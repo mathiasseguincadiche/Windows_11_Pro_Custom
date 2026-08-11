@@ -8,10 +8,14 @@ Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté *
 - SSD DATA Crucial T705 : `D:` en **NTFS**.
 - **Aucune partition EXT4 physique** et aucun dual boot.
 - Ubuntu WSL2 est stocké sous `D:\WSL\Ubuntu-DevOps\` ; son VHDX contient le filesystem Linux interne.
+- Le swap WSL est stocké séparément sous `D:\WSL\swap\wsl-swap.vhdx`.
 - Les dépôts DevOps utilisés par Linux restent dans `/home/<user>/projects`, pas dans `/mnt/c` ou `/mnt/d`.
-- WSL2 quotidien : 6 CPU, 16 Go RAM, 8 Go swap, réseau `mirrored`, DNS tunneling et firewall WSL/Hyper-V.
+- WSL2 quotidien V6 : **8 threads, 20 Go RAM, 8 Go swap**, réseau `mirrored`, DNS tunneling et firewall WSL/Hyper-V.
+- WSL2 lab-heavy V6 : **12 threads, 28 Go RAM, 12 Go swap**.
 - Docker Engine tourne directement dans Ubuntu WSL2 ; Docker Desktop n'est pas requis.
 - Microsoft Defender reste actif et toute exclusion est **deny-by-default** puis justifiée par mesure.
+- PowerShell 7 stable est installé dans le socle Windows via `Microsoft.PowerShell` ; Windows PowerShell 5.1 reste présent pour compatibilité.
+- VS Code couvre WSL, Remote - SSH et SFTP/FTP.
 - Les tweaks Windows, VS Code, WezTerm et les profils V4 possèdent Audit, Apply, Verify et Rollback.
 - La V5 matériel est **observationnelle** : elle qualifie mais ne modifie jamais automatiquement BIOS, PBO, RAM, GPU ou stockage.
 
@@ -74,6 +78,54 @@ Guide complet :
 docs/15_HARDWARE_QUALIFICATION_V5.md
 ```
 
+## WSL2 V6 — profil matériel
+
+Le profil quotidien est dimensionné pour le Ryzen 7 7700 et les 48 Go de RAM :
+
+```text
+standard
+├── 20 Go RAM
+├── 8 threads
+├── 8 Go swap sur D:\WSL\swap\wsl-swap.vhdx
+├── mirrored networking
+├── DNS tunneling
+├── firewall actif
+├── autoMemoryReclaim=gradual
+├── sparseVhd=true
+└── nestedVirtualization=false
+```
+
+Le profil lourd est réservé aux labs :
+
+```text
+lab-heavy
+├── 28 Go RAM
+├── 12 threads
+└── 12 Go swap
+```
+
+Le profil `nat-fallback` garde le budget `standard` mais bascule temporairement le réseau en NAT.
+
+Guide de tuning V6 :
+
+```text
+docs/17_WSL2_TUNING_V6.md
+```
+
+Qualification runtime :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateWsl
+```
+
+Verdict attendu :
+
+```text
+VERDICT: V6 WSL2 PLATFORM READY
+```
+
+Le validateur compare le profil versionné avec `%UserProfile%\.wslconfig` puis mesure depuis Ubuntu les CPU, RAM, swap, PID 1, filesystem HOME et présence de `~/projects`. Il vérifie également la présence de PowerShell 7 côté Windows.
+
 ## Stack DevOps WSL2
 
 - Docker Engine + Compose + Buildx
@@ -103,7 +155,9 @@ Le guide pédagogique principal est :
 docs/16_WSL2_GUIDE_COMPLET.md
 ```
 
-Il part de zéro et couvre le modèle mental Windows/Linux, le premier lancement Ubuntu, les commandes Linux de base, les permissions, `sudo`, APT, Git, VS Code, les commandes WSL PowerShell, `.wslconfig`, `/etc/wsl.conf`, systemd, réseau mirrored, Docker, Kubernetes, Terraform, Ansible, sauvegardes, import/export, VHDX, dépannage, exercices et antisèches.
+Il part de zéro et couvre le modèle mental Windows/Linux, le premier lancement Ubuntu, les commandes Linux de base, les permissions, `sudo`, APT, Git, VS Code, les commandes WSL PowerShell, `.wslconfig`, `/etc/wsl.conf`, systemd, réseau, Docker, Kubernetes, Terraform, Ansible, sauvegardes, import/export, VHDX, dépannage, exercices et antisèches.
+
+**Les valeurs de ressources WSL2 de référence sont celles de la V6 dans `docs/17_WSL2_TUNING_V6.md` et `config/wsl/*.wslconfig`.**
 
 Règle centrale :
 
@@ -112,11 +166,31 @@ outils Linux -> fichiers de projet Linux
                /home/<user>/projects
 ```
 
-Microsoft recommande ce placement pour éviter les ralentissements liés aux accès croisés entre le système de fichiers Windows et le système de fichiers WSL.
-
 ## Workstation DevOps
 
-Windows héberge VS Code et WezTerm. VS Code est préparé pour travailler directement dans WSL avec les extensions WSL, Terraform, Kubernetes, Container Tools, YAML, GitHub Actions, ShellCheck et shell-format.
+Windows héberge VS Code, WezTerm et PowerShell 7.
+
+VS Code est préparé pour :
+
+- WSL — `ms-vscode-remote.remote-wsl` ;
+- Remote - SSH — `ms-vscode-remote.remote-ssh` ;
+- SFTP / FTP — `Natizyskunk.sftp` ;
+- Terraform ;
+- Kubernetes ;
+- Container Tools ;
+- YAML ;
+- GitHub Actions ;
+- ShellCheck ;
+- shell-format.
+
+Exemples :
+
+```text
+config/vscode/ssh-config.example
+config/vscode/sftp.example.json
+```
+
+`.vscode/sftp.json` est ignoré par Git pour éviter la publication accidentelle de secrets. SFTP avec clé SSH est préféré à FTP avec mot de passe.
 
 WezTerm ouvre par défaut :
 
@@ -125,6 +199,37 @@ wsl.exe -d Ubuntu --cd ~
 ```
 
 Le profil shell Linux fournit les alias et complétions DevOps depuis `~/.config/windows11-pro-custom/devops.sh`.
+
+## Socle applicatif Windows
+
+Installation automatique WinGet quand un ID fiable est disponible :
+
+```text
+Visual Studio Code
+PowerShell 7 stable
+VLC
+Notion
+Firefox
+Brave
+FileZilla
+WezTerm
+LibreOffice
+Steam
+Notepad++
+draw.io
+Bitwarden
+```
+
+Installation conservée manuelle/contrôlée :
+
+```text
+MarkText
+Microsoft Office
+PDFgear
+Files
+```
+
+WSL2 fait partie du socle système mais est provisionné par le bootstrap WSL, pas comme une application WinGet.
 
 ## Windows Optimization V4
 
@@ -144,8 +249,6 @@ Le mapping WinUtil est versionné dans :
 ```text
 config/winutil/mathias-winutil.json
 ```
-
-Ce fichier est une référence de décision, pas un export WinUtil annoncé comme directement importable.
 
 ### Audit
 
@@ -175,8 +278,6 @@ reports/windows/v4-benchmark-after.json
 reports/windows/v4-benchmark-comparison.json
 reports/validation-v4.json
 ```
-
-Le benchmark ne lance aucun test synthétique générant de gros volumes d'écritures sur les SSD.
 
 ## Organisation
 
@@ -210,18 +311,24 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\install.ps1 -Mode Apply
 ```
 
+PowerShell 7 est ensuite disponible via :
+
+```powershell
+pwsh
+```
+
 Après le premier lancement Ubuntu :
 
 ```powershell
 .\install.ps1 -Mode Apply -InstallDevOps
 wsl --shutdown
-.\install.ps1 -Mode Verify -ValidateDevOps
+.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
 ```
 
 Après vérification UEFI / ReBAR / M.2 / refroidissement / stabilité mémoire :
 
 ```powershell
-.\install.ps1 -Mode Verify -ValidateHardware -ValidateDevOps
+.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
 ```
 
 Verdicts attendus :
@@ -231,6 +338,7 @@ VERDICT: V3 WINDOWS READY
 VERDICT: V3 DEVOPS READY
 VERDICT: V4 WINDOWS OPTIMIZATION READY
 VERDICT: V5 HARDWARE READY
+VERDICT: V6 WSL2 PLATFORM READY
 ```
 
 ## Rollback
@@ -240,8 +348,6 @@ Rollback des réglages gérés par le dépôt :
 ```powershell
 .\install.ps1 -Mode Rollback
 ```
-
-Sans paramètre explicite, le rollback V4 détecte les profils possédant une sauvegarde initiale et les restaure. Il restaure aussi les réglages Windows historiques et les configurations VS Code/WezTerm gérées par le dépôt.
 
 La V5 matériel n'a pas de rollback matériel car elle ne modifie aucun réglage matériel.
 
@@ -277,14 +383,15 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - `docs/02_BIOS_DRIVERS.md` — BIOS et stratégie pilotes ;
 - `docs/04_OPTIMISATION_WINDOWS.md` — stratégie Windows ;
 - `docs/05_DEFENDER_PERFORMANCE.md` — Defender et I/O ;
-- `docs/06_WSL2.md` — démarrage rapide WSL2 ;
+- `docs/06_WSL2.md` — configuration WSL2 de référence ;
 - `docs/07_DEVOPS_STACK.md` — stack Linux ;
 - `docs/11_VALIDATION.md` — critères workstation/DevOps ;
 - `docs/12_RUNBOOK_REINSTALLATION.md` — réinstallation ;
-- `docs/13_WORKSTATION_V3.md` — VS Code, WezTerm et profil shell ;
+- `docs/13_WORKSTATION_V3.md` — VS Code, Remote SSH/SFTP, WezTerm et PowerShell ;
 - `docs/14_WINDOWS_OPTIMIZATION_V4.md` — profils V4 et mapping WinUtil ;
 - `docs/15_HARDWARE_QUALIFICATION_V5.md` — tuning matériel stable et qualification ;
-- `docs/16_WSL2_GUIDE_COMPLET.md` — guide pédagogique WSL2 débutant à avancé.
+- `docs/16_WSL2_GUIDE_COMPLET.md` — guide pédagogique WSL2 débutant à avancé ;
+- `docs/17_WSL2_TUNING_V6.md` — tuning WSL2 matériel et exploitation V6.
 
 ## Statut
 
@@ -292,4 +399,5 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - V2 : tuning Windows réversible, Defender mesuré et stack DevOps — intégrée.
 - V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
 - V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
-- V5 : qualification hardware ciblée + guide WSL2 complet — périmètre complet et qualifié par CI.
+- V5 : qualification hardware ciblée + guide WSL2 complet — intégrée.
+- V6 : tuning WSL2 matériel, PowerShell 7 et accès distant VS Code — candidate à fusion après CI verte.
