@@ -12,26 +12,52 @@ jobs:
   powershell-parse:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Parse PowerShell files
         shell: pwsh
         run: |
-          $errors = @()
+          $failed = $false
           Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $file = $_
             $tokens = $null
             $parseErrors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
-            if ($parseErrors) { $errors += $parseErrors }
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
+            foreach ($parseError in @($parseErrors)) {
+              $failed = $true
+              $line = $parseError.Extent.StartLineNumber
+              $column = $parseError.Extent.StartColumnNumber
+              Write-Host "PARSE_ERROR $($file.FullName) line=$line col=$column message=$($parseError.Message)"
+              Write-Host "::error file=$($file.FullName),line=$line,col=$column::$($parseError.Message)"
+            }
           }
-          if ($errors.Count -gt 0) {
-            $errors | Format-List
-            exit 1
-          }
+          if ($failed) { exit 1 }
+
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse Bash files
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            bash -n "$file"
+          done < <(find . -type f -name '*.sh' -not -path './.git/*' -print0)
+      - name: ShellCheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          mapfile -d '' files < <(find . -type f -name '*.sh' -not -path './.git/*' -print0)
+          if (( ${#files[@]} > 0 )); then
+            shellcheck "${files[@]}"
+          fi
 
   json:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate JSON
         shell: bash
         run: |

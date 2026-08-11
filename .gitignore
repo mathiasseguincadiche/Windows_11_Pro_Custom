@@ -1,5 +1,6 @@
 logs/
 reports/
+state/
 *.etl
 *.log
 *.tmp
