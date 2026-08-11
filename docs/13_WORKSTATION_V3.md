@@ -1,26 +1,51 @@
-# Workstation V3 — VS Code, WezTerm et environnement WSL
+# Workstation DevOps — VS Code, WezTerm, PowerShell et environnement WSL
 
 ## Objectif
 
-La V3 termine le poste de travail DevOps en conservant une frontière claire :
+Le poste conserve une frontière claire :
 
-- Windows 11 Pro héberge VS Code, WezTerm et les applications graphiques ;
+- Windows 11 Pro héberge VS Code, WezTerm, PowerShell 7 et les applications graphiques ;
 - Ubuntu WSL2 héberge Docker, Kubernetes, Terraform, AWS CLI, Ansible et les outils de qualité ;
 - les dépôts Linux restent sous `/home/<user>/projects` ;
 - `C:` et `D:` restent NTFS.
 
+## PowerShell 7
+
+Le socle installe la version stable actuelle de PowerShell 7 via :
+
+```text
+Microsoft.PowerShell
+```
+
+Commande quotidienne :
+
+```powershell
+pwsh
+```
+
+Vérifier :
+
+```powershell
+$PSVersionTable
+```
+
+Windows PowerShell 5.1 reste présent pour la compatibilité des composants historiques Windows. PowerShell 7 devient le shell moderne recommandé pour le travail quotidien.
+
 ## VS Code
 
-La configuration versionnée est située dans :
+Configuration versionnée :
 
 ```text
 config/vscode/settings.json
 config/vscode/extensions.txt
+config/vscode/extensions-wsl.txt
 ```
 
-Extensions installées par la V3 :
+Extensions principales :
 
 - WSL — `ms-vscode-remote.remote-wsl` ;
+- Remote - SSH — `ms-vscode-remote.remote-ssh` ;
+- SFTP / FTP — `Natizyskunk.sftp` ;
 - Terraform — `hashicorp.terraform` ;
 - Kubernetes — `ms-kubernetes-tools.vscode-kubernetes-tools` ;
 - Container Tools — `ms-azuretools.vscode-containers` ;
@@ -42,9 +67,121 @@ Gestion :
 
 Le premier `Apply` sauvegarde le `settings.json` existant et la liste des extensions déjà présentes. Le rollback restaure le fichier initial et ne désinstalle que les extensions ajoutées par le dépôt.
 
+## VS Code Remote - SSH
+
+Remote - SSH sert à travailler **directement sur le filesystem d'un serveur distant**.
+
+Exemple de configuration versionnée :
+
+```text
+config/vscode/ssh-config.example
+```
+
+À recopier dans :
+
+```text
+%USERPROFILE%\.ssh\config
+```
+
+ou dans `~/.ssh/config` selon le client SSH utilisé.
+
+Exemple :
+
+```text
+Host devops-server
+    HostName server.example.com
+    User replace-me
+    Port 22
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+```
+
+Connexion dans VS Code :
+
+```text
+Ctrl+Shift+P
+Remote-SSH: Connect to Host...
+devops-server
+```
+
+Le projet reste alors sur le serveur distant et VS Code Server s'exécute côté serveur.
+
+### Clé SSH recommandée
+
+Dans Ubuntu WSL :
+
+```bash
+ssh-keygen -t ed25519 -a 64 -C "workstation-devops"
+```
+
+Vérifier les permissions :
+
+```bash
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/id_ed25519
+chmod 644 ~/.ssh/id_ed25519.pub
+```
+
+Ne jamais versionner la clé privée.
+
+## VS Code SFTP / FTP
+
+L'extension `Natizyskunk.sftp` est installée côté Windows et dans l'hôte WSL afin de fonctionner avec les workspaces Linux.
+
+Exemple sécurisé :
+
+```text
+config/vscode/sftp.example.json
+```
+
+Dans un projet réel, l'extension utilise généralement :
+
+```text
+.vscode/sftp.json
+```
+
+Ce fichier est ignoré par le dépôt principal afin d'éviter la publication accidentelle de secrets.
+
+Préférence :
+
+```text
+SFTP + clé SSH
+```
+
+plutôt que :
+
+```text
+FTP + mot de passe
+```
+
+Pour SFTP :
+
+```json
+{
+  "protocol": "sftp",
+  "port": 22,
+  "privateKeyPath": "~/.ssh/id_ed25519"
+}
+```
+
+Pour un serveur imposant FTP, utiliser au minimum FTPS/TLS lorsque le serveur le prend en charge. Ne jamais committer un champ `password` dans Git.
+
+### SFTP ou Remote - SSH ?
+
+```text
+Remote - SSH
+    code et outils sur le serveur distant
+    environnement distant complet
+    recommandé pour administration / développement distant
+
+SFTP
+    fichiers locaux ou WSL synchronisés vers le serveur
+    utile pour hébergement web / transferts ciblés
+```
+
 ## WezTerm
 
-La configuration versionnée :
+Configuration versionnée :
 
 ```text
 config/wezterm/wezterm.lua
@@ -89,11 +226,9 @@ dc   -> docker compose
 gst  -> git status --short --branch
 ```
 
-Les complétions kubectl et Helm sont activées si les commandes sont disponibles.
-
 ## Outils qualité IaC
 
-La V3 installe et vérifie :
+La workstation installe et vérifie :
 
 - terraform-docs `v0.24.0` ;
 - actionlint `v1.7.12` ;
@@ -101,26 +236,6 @@ La V3 installe et vérifie :
 - TFLint `v0.64.0`.
 
 Les archives sont vérifiées par SHA-256. actionlint et TFLint utilisent également GitHub Artifact Attestations lorsque le projet les publie.
-
-## Orchestration
-
-Configuration du poste Windows :
-
-```powershell
-.\scripts\bootstrap\10_workstation.ps1 -Mode Apply
-```
-
-Qualification Windows V3 :
-
-```powershell
-.\scripts\bootstrap\11_validate_v3.ps1
-```
-
-Qualification Linux V3 :
-
-```bash
-bash ./scripts/wsl/validate-devops.sh
-```
 
 ## Workflow complet après réinstallation
 
@@ -134,7 +249,11 @@ Lancer Ubuntu une première fois et créer l'utilisateur Linux, puis :
 ```powershell
 .\install.ps1 -Mode Apply -InstallDevOps
 wsl --shutdown
-.\install.ps1 -Mode Verify -ValidateDevOps
+.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
 ```
 
-Le poste n'est considéré V3 READY que si le validateur Windows et le validateur Linux terminent tous les deux sans `KO`.
+Verdict WSL2 V6 attendu :
+
+```text
+VERDICT: V6 WSL2 PLATFORM READY
+```
