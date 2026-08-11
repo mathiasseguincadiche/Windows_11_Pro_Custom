@@ -8,7 +8,8 @@ param(
 
     [string]$Distribution = 'Ubuntu',
 
-    [switch]$InstallDevOps
+    [switch]$InstallDevOps,
+    [switch]$ValidateDevOps
 )
 
 Set-StrictMode -Version Latest
@@ -25,6 +26,8 @@ if ($Mode -eq 'Rollback') {
 }
 
 & "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
+& "$RepoRoot\scripts\windows\20_system_audit.ps1"
+& "$RepoRoot\scripts\windows\21_storage_trim.ps1" -Mode Audit
 
 switch ($Mode) {
     'Audit' {
@@ -51,6 +54,9 @@ switch ($Mode) {
         & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Verify
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
         & "$RepoRoot\scripts\bootstrap\07_validate.ps1"
+        if ($ValidateDevOps) {
+            & "$RepoRoot\scripts\bootstrap\09_validate_devops.ps1" -Distribution $Distribution
+        }
     }
 }
 
