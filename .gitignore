@@ -8,3 +8,4 @@ state/
 .DS_Store
 Thumbs.db
 .vscode/*.log
+.vscode/sftp.json
