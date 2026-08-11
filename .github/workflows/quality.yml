@@ -287,8 +287,8 @@ jobs:
             echo 'V7 restore plan must remain instruction-only and must not execute native restore commands.' >&2
             exit 1
           fi
-          if grep -In -- '-quiet' scripts/backup/60_create_backup_v7.ps1; then
-            echo 'The first Golden Backup must retain wbadmin operator confirmation; -quiet is forbidden.' >&2
+          if grep -InE "['\"]-quiet['\"]" scripts/backup/60_create_backup_v7.ps1; then
+            echo 'The first Golden Backup must retain wbadmin operator confirmation; the wbadmin -quiet argument is forbidden.' >&2
             exit 1
           fi
           echo 'V7 backup and restore safety boundaries: OK'
