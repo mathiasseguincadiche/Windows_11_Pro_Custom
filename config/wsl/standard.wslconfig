@@ -1,12 +1,17 @@
 [wsl2]
-memory=16GB
-processors=6
+memory=20GB
+processors=8
 swap=8GB
+swapFile=D:\\WSL\\swap\\wsl-swap.vhdx
 networkingMode=mirrored
 dnsTunneling=true
 firewall=true
 autoProxy=true
+nestedVirtualization=false
+maxCrashDumpCount=3
 
 [experimental]
 autoMemoryReclaim=gradual
 sparseVhd=true
+bestEffortDnsParsing=true
+hostAddressLoopback=true
