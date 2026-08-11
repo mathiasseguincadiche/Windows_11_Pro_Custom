@@ -108,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|DisableRealtimeMonitoring[^\n]*(true|\$true)'
+          forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|DisableRealtimeMonitoring.*true'
           if grep -RInE "$forbidden" scripts --include='*.ps1'; then
             echo 'A destructive or Defender-disabling command was detected in executable PowerShell.' >&2
             exit 1
