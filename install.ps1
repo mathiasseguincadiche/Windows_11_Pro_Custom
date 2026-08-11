@@ -30,7 +30,7 @@ if ($Mode -eq 'Rollback') {
     $profilesToRollback = @($OptimizationProfiles)
     if (-not $PSBoundParameters.ContainsKey('OptimizationProfiles')) {
         $profilesToRollback = @('optional', 'gaming', 'privacy', 'standard') | Where-Object {
-            Test-Path (Join-Path $RepoRoot "state\windows-v4\$_.before.json")
+            Test-Path (Join-Path $RepoRoot "state\windows-v4\${_}.before.json")
         }
     } else {
         [array]::Reverse($profilesToRollback)
