@@ -106,7 +106,7 @@ Lancer Ubuntu une première fois afin de créer l'utilisateur Linux, puis reveni
 .\install.ps1 -Mode Apply -InstallDevOps
 ```
 
-Ce passage installe la stack DevOps V3, les outils qualité IaC et le profil shell.
+Ce passage installe la stack DevOps V3, les outils qualité IaC, le profil shell et les extensions VS Code dans l'hôte WSL.
 
 ## 4. Qualification complète V3
 
@@ -177,4 +177,4 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 
 - V1 : architecture Windows 11 Pro / NTFS / WSL2 / Defender — intégrée.
 - V2 : tuning Windows réversible, Defender mesuré et stack DevOps — intégrée.
-- V3 : workstation DevOps, qualité IaC, qualification stricte et CI de sécurité — candidate à fusion après contrôles verts.
+- V3 : workstation DevOps, qualité IaC, qualification stricte et CI de sécurité — périmètre complet.
