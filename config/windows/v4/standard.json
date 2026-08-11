@@ -1,0 +1,56 @@
+{
+  "profile": "standard",
+  "description": "Profil quotidien sûr inspiré du preset Standard WinUtil, sans suppression de composants ni services sensibles.",
+  "rebootRecommended": true,
+  "registry": [
+    {
+      "name": "Disable Activity Feed",
+      "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+      "property": "EnableActivityFeed",
+      "value": 0,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksActivity"
+    },
+    {
+      "name": "Disable publishing user activities",
+      "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+      "property": "PublishUserActivities",
+      "value": 0,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksActivity"
+    },
+    {
+      "name": "Disable uploading user activities",
+      "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+      "property": "UploadUserActivities",
+      "value": 0,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksActivity"
+    },
+    {
+      "name": "Disable WPBT execution",
+      "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager",
+      "property": "DisableWpbtExecution",
+      "value": 1,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksWPBT"
+    },
+    {
+      "name": "Disable Delivery Optimization peer sharing",
+      "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+      "property": "DODownloadMode",
+      "value": 0,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksDeliveryOptimization"
+    },
+    {
+      "name": "Enable End Task from taskbar",
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
+      "property": "TaskbarEndTask",
+      "value": 1,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksEndTaskOnTaskbar"
+    }
+  ],
+  "services": []
+}
