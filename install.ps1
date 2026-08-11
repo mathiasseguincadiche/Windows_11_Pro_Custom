@@ -16,12 +16,51 @@ param(
     [switch]$ValidateDevOps,
     [switch]$ValidateWsl,
     [switch]$ValidateHardware,
-    [switch]$SkipV4RestorePoint
+    [switch]$SkipV4RestorePoint,
+
+    [ValidateSet('None', 'Create', 'Verify', 'RestorePlan')]
+    [string]$BackupAction = 'None',
+    [string]$BackupTargetDrive,
+    [switch]$AllowNonUsbBackupTarget,
+    [switch]$SkipBackupRestorePoint
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
+
+if ($BackupAction -ne 'None') {
+    if ([string]::IsNullOrWhiteSpace($BackupTargetDrive) -or $BackupTargetDrive -notmatch '^[A-Za-z]:$') {
+        throw 'V7 backup actions require -BackupTargetDrive with a drive letter such as E:.'
+    }
+
+    Write-Host "Windows 11 Pro Custom - V7 backup action: $BackupAction" -ForegroundColor Cyan
+    Write-Host "Backup target: $BackupTargetDrive" -ForegroundColor Cyan
+
+    switch ($BackupAction) {
+        'Create' {
+            $backupParameters = @{
+                BackupTargetDrive = $BackupTargetDrive
+                Distribution = $Distribution
+            }
+            if ($AllowNonUsbBackupTarget) {
+                $backupParameters.AllowNonUsbTarget = $true
+            }
+            if ($SkipBackupRestorePoint) {
+                $backupParameters.SkipRestorePoint = $true
+            }
+            & "$RepoRoot\scripts\backup\60_create_backup_v7.ps1" @backupParameters
+        }
+        'Verify' {
+            & "$RepoRoot\scripts\backup\61_validate_backup_v7.ps1" -BackupTargetDrive $BackupTargetDrive
+        }
+        'RestorePlan' {
+            & "$RepoRoot\scripts\backup\62_restore_plan_v7.ps1" -BackupTargetDrive $BackupTargetDrive
+        }
+    }
+
+    return
+}
 
 Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
 Write-Host "WSL2 profile: $WslProfile" -ForegroundColor Cyan

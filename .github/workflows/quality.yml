@@ -164,6 +164,31 @@ jobs:
           grep -qx 'ms-vscode-remote.remote-ssh' config/vscode/extensions.txt
           grep -qx 'Natizyskunk.sftp' config/vscode/extensions.txt
           grep -qx 'Natizyskunk.sftp' config/vscode/extensions-wsl.txt
+      - name: Validate V7 backup policy and wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          policy='config/backup/v7-policy.json'
+          jq -e '
+            (.version == "V7") and
+            (.systemVolumes == ["C:", "D:"]) and
+            (.minimumTargetFreeGB >= 100) and
+            (.requireUsbTargetByDefault == true) and
+            (.wslDistribution == "Ubuntu") and
+            (.wslExportFormat == "vhdx") and
+            (.hashAlgorithm == "SHA256") and
+            (.restoreTestDistribution == "Ubuntu-Restore-V7") and
+            (.destructiveRestoreAutomation == false) and
+            (.recoveryMediaRecommended == true)
+          ' "$policy" >/dev/null
+          test -f scripts/backup/60_create_backup_v7.ps1
+          test -f scripts/backup/61_validate_backup_v7.ps1
+          test -f scripts/backup/62_restore_plan_v7.ps1
+          test -f docs/18_BACKUP_DISASTER_RECOVERY_V7.md
+          grep -q "ValidateSet('None', 'Create', 'Verify', 'RestorePlan')" install.ps1
+          grep -q 'scripts\\backup\\60_create_backup_v7.ps1' install.ps1
+          grep -q 'scripts\\backup\\61_validate_backup_v7.ps1' install.ps1
+          grep -q 'scripts\\backup\\62_restore_plan_v7.ps1' install.ps1
       - name: Validate WezTerm Lua syntax
         shell: bash
         run: |
@@ -249,3 +274,21 @@ jobs:
             exit 1
           fi
           echo 'V6 WSL safety boundaries: OK'
+      - name: Enforce V7 backup and restore safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.destructiveRestoreAutomation == false' config/backup/v7-policy.json >/dev/null
+          if grep -InE 'sysrecovery|start[[:space:]]+recovery|--unregister|-recreateDisks|Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition' scripts/backup/60_create_backup_v7.ps1 scripts/backup/61_validate_backup_v7.ps1; then
+            echo 'V7 create/validate scripts must never contain destructive restore or disk-recreation operations.' >&2
+            exit 1
+          fi
+          if grep -InE 'Invoke-Expression|Start-Process|^[[:space:]]*&' scripts/backup/62_restore_plan_v7.ps1; then
+            echo 'V7 restore plan must remain instruction-only and must not execute native restore commands.' >&2
+            exit 1
+          fi
+          if grep -InE "['\"]-quiet['\"]" scripts/backup/60_create_backup_v7.ps1; then
+            echo 'The first Golden Backup must retain wbadmin operator confirmation; the wbadmin -quiet argument is forbidden.' >&2
+            exit 1
+          fi
+          echo 'V7 backup and restore safety boundaries: OK'

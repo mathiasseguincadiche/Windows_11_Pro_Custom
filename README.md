@@ -1,6 +1,6 @@
 # Windows 11 Pro Custom
 
-Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté **DevOps/Ops**, WSL2, gaming et optimisation Windows réversible.
+Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté **DevOps/Ops**, WSL2, gaming, optimisation Windows réversible et reprise après incident.
 
 ## Architecture validée
 
@@ -19,6 +19,8 @@ Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté *
 - VS Code couvre WSL, Remote - SSH et SFTP/FTP.
 - Les tweaks Windows, VS Code, WezTerm et les profils V4 possèdent Audit, Apply, Verify et Rollback.
 - La V5 matériel est **observationnelle** : elle qualifie mais ne modifie jamais automatiquement BIOS, PBO, RAM, GPU ou stockage.
+- La V7 protège l'état réel du poste avec une image Windows `C:` + `D:` + volumes critiques et un export WSL2 VHDX indépendant sur un disque de sauvegarde séparé.
+- La restauration V7 est **guidée mais jamais destructive automatiquement**.
 
 ## Matériel cible
 
@@ -126,6 +128,89 @@ VERDICT: V6 WSL2 PLATFORM READY
 ```
 
 Le validateur compare le profil versionné avec `%UserProfile%\.wslconfig` puis mesure depuis Ubuntu les CPU, RAM, swap, PID 1, filesystem HOME et présence de `~/projects`. Il vérifie également la présence de PowerShell 7 côté Windows.
+
+## Backup & Disaster Recovery V7
+
+La V7 ajoute quatre protections complémentaires :
+
+```text
+System Restore
+      ↓
+régression Windows légère
+
+WindowsImageBackup
+      ↓
+C: + D: + volumes critiques
+      ↓
+récupération bare-metal depuis WinRE
+
+WSL VHDX + SHA-256
+      ↓
+restauration Ubuntu indépendante
+
+GitHub V1 → V7
+      ↓
+reconstruction reproductible si nécessaire
+```
+
+Politique :
+
+```text
+config/backup/v7-policy.json
+```
+
+Création du Golden Backup sur un disque USB NTFS séparé, exemple `E:` :
+
+```powershell
+.\install.ps1 -BackupAction Create -BackupTargetDrive E:
+```
+
+La création :
+
+- refuse une cible située sur le même disque physique que `C:` ou `D:` ;
+- exige NTFS ;
+- exige 100 Go libres minimum ;
+- exige une cible USB par défaut ;
+- vérifie WinRE ;
+- tente un point de restauration ;
+- arrête WSL ;
+- crée l'image Windows avec `wbadmin` ;
+- vérifie qu'une version récupérable est énumérée ;
+- exporte Ubuntu en VHDX ;
+- calcule et enregistre le SHA-256 ;
+- écrit un manifest JSON.
+
+Verdict de création :
+
+```text
+VERDICT: V7 GOLDEN BACKUP CREATED
+```
+
+Validation indépendante :
+
+```powershell
+.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
+```
+
+Verdict attendu après une **vraie sauvegarde sur le PC** :
+
+```text
+VERDICT: V7 BACKUP READY
+```
+
+Génération d'un plan de restauration sans exécuter la restauration :
+
+```powershell
+.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
+```
+
+La V7 ne lance jamais automatiquement `wbadmin start sysrecovery`, ne reformate aucun disque et ne fait jamais `wsl --unregister` sur la distribution active. Une restauration WSL est d'abord importée sous `Ubuntu-Restore-V7` à côté de l'Ubuntu existant.
+
+Guide complet :
+
+```text
+docs/18_BACKUP_DISASTER_RECOVERY_V7.md
+```
 
 ## Stack DevOps WSL2
 
@@ -291,6 +376,7 @@ reports/validation-v4.json
 ```text
 Windows_11_Pro_Custom/
 ├── config/
+│   ├── backup/
 │   ├── defender/
 │   ├── hardware/
 │   ├── vscode/
@@ -301,6 +387,7 @@ Windows_11_Pro_Custom/
 ├── docs/
 ├── manifests/
 ├── scripts/
+│   ├── backup/
 │   ├── bootstrap/
 │   ├── defender/
 │   ├── windows/
@@ -338,7 +425,7 @@ Après vérification UEFI / ReBAR / M.2 / refroidissement / stabilité mémoire 
 .\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
 ```
 
-Verdicts attendus :
+Verdicts plateforme attendus :
 
 ```text
 VERDICT: V3 WINDOWS READY
@@ -348,7 +435,13 @@ VERDICT: V5 HARDWARE READY
 VERDICT: V6 WSL2 PLATFORM READY
 ```
 
-## Rollback
+Puis, après création réelle du Golden Backup :
+
+```text
+VERDICT: V7 BACKUP READY
+```
+
+## Rollback et restauration
 
 Rollback des réglages gérés par le dépôt :
 
@@ -359,6 +452,8 @@ Rollback des réglages gérés par le dépôt :
 La V5 matériel n'a pas de rollback matériel car elle ne modifie aucun réglage matériel.
 
 Le client OpenSSH Windows possède un rollback à état initial : il n'est retiré que si le dépôt l'avait ajouté sur une machine où il était absent au départ.
+
+La V7 est différente d'un rollback : elle crée et vérifie des sauvegardes, puis génère un plan de reprise. Les opérations de restauration potentiellement destructives restent manuelles.
 
 ## Defender performance
 
@@ -400,7 +495,8 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - `docs/14_WINDOWS_OPTIMIZATION_V4.md` — profils V4 et mapping WinUtil ;
 - `docs/15_HARDWARE_QUALIFICATION_V5.md` — tuning matériel stable et qualification ;
 - `docs/16_WSL2_GUIDE_COMPLET.md` — guide pédagogique WSL2 débutant à avancé ;
-- `docs/17_WSL2_TUNING_V6.md` — tuning WSL2 matériel et exploitation V6.
+- `docs/17_WSL2_TUNING_V6.md` — tuning WSL2 matériel et exploitation V6 ;
+- `docs/18_BACKUP_DISASTER_RECOVERY_V7.md` — Golden Backup, contrôle d'intégrité et reprise après incident.
 
 ## Statut
 
@@ -409,4 +505,5 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
 - V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
 - V5 : qualification hardware ciblée + guide WSL2 complet — intégrée.
-- V6 : tuning WSL2 matériel, PowerShell 7, OpenSSH Client et accès distant VS Code — périmètre complet et qualifié par CI.
+- V6 : tuning WSL2 matériel, PowerShell 7, OpenSSH Client et accès distant VS Code — intégrée.
+- V7 : Golden Backup Windows + export WSL2 + SHA-256 + plan de reprise non destructif — périmètre complet et qualifié par CI ; première sauvegarde réelle requise avant le verdict runtime `V7 BACKUP READY`.
