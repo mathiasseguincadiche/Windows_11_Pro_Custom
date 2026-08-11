@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — OpenClaw + OpenRouter
+
+- ajout d'un bootstrap optionnel OpenClaw + OpenRouter natif Windows ;
+- séparation stricte entre `D:\WSL` pour les workloads Linux DevOps et `D:\AI\OpenClaw` pour la pile IA ;
+- clone/mise à jour protégée du plan de contrôle privé `openclaw_openrouter` sous `D:\AI\OpenClaw\control-plane` ;
+- installation et qualification depuis `install.ps1` avec `-InstallOpenClawAI` et `-ValidateOpenClawAI` ;
+- aucun effacement automatique de l'état OpenClaw pendant un rollback ;
+- documentation dédiée `docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`.
+
 ## V2
 
 - tuning Windows réversible avec Audit / Apply / Verify / Rollback ;
