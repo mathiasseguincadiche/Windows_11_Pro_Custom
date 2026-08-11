@@ -18,6 +18,12 @@ param(
     [switch]$ValidateHardware,
     [switch]$SkipV4RestorePoint,
 
+    [switch]$InstallOpenClawAI,
+    [switch]$ValidateOpenClawAI,
+    [string]$OpenClawRoot = 'D:\AI\OpenClaw',
+    [string]$OpenClawControlPlanePath = 'D:\AI\OpenClaw\control-plane',
+    [string]$OpenClawRepositoryRef = 'main',
+
     [ValidateSet('None', 'Create', 'Verify', 'RestorePlan')]
     [string]$BackupAction = 'None',
     [string]$BackupTargetDrive,
@@ -65,6 +71,7 @@ if ($BackupAction -ne 'None') {
 Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
 Write-Host "WSL2 profile: $WslProfile" -ForegroundColor Cyan
 Write-Host "V4 optimization profiles: $($OptimizationProfiles -join ', ')" -ForegroundColor Cyan
+Write-Host "OpenClaw AI root: $OpenClawRoot" -ForegroundColor Cyan
 
 if ($Mode -eq 'Rollback') {
     & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Rollback
@@ -84,6 +91,7 @@ if ($Mode -eq 'Rollback') {
 
     & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Rollback
     & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Rollback
+    Write-Host '[INFO] OpenClaw AI is not deleted by Rollback. Runtime state and credentials on D: require an explicit manual decision.' -ForegroundColor Yellow
     Write-Host 'Rollback of repository-managed settings completed.' -ForegroundColor Green
     return
 }
@@ -104,6 +112,7 @@ switch ($Mode) {
         & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Audit
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
         & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Audit
+        & "$RepoRoot\scripts\bootstrap\15_openclaw_ai.ps1" -Mode Audit -Root $OpenClawRoot -ControlPlanePath $OpenClawControlPlanePath -RepositoryRef $OpenClawRepositoryRef
     }
 
     'Apply' {
@@ -133,6 +142,12 @@ switch ($Mode) {
             & "$RepoRoot\scripts\bootstrap\14_validate_wsl_v6.ps1" -WslProfile $WslProfile -Distribution $Distribution
         } else {
             Write-Host '[INFO] DevOps stack not installed in this pass. Relaunch Apply with -InstallDevOps after first Ubuntu launch.' -ForegroundColor Yellow
+        }
+
+        if ($InstallOpenClawAI) {
+            & "$RepoRoot\scripts\bootstrap\15_openclaw_ai.ps1" -Mode Apply -Root $OpenClawRoot -ControlPlanePath $OpenClawControlPlanePath -RepositoryRef $OpenClawRepositoryRef
+        } else {
+            Write-Host '[INFO] OpenClaw AI not installed in this pass. Relaunch Apply with -InstallOpenClawAI when desired.' -ForegroundColor Yellow
         }
 
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
@@ -173,6 +188,12 @@ switch ($Mode) {
             & "$RepoRoot\scripts\bootstrap\09_validate_devops.ps1" -Distribution $Distribution
         } else {
             Write-Host '[INFO] Full Linux validation not requested. Use -ValidateDevOps after installing the stack.' -ForegroundColor Yellow
+        }
+
+        if ($ValidateOpenClawAI) {
+            & "$RepoRoot\scripts\bootstrap\15_openclaw_ai.ps1" -Mode Verify -Root $OpenClawRoot -ControlPlanePath $OpenClawControlPlanePath -RepositoryRef $OpenClawRepositoryRef
+        } else {
+            Write-Host '[INFO] OpenClaw AI qualification not requested. Use -ValidateOpenClawAI after installation.' -ForegroundColor Yellow
         }
     }
 }
