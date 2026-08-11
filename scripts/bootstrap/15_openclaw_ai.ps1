@@ -156,8 +156,8 @@ function Apply-Integration {
     }
 
     & $installer @parameters
-    if ($LASTEXITCODE -ne 0) {
-        throw "L'installateur OpenClaw a échoué avec le code $LASTEXITCODE"
+    if (-not $?) {
+        throw "L'installateur OpenClaw a échoué."
     }
     Write-Host 'VERDICT: OPENCLAW AI INSTALLED' -ForegroundColor Green
 }
@@ -171,8 +171,8 @@ function Verify-Integration {
     }
 
     & $installer -Mode Verify -Root $Root
-    if ($LASTEXITCODE -ne 0) {
-        throw "La validation OpenClaw a échoué avec le code $LASTEXITCODE"
+    if (-not $?) {
+        throw 'La validation OpenClaw a échoué.'
     }
     Write-Host 'VERDICT: OPENCLAW AI READY' -ForegroundColor Green
 }
