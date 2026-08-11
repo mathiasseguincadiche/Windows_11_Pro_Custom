@@ -88,7 +88,7 @@ switch ($Mode) {
         }
 
         foreach ($tweak in $tweaks) {
-            New-Item -ItemType Directory -Force -Path $tweak.Path | Out-Null
+            New-Item -Force -Path $tweak.Path | Out-Null
             New-ItemProperty -Path $tweak.Path -Name $tweak.Property -PropertyType $tweak.Type -Value $tweak.Value -Force | Out-Null
         }
         Show-Status
@@ -112,7 +112,7 @@ switch ($Mode) {
         $backup = Get-Content -Raw $statePath | ConvertFrom-Json
         foreach ($entry in $backup) {
             if ($entry.Exists) {
-                New-Item -ItemType Directory -Force -Path $entry.Path | Out-Null
+                New-Item -Force -Path $entry.Path | Out-Null
                 $kind = if ($entry.Kind) { $entry.Kind } else { 'DWord' }
                 New-ItemProperty -Path $entry.Path -Name $entry.Property -PropertyType $kind -Value $entry.Value -Force | Out-Null
             } elseif (Test-Path $entry.Path) {
