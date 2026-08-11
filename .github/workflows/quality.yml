@@ -51,6 +51,12 @@ jobs:
             Write-Host "Auditing V4 profile: $profile"
             & .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
           }
+      - name: Windows PowerShell 5.1 V5 smoke test
+        shell: powershell
+        run: |
+          Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
+          Get-Content -Raw .\config\hardware\target-v5.json | ConvertFrom-Json | Out-Null
+          & .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Show
 
   shell:
     runs-on: ubuntu-latest
@@ -101,6 +107,25 @@ jobs:
             ' "$file" >/dev/null
           done
           jq -e '.execution == "reference-only"' config/winutil/mathias-winutil.json >/dev/null
+      - name: Validate V5 hardware target schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            (.version == "V5") and
+            (.cpu.nameContains | type == "string") and
+            (.cpu.cores == 8) and
+            (.cpu.threads == 16) and
+            (.memory.minimumBytes | type == "number") and
+            (.memory.targetConfiguredClockMHz == 6000) and
+            (.gpu.nameRegex | type == "string") and
+            (.storage.minimumCount == 2) and
+            (.display.width == 2560) and
+            (.display.height == 1440) and
+            (.display.minimumRefreshHz >= 239) and
+            (.manualChecks | type == "array") and
+            (.manualChecks | length == 8)
+          ' config/hardware/target-v5.json >/dev/null
       - name: Validate WezTerm Lua syntax
         shell: bash
         run: |
@@ -163,3 +188,13 @@ jobs:
             exit 1
           fi
           echo 'V4 safety boundaries: OK'
+      - name: Enforce V5 observational hardware policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='Set-Service|New-ItemProperty|Set-ItemProperty|Remove-ItemProperty|Format-Volume|Clear-Disk|Initialize-Disk|Set-Disk|Set-Partition|Resize-Partition|Optimize-Volume|Set-Storage|Set-MpPreference|bcdedit|RyzenMaster'
+          if grep -InE "$forbidden" scripts/windows/50_hardware_inventory.ps1 scripts/windows/51_hardware_manual_checks.ps1 scripts/bootstrap/13_validate_hardware_v5.ps1; then
+            echo 'V5 hardware qualification must remain observational and must not tune hardware automatically.' >&2
+            exit 1
+          fi
+          echo 'V5 observational hardware policy: OK'

@@ -13,6 +13,7 @@ Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté *
 - Docker Engine tourne directement dans Ubuntu WSL2 ; Docker Desktop n'est pas requis.
 - Microsoft Defender reste actif et toute exclusion est **deny-by-default** puis justifiée par mesure.
 - Les tweaks Windows, VS Code, WezTerm et les profils V4 possèdent Audit, Apply, Verify et Rollback.
+- La V5 matériel est **observationnelle** : elle qualifie mais ne modifie jamais automatiquement BIOS, PBO, RAM, GPU ou stockage.
 
 ## Matériel cible
 
@@ -26,6 +27,52 @@ Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté *
 - ASUS Prime AP201
 - ROG Strix OLED XG27AQDMES 1440p 240 Hz
 - Logitech Brio 100
+
+## Hardware Qualification V5
+
+Politique stable :
+
+```text
+Ryzen 7 7700       stock / Precision Boost 2
+DDR5               6000 seulement si stable
+Arc B580            ReBAR + Above 4G vérifiés
+T705 #1             M2_1 PCIe 5.0 x4
+T705 #2             M2_2 PCIe 5.0 x4
+Écran               2560×1440 à ~240 Hz
+Plan alimentation   Balanced
+```
+
+La V5 contrôle automatiquement CPU, RAM, carte mère, GPU, pilotes, SSD, GPT, Secure Boot, TPM, SVM, TRIM et affichage. Les éléments non prouvables proprement via une API Windows générique (ReBAR UEFI, Above 4G, emplacement physique M.2, refroidissement et test de stabilité mémoire) sont enregistrés dans une checklist manuelle explicite.
+
+Inventaire :
+
+```powershell
+.\scripts\windows\50_hardware_inventory.ps1
+```
+
+Checklist :
+
+```powershell
+.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Show
+```
+
+Qualification finale :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateHardware
+```
+
+Verdict attendu :
+
+```text
+VERDICT: V5 HARDWARE READY
+```
+
+Guide complet :
+
+```text
+docs/15_HARDWARE_QUALIFICATION_V5.md
+```
 
 ## Stack DevOps WSL2
 
@@ -47,6 +94,25 @@ Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté *
 - TFLint `v0.64.0`
 
 Docker utilise le driver de logs `local` avec rotation afin d'éviter des journaux de conteneurs non bornés dans le VHDX.
+
+## Guide WSL2 débutant → avancé
+
+Le guide pédagogique principal est :
+
+```text
+docs/16_WSL2_GUIDE_COMPLET.md
+```
+
+Il part de zéro et couvre le modèle mental Windows/Linux, le premier lancement Ubuntu, les commandes Linux de base, les permissions, `sudo`, APT, Git, VS Code, les commandes WSL PowerShell, `.wslconfig`, `/etc/wsl.conf`, systemd, réseau mirrored, Docker, Kubernetes, Terraform, Ansible, sauvegardes, import/export, VHDX, dépannage, exercices et antisèches.
+
+Règle centrale :
+
+```text
+outils Linux -> fichiers de projet Linux
+               /home/<user>/projects
+```
+
+Microsoft recommande ce placement pour éviter les ralentissements liés aux accès croisés entre le système de fichiers Windows et le système de fichiers WSL.
 
 ## Workstation DevOps
 
@@ -118,6 +184,7 @@ Le benchmark ne lance aucun test synthétique générant de gros volumes d'écri
 Windows_11_Pro_Custom/
 ├── config/
 │   ├── defender/
+│   ├── hardware/
 │   ├── vscode/
 │   ├── wezterm/
 │   ├── winutil/
@@ -151,12 +218,19 @@ wsl --shutdown
 .\install.ps1 -Mode Verify -ValidateDevOps
 ```
 
+Après vérification UEFI / ReBAR / M.2 / refroidissement / stabilité mémoire :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateHardware -ValidateDevOps
+```
+
 Verdicts attendus :
 
 ```text
 VERDICT: V3 WINDOWS READY
 VERDICT: V3 DEVOPS READY
 VERDICT: V4 WINDOWS OPTIMIZATION READY
+VERDICT: V5 HARDWARE READY
 ```
 
 ## Rollback
@@ -168,6 +242,8 @@ Rollback des réglages gérés par le dépôt :
 ```
 
 Sans paramètre explicite, le rollback V4 détecte les profils possédant une sauvegarde initiale et les restaure. Il restaure aussi les réglages Windows historiques et les configurations VS Code/WezTerm gérées par le dépôt.
+
+La V5 matériel n'a pas de rollback matériel car elle ne modifie aucun réglage matériel.
 
 ## Defender performance
 
@@ -198,18 +274,22 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 ## Documentation
 
 - `docs/00_ARCHITECTURE.md` — architecture globale ;
+- `docs/02_BIOS_DRIVERS.md` — BIOS et stratégie pilotes ;
 - `docs/04_OPTIMISATION_WINDOWS.md` — stratégie Windows ;
 - `docs/05_DEFENDER_PERFORMANCE.md` — Defender et I/O ;
-- `docs/06_WSL2.md` — WSL2 ;
+- `docs/06_WSL2.md` — démarrage rapide WSL2 ;
 - `docs/07_DEVOPS_STACK.md` — stack Linux ;
 - `docs/11_VALIDATION.md` — critères workstation/DevOps ;
 - `docs/12_RUNBOOK_REINSTALLATION.md` — réinstallation ;
 - `docs/13_WORKSTATION_V3.md` — VS Code, WezTerm et profil shell ;
-- `docs/14_WINDOWS_OPTIMIZATION_V4.md` — profils V4 et mapping WinUtil.
+- `docs/14_WINDOWS_OPTIMIZATION_V4.md` — profils V4 et mapping WinUtil ;
+- `docs/15_HARDWARE_QUALIFICATION_V5.md` — tuning matériel stable et qualification ;
+- `docs/16_WSL2_GUIDE_COMPLET.md` — guide pédagogique WSL2 débutant à avancé.
 
 ## Statut
 
 - V1 : architecture Windows 11 Pro / NTFS / WSL2 / Defender — intégrée.
 - V2 : tuning Windows réversible, Defender mesuré et stack DevOps — intégrée.
 - V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
-- V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — périmètre complet et qualifié par CI.
+- V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
+- V5 : qualification hardware ciblée + guide WSL2 complet — périmètre complet et qualifié par CI.

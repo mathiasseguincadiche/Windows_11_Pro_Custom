@@ -14,6 +14,7 @@ param(
 
     [switch]$InstallDevOps,
     [switch]$ValidateDevOps,
+    [switch]$ValidateHardware,
     [switch]$SkipV4RestorePoint
 )
 
@@ -48,6 +49,7 @@ if ($Mode -eq 'Rollback') {
 
 & "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
 & "$RepoRoot\scripts\windows\20_system_audit.ps1"
+& "$RepoRoot\scripts\windows\50_hardware_inventory.ps1"
 & "$RepoRoot\scripts\windows\21_storage_trim.ps1" -Mode Audit
 
 switch ($Mode) {
@@ -57,6 +59,7 @@ switch ($Mode) {
             & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Audit -Profile $profile
         }
         & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage snapshot
+        & "$RepoRoot\scripts\windows\51_hardware_manual_checks.ps1" -Mode Show
         & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Audit
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
         & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Audit
@@ -92,6 +95,7 @@ switch ($Mode) {
 
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
         & "$RepoRoot\scripts\bootstrap\11_validate_v3.ps1" -WslProfile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
+        Write-Host '[INFO] Hardware V5 is observational only. BIOS, ReBAR, memory tuning and device placement are never changed automatically.' -ForegroundColor Yellow
     }
 
     'Verify' {
@@ -110,6 +114,12 @@ switch ($Mode) {
         }
 
         & "$RepoRoot\scripts\bootstrap\12_validate_v4.ps1" -OptimizationProfiles $OptimizationProfiles
+
+        if ($ValidateHardware) {
+            & "$RepoRoot\scripts\bootstrap\13_validate_hardware_v5.ps1" -RequireManualChecks
+        } else {
+            Write-Host '[INFO] Final hardware V5 qualification not requested. Use -ValidateHardware after recording the manual BIOS/placement/stability checks.' -ForegroundColor Yellow
+        }
 
         if ($ValidateDevOps) {
             & "$RepoRoot\scripts\bootstrap\09_validate_devops.ps1" -Distribution $Distribution
