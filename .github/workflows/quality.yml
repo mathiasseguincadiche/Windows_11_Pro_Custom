@@ -78,6 +78,22 @@ jobs:
           find . -type f -name '*.json' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do
             jq empty "$file"
           done
+      - name: Validate V4 profile schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in config/windows/v4/*.json; do
+            jq -e '
+              (.profile | type == "string") and
+              (.description | type == "string") and
+              (.rebootRecommended | type == "boolean") and
+              (.registry | type == "array") and
+              (.services | type == "array") and
+              (all(.registry[]?; (.name|type=="string") and (.path|type=="string") and (.property|type=="string") and ((.type=="DWord") or (.type=="String")))) and
+              (all(.services[]?; (.name|type=="string") and ((.startupType=="Disabled") or (.startupType=="Manual") or (.startupType=="Automatic"))))
+            ' "$file" >/dev/null
+          done
+          jq -e '.execution == "reference-only"' config/winutil/mathias-winutil.json >/dev/null
       - name: Validate WezTerm Lua syntax
         shell: bash
         run: |
@@ -116,4 +132,27 @@ jobs:
             echo 'A destructive or Defender-disabling command was detected in executable PowerShell.' >&2
             exit 1
           fi
-          echo 'Safety guard: OK'
+          echo 'Base safety guard: OK'
+      - name: Enforce V4 safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          profiles=(config/windows/v4/*.json)
+          forbidden_services='^(SharedAccess|StorSvc|wuauserv|WinDefend|mpssvc|vmcompute|hns)$'
+          if jq -r '.services[]?.name' "${profiles[@]}" | grep -E "$forbidden_services"; then
+            echo 'A forbidden Windows/WSL/security service is targeted by a V4 profile.' >&2
+            exit 1
+          fi
+          if jq -r '.registry[]?.path' "${profiles[@]}" | grep -Ei 'Windows Defender|WindowsUpdate|WindowsFirewall'; then
+            echo 'A forbidden security/update Registry path is targeted by a V4 profile.' >&2
+            exit 1
+          fi
+          if [[ "$(jq '.services | length' config/windows/v4/standard.json)" != '0' ]]; then
+            echo 'The default V4 standard profile must not modify services.' >&2
+            exit 1
+          fi
+          if grep -RInE 'Remove-AppxPackage|Disable-WindowsOptionalFeature|winget[[:space:]]+uninstall' scripts/windows/4*.ps1; then
+            echo 'V4 optimization scripts must not remove Windows components or apps.' >&2
+            exit 1
+          fi
+          echo 'V4 safety boundaries: OK'
