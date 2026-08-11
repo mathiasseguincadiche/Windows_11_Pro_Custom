@@ -1,0 +1,24 @@
+{
+  "core": [
+    "Visual Studio Code",
+    "MarkText",
+    "VLC",
+    "Notion",
+    "Firefox",
+    "Brave",
+    "FileZilla",
+    "WezTerm",
+    "Microsoft Office",
+    "LibreOffice",
+    "Steam",
+    "Notepad++",
+    "PDFgear",
+    "Files",
+    "draw.io"
+  ],
+  "notes": [
+    "Les identifiants WinGet seront verifies avant automatisation de l'installation.",
+    "Office peut necessiter le compte/licence Microsoft et ne doit pas etre suppose installable silencieusement.",
+    "Aucune application non demandee n'est ajoutee au socle core sans decision explicite."
+  ]
+}

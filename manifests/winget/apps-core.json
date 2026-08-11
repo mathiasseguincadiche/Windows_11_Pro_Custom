@@ -1,0 +1,19 @@
+{
+  "apps": [
+    { "name": "Visual Studio Code", "wingetId": "Microsoft.VisualStudioCode", "autoInstall": true },
+    { "name": "MarkText", "wingetId": null, "autoInstall": false },
+    { "name": "VLC", "wingetId": "VideoLAN.VLC", "autoInstall": true },
+    { "name": "Notion", "wingetId": "Notion.Notion", "autoInstall": true },
+    { "name": "Firefox", "wingetId": "Mozilla.Firefox", "autoInstall": true },
+    { "name": "Brave", "wingetId": "Brave.Brave", "autoInstall": true },
+    { "name": "FileZilla", "wingetId": "TimKosse.FileZilla.Client", "autoInstall": true },
+    { "name": "WezTerm", "wingetId": "wez.wezterm", "autoInstall": true },
+    { "name": "Microsoft Office", "wingetId": null, "autoInstall": false },
+    { "name": "LibreOffice", "wingetId": "TheDocumentFoundation.LibreOffice", "autoInstall": true },
+    { "name": "Steam", "wingetId": "Valve.Steam", "autoInstall": true },
+    { "name": "Notepad++", "wingetId": "Notepad++.Notepad++", "autoInstall": true },
+    { "name": "PDFgear", "wingetId": null, "autoInstall": false },
+    { "name": "Files", "wingetId": null, "autoInstall": false },
+    { "name": "draw.io", "wingetId": "JGraph.Draw", "autoInstall": true }
+  ]
+}
