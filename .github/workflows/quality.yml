@@ -12,26 +12,28 @@ jobs:
   powershell-parse:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Parse PowerShell files
         shell: pwsh
         run: |
-          $errors = @()
+          $failed = $false
           Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
             $tokens = $null
             $parseErrors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
-            if ($parseErrors) { $errors += $parseErrors }
+            foreach ($parseError in @($parseErrors)) {
+              $failed = $true
+              $line = $parseError.Extent.StartLineNumber
+              $column = $parseError.Extent.StartColumnNumber
+              Write-Host "::error file=$($_.FullName),line=$line,col=$column::$($parseError.Message)"
+            }
           }
-          if ($errors.Count -gt 0) {
-            $errors | Format-List
-            exit 1
-          }
+          if ($failed) { exit 1 }
 
   shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Parse Bash files
         shell: bash
         run: |
@@ -53,7 +55,7 @@ jobs:
   json:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate JSON
         shell: bash
         run: |
