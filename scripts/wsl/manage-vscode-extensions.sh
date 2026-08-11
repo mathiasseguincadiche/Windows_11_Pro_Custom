@@ -33,7 +33,7 @@ list_installed() {
 if [[ "$mode" == audit ]]; then
   echo 'Extensions WSL demandées:'
   printf '  %s\n' "${requested[@]}"
-  echo 'Extensions visibles dans l’hôte WSL:'
+  echo "Extensions visibles dans l'hôte WSL:"
   list_installed | sed 's/^/  /'
   exit 0
 fi
@@ -46,7 +46,7 @@ if [[ "$mode" == apply ]]; then
   for extension in "${requested[@]}"; do
     code --install-extension "$extension" --force
   done
-  echo '[OK] Extensions VS Code installées dans l’hôte WSL.'
+  echo "[OK] Extensions VS Code installées dans l'hôte WSL."
   exit 0
 fi
 
