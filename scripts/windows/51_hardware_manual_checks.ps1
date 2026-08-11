@@ -48,11 +48,25 @@ function New-EmptyState {
 }
 
 function Read-State {
+    $state = New-EmptyState
     if (-not (Test-Path $statePath)) {
-        return New-EmptyState
+        return $state
     }
-    $raw = Get-Content -Raw $statePath | ConvertFrom-Json -AsHashtable
-    return $raw
+
+    $existing = Get-Content -Raw $statePath | ConvertFrom-Json
+    foreach ($name in @($target.manualChecks)) {
+        $property = $existing.Checks.PSObject.Properties[$name]
+        if ($null -ne $property) {
+            $state.Checks[$name] = [bool]$property.Value
+        }
+    }
+    if ($null -ne $existing.UpdatedAt) {
+        $state.UpdatedAt = [string]$existing.UpdatedAt
+    }
+    if ($null -ne $existing.Notes) {
+        $state.Notes = [string]$existing.Notes
+    }
+    return $state
 }
 
 function Show-State {
