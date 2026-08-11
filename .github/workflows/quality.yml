@@ -18,14 +18,15 @@ jobs:
         run: |
           $failed = $false
           Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $file = $_
             $tokens = $null
             $parseErrors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors)
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
             foreach ($parseError in @($parseErrors)) {
               $failed = $true
               $line = $parseError.Extent.StartLineNumber
               $column = $parseError.Extent.StartColumnNumber
-              Write-Host "::error file=$($_.FullName),line=$line,col=$column::$($parseError.Message)"
+              Write-Host "::error file=$($file.FullName),line=$line,col=$column::$($parseError.Message)"
             }
           }
           if ($failed) { exit 1 }
