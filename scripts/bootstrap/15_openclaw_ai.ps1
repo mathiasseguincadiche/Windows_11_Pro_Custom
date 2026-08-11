@@ -159,7 +159,7 @@ function Apply-Integration {
     if ($LASTEXITCODE -ne 0) {
         throw "L'installateur OpenClaw a échoué avec le code $LASTEXITCODE"
     }
-    Write-Host 'VERDICT: WINDOWS V8 OPENCLAW AI INSTALLED' -ForegroundColor Green
+    Write-Host 'VERDICT: OPENCLAW AI INSTALLED' -ForegroundColor Green
 }
 
 function Verify-Integration {
@@ -174,7 +174,7 @@ function Verify-Integration {
     if ($LASTEXITCODE -ne 0) {
         throw "La validation OpenClaw a échoué avec le code $LASTEXITCODE"
     }
-    Write-Host 'VERDICT: WINDOWS V8 OPENCLAW AI READY' -ForegroundColor Green
+    Write-Host 'VERDICT: OPENCLAW AI READY' -ForegroundColor Green
 }
 
 switch ($Mode) {
