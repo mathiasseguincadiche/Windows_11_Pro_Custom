@@ -159,7 +159,7 @@ switch ($Mode) {
         }
 
         foreach ($entry in @($config.registry)) {
-            New-Item -ItemType Directory -Force -Path $entry.path | Out-Null
+            New-Item -Force -Path $entry.path | Out-Null
             New-ItemProperty -Path $entry.path -Name $entry.property -PropertyType $entry.type -Value $entry.value -Force | Out-Null
         }
 
@@ -218,7 +218,7 @@ switch ($Mode) {
 
         foreach ($entry in @($backup.Registry)) {
             if ($entry.Exists) {
-                New-Item -ItemType Directory -Force -Path $entry.Path | Out-Null
+                New-Item -Force -Path $entry.Path | Out-Null
                 $kind = if ($entry.Kind) { [string]$entry.Kind } else { 'DWord' }
                 New-ItemProperty -Path $entry.Path -Name $entry.Property -PropertyType $kind -Value $entry.Value -Force | Out-Null
             } elseif (Test-Path $entry.Path) {
