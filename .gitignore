@@ -1,0 +1,9 @@
+logs/
+reports/
+*.etl
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+.vscode/*.log
