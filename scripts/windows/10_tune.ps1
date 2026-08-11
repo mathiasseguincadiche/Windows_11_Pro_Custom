@@ -34,7 +34,7 @@ function Get-RegistryState {
 
     $item = Get-Item -LiteralPath $Tweak.Path
     try {
-        $value = $item.GetValue($Tweak.Property, $null, 'DoNotExpandEnvironmentNames')
+        $value = $item.GetValue($Tweak.Property, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
         if ($null -eq $value) {
             return [pscustomobject]@{ Exists = $false; Value = $null; Kind = $null }
         }
@@ -49,7 +49,7 @@ function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw 'Ce mode doit être exécuté dans PowerShell administrateur.'
+        throw 'Ce mode doit etre execute dans PowerShell administrateur.'
     }
 }
 
@@ -82,9 +82,9 @@ switch ($Mode) {
                 }
             }
             $backup | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $statePath
-            Write-Host "[OK] État initial sauvegardé: $statePath"
+            Write-Host "[OK] Etat initial sauvegarde: $statePath"
         } else {
-            Write-Host '[INFO] Sauvegarde initiale déjà présente, elle n’est pas écrasée.'
+            Write-Host '[INFO] Sauvegarde initiale deja presente; elle ne sera pas ecrasee.'
         }
 
         foreach ($tweak in $tweaks) {
@@ -98,7 +98,7 @@ switch ($Mode) {
         foreach ($tweak in $tweaks) {
             $current = Get-RegistryState -Tweak $tweak
             if (-not ($current.Exists -and ([int64]$current.Value -eq [int64]$tweak.Value))) {
-                Write-Error "Échec: $($tweak.Name)"
+                Write-Error "Echec: $($tweak.Name)"
                 $failed++
             } else {
                 Write-Host "[OK] $($tweak.Name)"
@@ -119,6 +119,6 @@ switch ($Mode) {
                 Remove-ItemProperty -Path $entry.Path -Name $entry.Property -ErrorAction SilentlyContinue
             }
         }
-        Write-Host '[OK] Réglages Windows restaurés depuis la sauvegarde initiale.' -ForegroundColor Green
+        Write-Host '[OK] Reglages Windows restaures depuis la sauvegarde initiale.' -ForegroundColor Green
     }
 }
