@@ -78,6 +78,7 @@ switch ($Mode) {
         }
         & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage after
         & "$RepoRoot\scripts\windows\43_compare_benchmarks.ps1"
+        & "$RepoRoot\scripts\bootstrap\12_validate_v4.ps1" -OptimizationProfiles $OptimizationProfiles
 
         & "$RepoRoot\scripts\bootstrap\06_wsl.ps1" -Profile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
         & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Apply
@@ -107,6 +108,8 @@ switch ($Mode) {
         if ((Test-Path $beforeReport) -and (Test-Path $afterReport)) {
             & "$RepoRoot\scripts\windows\43_compare_benchmarks.ps1"
         }
+
+        & "$RepoRoot\scripts\bootstrap\12_validate_v4.ps1" -OptimizationProfiles $OptimizationProfiles
 
         if ($ValidateDevOps) {
             & "$RepoRoot\scripts\bootstrap\09_validate_devops.ps1" -Distribution $Distribution
