@@ -31,6 +31,13 @@ $PSVersionTable
 
 Windows PowerShell 5.1 reste présent pour la compatibilité des composants historiques Windows. PowerShell 7 devient le shell moderne recommandé pour le travail quotidien.
 
+VS Code expose deux profils de terminal Windows :
+
+```text
+Ubuntu WSL      profil par défaut pour le DevOps
+PowerShell 7    shell Windows moderne disponible à la demande
+```
+
 ## VS Code
 
 Configuration versionnée :
@@ -101,19 +108,19 @@ Get-Command ssh.exe
 
 Remote - SSH sert à travailler **directement sur le filesystem d'un serveur distant**.
 
-Exemple de configuration versionnée :
+Le client est exécuté côté Windows. Sa configuration de référence est donc :
+
+```text
+%USERPROFILE%\.ssh\config
+%USERPROFILE%\.ssh\id_ed25519
+%USERPROFILE%\.ssh\id_ed25519.pub
+```
+
+Exemple versionné :
 
 ```text
 config/vscode/ssh-config.example
 ```
-
-À recopier dans :
-
-```text
-%USERPROFILE%\.ssh\config
-```
-
-ou dans `~/.ssh/config` selon le client SSH utilisé.
 
 Exemple :
 
@@ -126,6 +133,25 @@ Host devops-server
     IdentitiesOnly yes
 ```
 
+Dans ce fichier Windows OpenSSH, `~` correspond au HOME Windows de l'utilisateur.
+
+### Créer la clé Windows pour Remote - SSH
+
+Dans PowerShell 7 :
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.ssh" | Out-Null
+ssh-keygen -t ed25519 -a 64 -f "$env:USERPROFILE\.ssh\id_ed25519" -C "windows-vscode-remote-ssh"
+```
+
+La clé privée reste :
+
+```text
+%USERPROFILE%\.ssh\id_ed25519
+```
+
+Ne jamais la versionner.
+
 Connexion dans VS Code :
 
 ```text
@@ -136,27 +162,27 @@ devops-server
 
 Le projet reste alors sur le serveur distant et VS Code Server s'exécute côté serveur.
 
-### Clé SSH recommandée
+## SSH depuis Ubuntu WSL
 
-Dans Ubuntu WSL :
+Le client Linux est distinct du client OpenSSH Windows.
 
-```bash
-ssh-keygen -t ed25519 -a 64 -C "workstation-devops"
-```
-
-Vérifier les permissions :
+Le bootstrap DevOps installe `openssh-client` dans Ubuntu. Si les commandes Linux `ssh`, `scp`, `rsync` ou SFTP ont besoin d'une clé, créer une **clé Linux séparée** :
 
 ```bash
+mkdir -p ~/.ssh
 chmod 700 ~/.ssh
+ssh-keygen -t ed25519 -a 64 -f ~/.ssh/id_ed25519 -C "wsl-devops"
 chmod 600 ~/.ssh/id_ed25519
 chmod 644 ~/.ssh/id_ed25519.pub
 ```
 
-Ne jamais versionner la clé privée.
+Cette séparation évite de dépendre d'un chemin `/mnt/c/...` pour une clé privée Linux et rend les permissions plus simples à comprendre.
+
+Les deux clés peuvent naturellement être autorisées sur le même serveur distant si nécessaire.
 
 ## VS Code SFTP / FTP
 
-L'extension `Natizyskunk.sftp` est installée côté Windows et dans l'hôte WSL afin de fonctionner avec les workspaces Linux.
+L'extension `Natizyskunk.sftp` est installée côté Windows et dans l'hôte WSL afin de fonctionner avec les deux types de workspace.
 
 Exemple sécurisé :
 
@@ -171,6 +197,26 @@ Dans un projet réel, l'extension utilise généralement :
 ```
 
 Ce fichier est ignoré par le dépôt principal afin d'éviter la publication accidentelle de secrets.
+
+### Workspace Windows
+
+Si l'extension tourne côté Windows :
+
+```text
+privateKeyPath = ~/.ssh/id_ed25519
+```
+
+référence la clé du HOME Windows.
+
+### Workspace WSL
+
+Si l'extension tourne dans l'hôte WSL :
+
+```text
+privateKeyPath = ~/.ssh/id_ed25519
+```
+
+référence la clé Linux située sous `/home/<user>/.ssh/`.
 
 Préférence :
 
