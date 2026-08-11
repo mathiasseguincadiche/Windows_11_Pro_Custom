@@ -27,24 +27,30 @@ function Assert-Administrator {
 function Assert-SafeExclusionPath {
     param([string]$Path)
 
-    if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Exclusion vide refusée.' }
-    if ($Path -match '[*?]') { throw "Wildcard refusé: $Path" }
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Exclusion vide refusee.' }
+    if ($Path -match '[*?]') { throw "Wildcard refuse: $Path" }
 
     $expanded = [Environment]::ExpandEnvironmentVariables($Path).TrimEnd('\\')
-    if ($expanded -match '^[A-Za-z]:$') { throw "Racine de volume refusée: $Path" }
-    if ($expanded -match '^\\\\[^\\]+\\[^\\]+$') { throw "Racine de partage refusée: $Path" }
-    if ($expanded -match '\.(exe|dll|ps1|bat|cmd|msi)$') { throw "Exclusion de fichier exécutable/script refusée: $Path" }
+    if ($expanded -match '^[A-Za-z]:$') { throw "Racine de volume refusee: $Path" }
+    if ($expanded -match '^\\\\[^\\]+\\[^\\]+$') { throw "Racine de partage refusee: $Path" }
+    if ($expanded -match '\.(exe|dll|ps1|bat|cmd|msi)$') { throw "Fichier executable ou script refuse: $Path" }
 
     return $expanded
 }
+
+$safeApproved = @(
+    foreach ($path in $approved) {
+        Assert-SafeExclusionPath -Path ([string]$path)
+    }
+)
 
 $current = @((Get-MpPreference).ExclusionPath)
 
 if ($Mode -eq 'Audit') {
     Write-Host 'Exclusions Defender actuelles:' -ForegroundColor Cyan
     if ($current.Count -eq 0) { Write-Host '  aucune' } else { $current | ForEach-Object { Write-Host "  $_" } }
-    Write-Host 'Exclusions approuvées par le dépôt:' -ForegroundColor Cyan
-    if ($approved.Count -eq 0) { Write-Host '  aucune' } else { $approved | ForEach-Object { Write-Host "  $_" } }
+    Write-Host 'Exclusions approuvees par le depot:' -ForegroundColor Cyan
+    if ($safeApproved.Count -eq 0) { Write-Host '  aucune' } else { $safeApproved | ForEach-Object { Write-Host "  $_" } }
     return
 }
 
@@ -52,19 +58,34 @@ Assert-Administrator
 
 if ($Mode -eq 'Apply') {
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-    if (-not (Test-Path $statePath)) {
-        @{ ExclusionPath = $current } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $statePath
+
+    if (Test-Path $statePath) {
+        $existingState = Get-Content -Raw $statePath | ConvertFrom-Json
+        $original = @($existingState.ExclusionPath)
+        $previousManaged = @()
+        if ($existingState.PSObject.Properties.Name -contains 'ManagedPaths') {
+            $previousManaged = @($existingState.ManagedPaths)
+        }
+        $managed = @($previousManaged + $safeApproved | Sort-Object -Unique)
+    } else {
+        $original = $current
+        $managed = $safeApproved
     }
 
-    foreach ($path in $approved) {
-        $safePath = Assert-SafeExclusionPath -Path ([string]$path)
+    [ordered]@{
+        ExclusionPath = $original
+        ManagedPaths = $managed
+    } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $statePath
+
+    foreach ($safePath in $safeApproved) {
         if ($current -notcontains $safePath) {
             Add-MpPreference -ExclusionPath $safePath
-            Write-Host "[OK] Exclusion ciblée ajoutée: $safePath"
+            Write-Host "[OK] Exclusion ciblee ajoutee: $safePath"
         }
     }
-    if ($approved.Count -eq 0) {
-        Write-Host '[OK] Aucune exclusion approuvée: Defender reste sans exception ajoutée par ce dépôt.'
+
+    if ($safeApproved.Count -eq 0) {
+        Write-Host '[OK] Aucune exclusion approuvee. Defender reste sans exception ajoutee par ce depot.'
     }
     return
 }
@@ -72,12 +93,17 @@ if ($Mode -eq 'Apply') {
 if (-not (Test-Path $statePath)) { throw "Sauvegarde absente: $statePath" }
 $backup = Get-Content -Raw $statePath | ConvertFrom-Json
 $original = @($backup.ExclusionPath)
+$managed = if ($backup.PSObject.Properties.Name -contains 'ManagedPaths') {
+    @($backup.ManagedPaths)
+} else {
+    $safeApproved
+}
 $current = @((Get-MpPreference).ExclusionPath)
 
-foreach ($path in $current) {
-    if ($original -notcontains $path -and $approved -contains $path) {
+foreach ($path in $managed) {
+    if ($original -notcontains $path -and $current -contains $path) {
         Remove-MpPreference -ExclusionPath $path
-        Write-Host "[OK] Exclusion retirée: $path"
+        Write-Host "[OK] Exclusion retiree: $path"
     }
 }
-Write-Host '[OK] Rollback des exclusions gérées par le dépôt terminé.' -ForegroundColor Green
+Write-Host '[OK] Rollback des exclusions gerees par le depot termine.' -ForegroundColor Green
