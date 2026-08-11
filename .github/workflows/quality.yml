@@ -34,6 +34,9 @@ jobs:
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default
+          }
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
           Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
           $results = @(Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error)
