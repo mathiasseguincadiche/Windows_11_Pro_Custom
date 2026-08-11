@@ -1,31 +1,32 @@
-# Validation
+# Validation V3
 
-## V2 — contrôles obligatoires
+## Règle de qualification
 
-Le poste est considéré prêt uniquement lorsque les contrôles Windows et WSL2 attendus sont verts.
+La machine est considérée **V3 READY** uniquement lorsque les contrôles Windows et WSL2 sont tous les deux verts.
 
-### Windows
+## Windows
+
+Commande stricte :
 
 ```powershell
-.\install.ps1 -Mode Audit
 .\install.ps1 -Mode Verify
 ```
 
-La validation couvre notamment :
+Le validateur `scripts/bootstrap/11_validate_v3.ps1` contrôle notamment :
 
 - Windows 11 ;
 - `C:` en NTFS ;
 - `D:` en NTFS ;
-- aucune dépendance à une partition EXT4 physique ;
-- présence de `.wslconfig` après application ;
-- commande WSL disponible ;
+- Defender Antivirus actif ;
 - protection temps réel Defender active ;
-- état CPU / RAM / GPU ;
-- état des SSD et volumes ;
-- TRIM ;
-- plan d'alimentation ;
-- compression mémoire Windows ;
-- configuration WSL.
+- absence d'exclusion Defender racine `C:\` ou `D:\` ;
+- commande WSL disponible ;
+- profil `.wslconfig` identique au profil demandé ;
+- distribution Ubuntu présente ;
+- emplacement WSL sous `D:\WSL\Ubuntu-DevOps` ;
+- présence du VHDX sur le SSD DATA ;
+- configuration VS Code identique à la V3 ;
+- configuration WezTerm identique à la V3.
 
 Rapports locaux :
 
@@ -33,12 +34,18 @@ Rapports locaux :
 reports/preflight.json
 reports/windows/system-audit.json
 reports/defender-baseline.json
-reports/validation.json
+reports/validation-v3.json
 ```
 
-### WSL2 / DevOps
+Verdict attendu :
 
-Après le bootstrap DevOps et un `wsl --shutdown` :
+```text
+VERDICT: V3 WINDOWS READY
+```
+
+## WSL2 / DevOps
+
+Après installation de la stack et un `wsl --shutdown` :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateDevOps
@@ -47,30 +54,50 @@ Après le bootstrap DevOps et un `wsl --shutdown` :
 Le validateur Linux contrôle :
 
 - Git ;
-- curl ;
-- jq ;
-- Docker Engine ;
-- Docker Compose ;
+- Docker Engine et Compose ;
 - kubectl ;
 - Helm ;
+- Minikube ;
+- kind ;
 - Terraform ;
-- AWS CLI ;
-- Ansible ;
+- AWS CLI v2 ;
+- Ansible Core ;
 - GitHub CLI ;
 - Trivy ;
 - ShellCheck ;
 - shfmt ;
-- Minikube ;
-- kind ;
-- HOME Linux hors de `/mnt/c` et `/mnt/d` ;
-- présence des répertoires de travail.
+- terraform-docs ;
+- actionlint ;
+- yq ;
+- TFLint ;
+- Docker accessible sans sudo ;
+- service Docker systemd actif ;
+- driver de logs Docker `local` ;
+- HOME hors de `/mnt/c` et `/mnt/d` ;
+- répertoires `projects`, `labs`, `repositories`, `workspace`, `backups` ;
+- profil shell versionné ;
+- workflows GitHub Actions avec actionlint ;
+- smoke test Terraform.
 
 Verdict attendu :
 
 ```text
-VERDICT: STACK DEVOPS READY
+VERDICT: V3 DEVOPS READY
 ```
+
+## Qualification du dépôt GitHub
+
+La PR V3 doit également être verte sur :
+
+- parsing PowerShell ;
+- PSScriptAnalyzer niveau Error ;
+- `bash -n` ;
+- ShellCheck ;
+- JSON ;
+- syntaxe Lua WezTerm ;
+- actionlint ;
+- garde-fou contre les opérations de formatage disque et la désactivation temps réel Defender.
 
 ## Règle de sortie
 
-Un contrôle `KO` doit être corrigé avant de considérer la machine comme qualifiée. Une optimisation qui ne peut pas être auditée, vérifiée ou annulée ne doit pas être intégrée au bootstrap principal.
+Un seul `KO` bloque la qualification. Une optimisation non auditée, non vérifiable ou sans rollback ne doit pas être fusionnée dans `main`.
