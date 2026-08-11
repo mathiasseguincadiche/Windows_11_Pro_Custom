@@ -45,12 +45,12 @@ if ($Mode -eq 'Apply') {
         Write-Host '[INFO] Installation du client OpenSSH Windows...'
         $result = Add-WindowsCapability -Online -Name $capabilityName
         if ($result.RestartNeeded) {
-            Write-Warning 'OpenSSH Client indique qu’un redémarrage Windows est nécessaire.'
+            Write-Warning "OpenSSH Client indique qu’un redémarrage Windows est nécessaire."
         }
     }
 
     $capability = Get-OpenSshClientCapability
-    if ($capability.State -ne 'Installed') { throw 'OpenSSH Client n’est pas installé après Apply.' }
+    if ($capability.State -ne 'Installed') { throw "OpenSSH Client n’est pas installé après Apply." }
     if (-not (Test-SshCommand)) { throw 'OpenSSH Client est installé mais ssh.exe reste introuvable.' }
 
     Write-Host '[OK] OpenSSH Client prêt pour VS Code Remote - SSH.' -ForegroundColor Green
@@ -71,10 +71,10 @@ if (-not (Test-Path $statePath)) {
 
 $state = Get-Content -Raw $statePath | ConvertFrom-Json
 if (-not [bool]$state.InstalledBefore -and $installed) {
-    Write-Host '[INFO] Restauration de l’état initial : suppression du client OpenSSH ajouté par le dépôt.'
+    Write-Host "[INFO] Restauration de l’état initial : suppression du client OpenSSH ajouté par le dépôt."
     $result = Remove-WindowsCapability -Online -Name $capabilityName
     if ($result.RestartNeeded) {
-        Write-Warning 'La suppression OpenSSH Client indique qu’un redémarrage Windows est nécessaire.'
+        Write-Warning "La suppression OpenSSH Client indique qu’un redémarrage Windows est nécessaire."
     }
 }
 
