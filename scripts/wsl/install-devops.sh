@@ -43,7 +43,7 @@ log "Paquets de base"
 sudo apt-get update
 sudo apt-get install -y \
   ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client rsync \
-  python3 python3-pip python3-venv pipx shellcheck shfmt ansible-core
+  python3 python3-pip python3-venv pipx shellcheck shfmt ansible-core bash-completion
 
 log "Docker Engine + Buildx + Compose depuis le dépôt Docker officiel"
 for pkg in docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc; do
@@ -134,17 +134,23 @@ KIND_VERSION="${KIND_VERSION:-v0.32.0}"
 curl -fsSL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" -o "$tmpdir/kind"
 sudo install -m 0755 "$tmpdir/kind" /usr/local/bin/kind
 
+log "Outils qualité IaC"
+bash "$SCRIPT_DIR/install-quality-tools.sh"
+
+log "Profil shell DevOps"
+bash "$SCRIPT_DIR/manage-shell-profile.sh" apply
+
 log "Répertoires de travail"
 mkdir -p "$HOME"/{projects,labs,repositories,scripts,workspace,backups}
 
 cat <<'EOF'
 
-[OK] Stack DevOps installée.
+[OK] Stack DevOps V3 installée.
 
 Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
+Les outils IaC et le profil shell DevOps sont installés.
 Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL.
 Exécute ensuite :
   wsl.exe --shutdown   # depuis Windows
-puis relance Ubuntu et :
-  ./scripts/wsl/validate-devops.sh
+puis relance Ubuntu et valide la V3.
 EOF

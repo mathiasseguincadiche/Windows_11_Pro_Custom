@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind terraform-docs actionlint yq tflint)
 failed=0
+warnings=0
 
-printf 'Validation stack DevOps WSL2\n\n'
+ok() { printf '[OK] %s\n' "$*"; }
+ko() { printf '[KO] %s\n' "$*"; failed=$((failed + 1)); }
+warn() { printf '[AVERTISSEMENT] %s\n' "$*"; warnings=$((warnings + 1)); }
+
+printf 'Validation stack DevOps WSL2 - V3\n\n'
 
 for cmd in "${required[@]}"; do
   if command -v "$cmd" >/dev/null 2>&1; then
-    printf '[OK] %-12s %s\n' "$cmd" "$(command -v "$cmd")"
+    printf '[OK] %-16s %s\n' "$cmd" "$(command -v "$cmd")"
   else
-    printf '[KO] %-12s absent\n' "$cmd"
+    printf '[KO] %-16s absent\n' "$cmd"
     failed=$((failed + 1))
   fi
 done
@@ -28,37 +35,99 @@ gh --version | head -n 1 || true
 trivy --version || true
 minikube version || true
 kind version || true
+terraform-docs --version || true
+actionlint -version || true
+yq --version || true
+tflint --version || true
 
 printf '\nDocker daemon\n'
 if docker info >/dev/null 2>&1; then
-  echo '[OK] Docker Engine accessible sans sudo.'
+  ok 'Docker Engine accessible sans sudo.'
+  logging_driver="$(docker info --format '{{.LoggingDriver}}' 2>/dev/null || true)"
+  if [[ "$logging_driver" == local ]]; then
+    ok 'Docker logging driver = local.'
+  else
+    ko "Docker logging driver inattendu: ${logging_driver:-inconnu}"
+  fi
 else
-  echo '[AVERTISSEMENT] Docker Engine non accessible. Ferme WSL avec wsl.exe --shutdown puis relance la distribution.'
+  ko 'Docker Engine non accessible sans sudo. Ferme WSL avec wsl.exe --shutdown puis relance Ubuntu.'
+fi
+
+if systemctl is-active --quiet docker 2>/dev/null; then
+  ok 'Service systemd docker actif.'
+else
+  ko 'Service systemd docker inactif.'
 fi
 
 printf '\nFilesystem de travail\n'
 case "$HOME" in
   /mnt/c/*|/mnt/d/*)
-    echo "[KO] HOME est sur un filesystem Windows: $HOME"
-    failed=$((failed + 1))
+    ko "HOME est sur un filesystem Windows: $HOME"
     ;;
   *)
-    echo "[OK] HOME Linux: $HOME"
+    ok "HOME Linux: $HOME"
     ;;
 esac
 
-for dir in projects labs repositories workspace; do
+for dir in projects labs repositories workspace backups; do
   if [[ -d "$HOME/$dir" ]]; then
-    echo "[OK] $HOME/$dir"
+    ok "$HOME/$dir"
   else
-    echo "[KO] Répertoire absent: $HOME/$dir"
-    failed=$((failed + 1))
+    ko "Répertoire absent: $HOME/$dir"
   fi
 done
 
+printf '\nProfil shell\n'
+if bash "$SCRIPT_DIR/manage-shell-profile.sh" verify; then
+  ok 'Profil shell V3 opérationnel.'
+else
+  ko 'Profil shell V3 invalide.'
+fi
+
+printf '\nVS Code WSL\n'
+if bash "$SCRIPT_DIR/manage-vscode-extensions.sh" verify; then
+  ok 'Extensions VS Code WSL opérationnelles.'
+else
+  ko 'Extensions VS Code WSL invalides.'
+fi
+
+printf '\nQualité GitHub Actions\n'
+if compgen -G "$REPO_ROOT/.github/workflows/*.yml" >/dev/null; then
+  if actionlint "$REPO_ROOT"/.github/workflows/*.yml; then
+    ok 'actionlint valide les workflows du dépôt.'
+  else
+    ko 'actionlint détecte une erreur dans les workflows.'
+  fi
+else
+  warn 'Aucun workflow .yml trouvé pour actionlint.'
+fi
+
+printf '\nTerraform smoke test\n'
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+cat > "$tmpdir/main.tf" <<'EOF'
+terraform {
+  required_version = ">= 1.0"
+}
+
+variable "environment" {
+  type    = string
+  default = "validation"
+}
+
+output "environment" {
+  value = var.environment
+}
+EOF
+if terraform -chdir="$tmpdir" fmt -check -diff >/dev/null && terraform -chdir="$tmpdir" validate >/dev/null; then
+  ok 'Terraform fmt/validate opérationnels.'
+else
+  ko 'Terraform smoke test en échec.'
+fi
+
 if [[ $failed -gt 0 ]]; then
-  printf '\nVERDICT: KO (%d contrôle(s) en échec)\n' "$failed"
+  printf '\nVERDICT: KO (%d contrôle(s) en échec, %d avertissement(s))\n' "$failed" "$warnings"
   exit 1
 fi
 
-printf '\nVERDICT: STACK DEVOPS READY\n'
+printf '\nVERDICT: V3 DEVOPS READY (%d avertissement(s))\n' "$warnings"

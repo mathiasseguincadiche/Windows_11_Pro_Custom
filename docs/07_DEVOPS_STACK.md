@@ -17,14 +17,10 @@ et non dans `/mnt/c` ou `/mnt/d`.
 Après installation de WSL2, lancer Ubuntu une première fois afin de créer l'utilisateur Linux. Puis, depuis PowerShell administrateur à la racine du dépôt :
 
 ```powershell
-.\scripts\bootstrap\08_devops.ps1 -Distribution Ubuntu
+.\install.ps1 -Mode Apply -InstallDevOps
 ```
 
-Ou directement depuis Ubuntu :
-
-```bash
-bash ./scripts/wsl/install-devops.sh
-```
+Le bootstrap principal appelle `scripts/wsl/install-devops.sh`, puis les installateurs qualité et profil shell.
 
 ## Outils installés
 
@@ -38,6 +34,12 @@ bash ./scripts/wsl/install-devops.sh
 
 Docker est installé depuis le dépôt APT officiel Docker et fonctionne avec systemd dans WSL2.
 
+Le daemon utilise le driver de logs `local` avec rotation définie dans :
+
+```text
+config/wsl/docker-daemon.json
+```
+
 ### Kubernetes
 
 - kubectl ;
@@ -45,9 +47,7 @@ Docker est installé depuis le dépôt APT officiel Docker et fonctionne avec sy
 - Minikube ;
 - kind.
 
-Le script détermine dynamiquement la branche mineure Kubernetes stable pour configurer `pkgs.k8s.io`. `kind` est épinglé par défaut sur une version stable définie dans le script et peut être surchargé par `KIND_VERSION`.
-
-Pour Minikube sous WSL2, le driver recommandé pour cette architecture est Docker :
+Pour Minikube sous WSL2 :
 
 ```bash
 minikube start --driver=docker
@@ -65,7 +65,13 @@ minikube start --driver=docker
 - ShellCheck ;
 - shfmt ;
 - Trivy ;
-- jq.
+- jq ;
+- yq `v4.53.3` ;
+- terraform-docs `v0.24.0` ;
+- actionlint `v1.7.12` ;
+- TFLint `v0.64.0`.
+
+Les binaires téléchargés directement sont contrôlés par empreinte SHA-256. actionlint et TFLint utilisent aussi GitHub Artifact Attestations.
 
 ## Docker sans sudo
 
@@ -84,19 +90,39 @@ docker run --rm hello-world
 
 L'appartenance au groupe `docker` donne un niveau de privilège important sur la machine Linux ; elle est choisie ici pour l'ergonomie d'un poste DevOps personnel.
 
-## Validation
+## Profil shell
+
+Le bootstrap installe :
+
+```text
+~/.config/windows11-pro-custom/devops.sh
+```
+
+et ajoute un bloc borné dans `~/.bashrc` pour les alias et complétions DevOps.
+
+## Validation V3
 
 ```bash
 bash ./scripts/wsl/validate-devops.sh
 ```
 
-Le verdict attendu est :
+Le validateur contrôle notamment :
+
+- tous les binaires DevOps et qualité ;
+- Docker accessible sans sudo ;
+- service systemd Docker actif ;
+- logging driver Docker `local` ;
+- HOME Linux hors de `/mnt/c` et `/mnt/d` ;
+- répertoires de travail ;
+- profil shell ;
+- workflows GitHub Actions avec actionlint ;
+- smoke test `terraform fmt` / `terraform validate`.
+
+Verdict attendu :
 
 ```text
-VERDICT: STACK DEVOPS READY
+VERDICT: V3 DEVOPS READY
 ```
-
-Le contrôle vérifie également que le HOME Linux ne se trouve pas sous `/mnt/c` ou `/mnt/d`.
 
 ## Répertoires créés
 
@@ -111,11 +137,11 @@ Le contrôle vérifie également que le HOME Linux ne se trouve pas sous `/mnt/c
 
 ## Mise à jour
 
-Les composants installés via APT suivent ensuite le mécanisme normal :
+Les composants installés via APT suivent :
 
 ```bash
 sudo apt update
 sudo apt upgrade
 ```
 
-AWS CLI, Minikube et kind sont des installations binaires et doivent être mis à jour via leurs installateurs ou en relançant le bootstrap après validation d'une nouvelle version.
+Les outils binaires épinglés doivent être mis à jour dans le dépôt avec leurs nouvelles empreintes, puis requalifiés par CI avant changement de version.
