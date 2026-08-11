@@ -45,10 +45,10 @@ function Invoke-LinuxValue {
 }
 
 $processors = [int](Invoke-LinuxValue 'nproc')
-$memKb = [int64](Invoke-LinuxValue "awk '/MemTotal:/ {print \$2}' /proc/meminfo")
-$memoryGB = [math]::Round(($memKb * 1KB) / 1GB, 2)
-$swapBytesText = Invoke-LinuxValue "swapon --show --bytes --noheadings --output=SIZE 2>/dev/null | awk '{s+=\$1} END {print s+0}'"
-$swapGB = [math]::Round(([int64]$swapBytesText) / 1GB, 2)
+$memoryBytes = [int64](Invoke-LinuxValue "free -b | sed -n '2p' | tr -s ' ' | cut -d ' ' -f 2")
+$memoryGB = [math]::Round($memoryBytes / 1GB, 2)
+$swapBytes = [int64](Invoke-LinuxValue "free -b | sed -n '3p' | tr -s ' ' | cut -d ' ' -f 2")
+$swapGB = [math]::Round($swapBytes / 1GB, 2)
 $pid1 = Invoke-LinuxValue 'ps -p 1 -o comm='
 $homeFs = Invoke-LinuxValue 'findmnt -T "$HOME" -n -o FSTYPE'
 $projectsPath = Invoke-LinuxValue 'printf "%s" "$HOME/projects"'
