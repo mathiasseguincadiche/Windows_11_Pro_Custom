@@ -1,0 +1,18 @@
+{
+  "profile": "optional",
+  "description": "Profil optionnel pour réduire quelques services non essentiels. Il n'est jamais appliqué par défaut.",
+  "rebootRecommended": true,
+  "registry": [],
+  "services": [
+    {
+      "name": "DiagTrack",
+      "startupType": "Disabled",
+      "source": "WinUtil:WPFTweaksServices"
+    },
+    {
+      "name": "MapsBroker",
+      "startupType": "Manual",
+      "source": "WinUtil:WPFTweaksServices"
+    }
+  ]
+}

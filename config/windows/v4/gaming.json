@@ -1,0 +1,40 @@
+{
+  "profile": "gaming",
+  "description": "Profil optionnel gaming : conserve Game Mode et désactive uniquement les captures en arrière-plan. Aucun tweak GPU/latence non documenté.",
+  "rebootRecommended": false,
+  "registry": [
+    {
+      "name": "Enable Windows Game Mode",
+      "path": "HKCU:\\Software\\Microsoft\\GameBar",
+      "property": "AutoGameModeEnabled",
+      "value": 1,
+      "type": "DWord",
+      "source": "Windows11ProCustom"
+    },
+    {
+      "name": "Allow Windows Game Mode",
+      "path": "HKCU:\\Software\\Microsoft\\GameBar",
+      "property": "AllowAutoGameMode",
+      "value": 1,
+      "type": "DWord",
+      "source": "Windows11ProCustom"
+    },
+    {
+      "name": "Disable Game DVR recording",
+      "path": "HKCU:\\System\\GameConfigStore",
+      "property": "GameDVR_Enabled",
+      "value": 0,
+      "type": "DWord",
+      "source": "Windows11ProCustom"
+    },
+    {
+      "name": "Disable app capture in background",
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+      "property": "AppCaptureEnabled",
+      "value": 0,
+      "type": "DWord",
+      "source": "Windows11ProCustom"
+    }
+  ],
+  "services": []
+}
