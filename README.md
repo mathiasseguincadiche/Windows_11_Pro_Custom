@@ -506,4 +506,4 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
 - V5 : qualification hardware ciblée + guide WSL2 complet — intégrée.
 - V6 : tuning WSL2 matériel, PowerShell 7, OpenSSH Client et accès distant VS Code — intégrée.
-- V7 : Golden Backup Windows + export WSL2 + SHA-256 + plan de reprise non destructif — implémentée sur la branche V7 ; qualification CI et première sauvegarde réelle requises avant verdict runtime.
+- V7 : Golden Backup Windows + export WSL2 + SHA-256 + plan de reprise non destructif — périmètre complet et qualifié par CI ; première sauvegarde réelle requise avant le verdict runtime `V7 BACKUP READY`.
