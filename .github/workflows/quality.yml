@@ -26,6 +26,7 @@ jobs:
               $failed = $true
               $line = $parseError.Extent.StartLineNumber
               $column = $parseError.Extent.StartColumnNumber
+              Write-Host "PARSE_ERROR $($file.FullName) line=$line col=$column message=$($parseError.Message)"
               Write-Host "::error file=$($file.FullName),line=$line,col=$column::$($parseError.Message)"
             }
           }
