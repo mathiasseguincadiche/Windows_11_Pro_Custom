@@ -292,4 +292,4 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - V2 : tuning Windows réversible, Defender mesuré et stack DevOps — intégrée.
 - V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
 - V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
-- V5 : qualification hardware ciblée + guide WSL2 complet — candidate à fusion après CI verte.
+- V5 : qualification hardware ciblée + guide WSL2 complet — périmètre complet et qualifié par CI.
