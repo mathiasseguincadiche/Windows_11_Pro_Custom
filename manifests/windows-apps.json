@@ -14,11 +14,13 @@
     "Notepad++",
     "PDFgear",
     "Files",
-    "draw.io"
+    "draw.io",
+    "Bitwarden"
   ],
   "notes": [
-    "Les identifiants WinGet seront verifies avant automatisation de l'installation.",
-    "Office peut necessiter le compte/licence Microsoft et ne doit pas etre suppose installable silencieusement.",
-    "Aucune application non demandee n'est ajoutee au socle core sans decision explicite."
+    "WSL2 fait partie du socle de la machine mais est provisionné par le bootstrap Windows, pas par le catalogue applicatif WinGet.",
+    "Les identifiants WinGet sont vérifiés avant automatisation de l'installation.",
+    "Office peut nécessiter le compte/licence Microsoft et ne doit pas être supposé installable silencieusement.",
+    "Aucune application non demandée n'est ajoutée au socle core sans décision explicite."
   ]
 }
