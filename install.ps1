@@ -16,6 +16,7 @@ Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
 & "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
 
 if ($Mode -eq 'Apply') {
+    & "$RepoRoot\scripts\bootstrap\03_apps.ps1"
     & "$RepoRoot\scripts\bootstrap\06_wsl.ps1" -Profile $WslProfile
 }
 
