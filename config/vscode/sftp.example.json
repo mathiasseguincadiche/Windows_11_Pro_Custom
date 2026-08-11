@@ -1,0 +1,17 @@
+{
+  "name": "server-sftp",
+  "host": "server.example.com",
+  "protocol": "sftp",
+  "port": 22,
+  "username": "replace-me",
+  "remotePath": "/srv/project",
+  "privateKeyPath": "~/.ssh/id_ed25519",
+  "uploadOnSave": false,
+  "ignore": [
+    ".git/**",
+    ".terraform/**",
+    "node_modules/**",
+    "*.tfstate*",
+    ".env"
+  ]
+}

@@ -14,6 +14,7 @@ param(
 
     [switch]$InstallDevOps,
     [switch]$ValidateDevOps,
+    [switch]$ValidateWsl,
     [switch]$ValidateHardware,
     [switch]$SkipV4RestorePoint
 )
@@ -23,6 +24,7 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
 
 Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
+Write-Host "WSL2 profile: $WslProfile" -ForegroundColor Cyan
 Write-Host "V4 optimization profiles: $($OptimizationProfiles -join ', ')" -ForegroundColor Cyan
 
 if ($Mode -eq 'Rollback') {
@@ -89,6 +91,7 @@ switch ($Mode) {
 
         if ($InstallDevOps) {
             & "$RepoRoot\scripts\bootstrap\08_devops.ps1" -Distribution $Distribution
+            & "$RepoRoot\scripts\bootstrap\14_validate_wsl_v6.ps1" -WslProfile $WslProfile -Distribution $Distribution
         } else {
             Write-Host '[INFO] DevOps stack not installed in this pass. Relaunch Apply with -InstallDevOps after first Ubuntu launch.' -ForegroundColor Yellow
         }
@@ -119,6 +122,12 @@ switch ($Mode) {
             & "$RepoRoot\scripts\bootstrap\13_validate_hardware_v5.ps1" -RequireManualChecks
         } else {
             Write-Host '[INFO] Final hardware V5 qualification not requested. Use -ValidateHardware after recording the manual BIOS/placement/stability checks.' -ForegroundColor Yellow
+        }
+
+        if ($ValidateWsl -or $ValidateDevOps) {
+            & "$RepoRoot\scripts\bootstrap\14_validate_wsl_v6.ps1" -WslProfile $WslProfile -Distribution $Distribution
+        } else {
+            Write-Host '[INFO] WSL2 V6 runtime qualification not requested. Use -ValidateWsl.' -ForegroundColor Yellow
         }
 
         if ($ValidateDevOps) {

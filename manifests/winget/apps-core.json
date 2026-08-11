@@ -1,6 +1,7 @@
 {
   "apps": [
     { "name": "Visual Studio Code", "wingetId": "Microsoft.VisualStudioCode", "autoInstall": true },
+    { "name": "PowerShell 7", "wingetId": "Microsoft.PowerShell", "autoInstall": true },
     { "name": "MarkText", "wingetId": null, "autoInstall": false },
     { "name": "VLC", "wingetId": "VideoLAN.VLC", "autoInstall": true },
     { "name": "Notion", "wingetId": "Notion.Notion", "autoInstall": true },

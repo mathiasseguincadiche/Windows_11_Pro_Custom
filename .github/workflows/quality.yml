@@ -126,6 +126,44 @@ jobs:
             (.manualChecks | type == "array") and
             (.manualChecks | length == 8)
           ' config/hardware/target-v5.json >/dev/null
+      - name: Validate V6 WSL profiles and remote tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          standard='config/wsl/standard.wslconfig'
+          heavy='config/wsl/lab-heavy.wslconfig'
+          nat='config/wsl/nat-fallback.wslconfig'
+
+          grep -qx 'memory=20GB' "$standard"
+          grep -qx 'processors=8' "$standard"
+          grep -qx 'swap=8GB' "$standard"
+          grep -Fqx 'swapFile=D:\\WSL\\swap\\wsl-swap.vhdx' "$standard"
+          grep -qx 'networkingMode=mirrored' "$standard"
+
+          grep -qx 'memory=28GB' "$heavy"
+          grep -qx 'processors=12' "$heavy"
+          grep -qx 'swap=12GB' "$heavy"
+          grep -Fqx 'swapFile=D:\\WSL\\swap\\wsl-swap.vhdx' "$heavy"
+          grep -qx 'networkingMode=mirrored' "$heavy"
+
+          grep -qx 'memory=20GB' "$nat"
+          grep -qx 'processors=8' "$nat"
+          grep -qx 'swap=8GB' "$nat"
+          grep -qx 'networkingMode=nat' "$nat"
+
+          for file in "$standard" "$heavy" "$nat"; do
+            grep -qx 'dnsTunneling=true' "$file"
+            grep -qx 'firewall=true' "$file"
+            grep -qx 'autoProxy=true' "$file"
+            grep -qx 'nestedVirtualization=false' "$file"
+            grep -qx 'autoMemoryReclaim=gradual' "$file"
+            grep -qx 'sparseVhd=true' "$file"
+          done
+
+          jq -e '.apps[] | select(.wingetId == "Microsoft.PowerShell" and .autoInstall == true)' manifests/winget/apps-core.json >/dev/null
+          grep -qx 'ms-vscode-remote.remote-ssh' config/vscode/extensions.txt
+          grep -qx 'Natizyskunk.sftp' config/vscode/extensions.txt
+          grep -qx 'Natizyskunk.sftp' config/vscode/extensions-wsl.txt
       - name: Validate WezTerm Lua syntax
         shell: bash
         run: |
@@ -198,3 +236,16 @@ jobs:
             exit 1
           fi
           echo 'V5 observational hardware policy: OK'
+      - name: Enforce V6 WSL safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '^(memory=(3[3-9]|[4-9][0-9])GB|processors=(1[3-9]|[2-9][0-9])|swap=0|nestedVirtualization=true)$' config/wsl/*.wslconfig; then
+            echo 'Unsafe or oversized WSL V6 resource setting detected.' >&2
+            exit 1
+          fi
+          if grep -RInE 'autoMemoryReclaim=disabled|firewall=false|dnsTunneling=false' config/wsl/*.wslconfig; then
+            echo 'A required WSL V6 memory/network safety setting was disabled.' >&2
+            exit 1
+          fi
+          echo 'V6 WSL safety boundaries: OK'

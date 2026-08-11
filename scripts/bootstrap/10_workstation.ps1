@@ -10,5 +10,6 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 
 & "$repoRoot\scripts\windows\30_vscode.ps1" -Mode $Mode
 & "$repoRoot\scripts\windows\31_wezterm.ps1" -Mode $Mode
+& "$repoRoot\scripts\windows\32_openssh_client.ps1" -Mode $Mode
 
 Write-Host "[OK] Poste de travail: $Mode terminé." -ForegroundColor Green

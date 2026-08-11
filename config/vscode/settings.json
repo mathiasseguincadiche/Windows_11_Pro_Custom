@@ -7,6 +7,9 @@
     "Ubuntu WSL": {
       "path": "C:\\Windows\\System32\\wsl.exe",
       "args": ["-d", "Ubuntu"]
+    },
+    "PowerShell 7": {
+      "path": "pwsh.exe"
     }
   },
   "terminal.integrated.defaultProfile.windows": "Ubuntu WSL",
