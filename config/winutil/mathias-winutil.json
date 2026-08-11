@@ -1,0 +1,84 @@
+{
+  "schema": "windows11-pro-custom.winutil-reference.v1",
+  "upstream": "ChrisTitusTech/winutil",
+  "upstreamPreset": "Standard",
+  "execution": "reference-only",
+  "warning": "Ce fichier documente le mapping avec WinUtil. Il n'est pas présenté comme un export WinUtil directement importable.",
+  "mapping": {
+    "WPFTweaksActivity": {
+      "decision": "native",
+      "implementation": "config/windows/v4/standard.json",
+      "reason": "Réglages Registry réversibles."
+    },
+    "WPFTweaksConsumerFeatures": {
+      "decision": "native-existing",
+      "implementation": "scripts/windows/10_tune.ps1",
+      "reason": "Déjà géré par la couche V2/V3."
+    },
+    "WPFTweaksDisableExplorerAutoDiscovery": {
+      "decision": "deferred",
+      "implementation": null,
+      "reason": "Non intégré sans mécanisme upstream clairement isolé et vérifiable."
+    },
+    "WPFTweaksWPBT": {
+      "decision": "native",
+      "implementation": "config/windows/v4/standard.json",
+      "reason": "Réglage sécurité Registry réversible."
+    },
+    "WPFTweaksLocation": {
+      "decision": "optional",
+      "implementation": "config/windows/v4/privacy.json",
+      "reason": "Peut affecter localisation, météo et fonctions associées."
+    },
+    "WPFTweaksServices": {
+      "decision": "curated-optional",
+      "implementation": "config/windows/v4/optional.json",
+      "reason": "DiagTrack et MapsBroker uniquement. CscService, StorSvc et SharedAccess ne sont pas modifiés."
+    },
+    "WPFTweaksTelemetry": {
+      "decision": "native-existing",
+      "implementation": "scripts/windows/10_tune.ps1",
+      "reason": "Niveau de diagnostic raisonnable, Defender et services de sécurité conservés."
+    },
+    "WPFTweaksDeliveryOptimization": {
+      "decision": "native",
+      "implementation": "config/windows/v4/standard.json",
+      "reason": "Désactive le peer-to-peer sans désactiver Windows Update."
+    },
+    "WPFTweaksDiskCleanup": {
+      "decision": "excluded-from-automatic",
+      "implementation": null,
+      "reason": "Suppression de fichiers non réversible ; incompatible avec la règle rollback de la V4."
+    },
+    "WPFTweaksDeleteTempFiles": {
+      "decision": "excluded-from-automatic",
+      "implementation": null,
+      "reason": "Suppression de fichiers non réversible ; maintenance séparée uniquement."
+    },
+    "WPFTweaksEndTaskOnTaskbar": {
+      "decision": "native",
+      "implementation": "config/windows/v4/standard.json",
+      "reason": "Amélioration d'ergonomie réversible."
+    },
+    "WPFTweaksRestorePoint": {
+      "decision": "native",
+      "implementation": "scripts/windows/41_restore_point.ps1",
+      "reason": "Tentative de point de restauration avant Apply, en complément du backup Registry."
+    },
+    "WPFTweaksRemoveOneDrive": {
+      "decision": "rejected-default",
+      "implementation": null,
+      "reason": "Pas de suppression automatique de composant utilisateur."
+    },
+    "WPFTweaksWindowsAI": {
+      "decision": "rejected-default",
+      "implementation": null,
+      "reason": "Pas de suppression massive de packages/feature Windows AI."
+    },
+    "WPFTweaksReservedStorage": {
+      "decision": "rejected",
+      "implementation": null,
+      "reason": "Le stockage réservé Windows Update est conservé sur les SSD de grande capacité."
+    }
+  }
+}
