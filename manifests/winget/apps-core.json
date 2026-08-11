@@ -14,6 +14,7 @@
     { "name": "Notepad++", "wingetId": "Notepad++.Notepad++", "autoInstall": true },
     { "name": "PDFgear", "wingetId": null, "autoInstall": false },
     { "name": "Files", "wingetId": null, "autoInstall": false },
-    { "name": "draw.io", "wingetId": "JGraph.Draw", "autoInstall": true }
+    { "name": "draw.io", "wingetId": "JGraph.Draw", "autoInstall": true },
+    { "name": "Bitwarden", "wingetId": "Bitwarden.Bitwarden", "autoInstall": true }
   ]
 }
