@@ -15,6 +15,7 @@ Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté *
 - Docker Engine tourne directement dans Ubuntu WSL2 ; Docker Desktop n'est pas requis.
 - Microsoft Defender reste actif et toute exclusion est **deny-by-default** puis justifiée par mesure.
 - PowerShell 7 stable est installé dans le socle Windows via `Microsoft.PowerShell` ; Windows PowerShell 5.1 reste présent pour compatibilité.
+- Le client OpenSSH Windows est installé et géré par le dépôt pour VS Code Remote - SSH ; le serveur OpenSSH Windows n'est pas installé.
 - VS Code couvre WSL, Remote - SSH et SFTP/FTP.
 - Les tweaks Windows, VS Code, WezTerm et les profils V4 possèdent Audit, Apply, Verify et Rollback.
 - La V5 matériel est **observationnelle** : elle qualifie mais ne modifie jamais automatiquement BIOS, PBO, RAM, GPU ou stockage.
@@ -183,6 +184,12 @@ VS Code est préparé pour :
 - ShellCheck ;
 - shell-format.
 
+Le client Windows requis pour Remote - SSH est géré comme capacité système :
+
+```text
+OpenSSH.Client~~~~0.0.1.0
+```
+
 Exemples :
 
 ```text
@@ -229,7 +236,7 @@ PDFgear
 Files
 ```
 
-WSL2 fait partie du socle système mais est provisionné par le bootstrap WSL, pas comme une application WinGet.
+WSL2 fait partie du socle système mais est provisionné par le bootstrap WSL, pas comme une application WinGet. OpenSSH Client est également provisionné comme capacité Windows et non comme package WinGet.
 
 ## Windows Optimization V4
 
@@ -351,6 +358,8 @@ Rollback des réglages gérés par le dépôt :
 
 La V5 matériel n'a pas de rollback matériel car elle ne modifie aucun réglage matériel.
 
+Le client OpenSSH Windows possède un rollback à état initial : il n'est retiré que si le dépôt l'avait ajouté sur une machine où il était absent au départ.
+
 ## Defender performance
 
 ```powershell
@@ -387,7 +396,7 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - `docs/07_DEVOPS_STACK.md` — stack Linux ;
 - `docs/11_VALIDATION.md` — critères workstation/DevOps ;
 - `docs/12_RUNBOOK_REINSTALLATION.md` — réinstallation ;
-- `docs/13_WORKSTATION_V3.md` — VS Code, Remote SSH/SFTP, WezTerm et PowerShell ;
+- `docs/13_WORKSTATION_V3.md` — VS Code, Remote SSH/SFTP, OpenSSH, WezTerm et PowerShell ;
 - `docs/14_WINDOWS_OPTIMIZATION_V4.md` — profils V4 et mapping WinUtil ;
 - `docs/15_HARDWARE_QUALIFICATION_V5.md` — tuning matériel stable et qualification ;
 - `docs/16_WSL2_GUIDE_COMPLET.md` — guide pédagogique WSL2 débutant à avancé ;
@@ -400,4 +409,4 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
 - V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
 - V5 : qualification hardware ciblée + guide WSL2 complet — intégrée.
-- V6 : tuning WSL2 matériel, PowerShell 7 et accès distant VS Code — candidate à fusion après CI verte.
+- V6 : tuning WSL2 matériel, PowerShell 7, OpenSSH Client et accès distant VS Code — périmètre complet et qualifié par CI.
