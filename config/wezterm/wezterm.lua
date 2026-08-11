@@ -3,7 +3,6 @@ local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
 config.default_prog = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~' }
-config.default_cwd = '~'
 config.check_for_updates = true
 config.enable_tab_bar = true
 config.hide_tab_bar_if_only_one_tab = false
