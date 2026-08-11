@@ -44,6 +44,13 @@ jobs:
             $results | Format-Table -AutoSize
             exit 1
           }
+      - name: Audit V4 profiles on Windows
+        shell: pwsh
+        run: |
+          foreach ($profile in @('standard', 'privacy', 'gaming', 'optional')) {
+            Write-Host "Auditing V4 profile: $profile"
+            & .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
+          }
 
   shell:
     runs-on: ubuntu-latest
