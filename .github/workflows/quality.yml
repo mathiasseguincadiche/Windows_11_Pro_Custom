@@ -28,6 +28,28 @@ jobs:
             exit 1
           }
 
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Bash files
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            bash -n "$file"
+          done < <(find . -type f -name '*.sh' -not -path './.git/*' -print0)
+      - name: ShellCheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          mapfile -d '' files < <(find . -type f -name '*.sh' -not -path './.git/*' -print0)
+          if (( ${#files[@]} > 0 )); then
+            shellcheck "${files[@]}"
+          fi
+
   json:
     runs-on: ubuntu-latest
     steps:
