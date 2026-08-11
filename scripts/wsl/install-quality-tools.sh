@@ -35,7 +35,7 @@ log "terraform-docs"
 TERRAFORM_DOCS_VERSION="v0.24.0"
 TERRAFORM_DOCS_SHA256="9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3"
 terraform_docs_archive="$tmpdir/terraform-docs.tar.gz"
-curl -fsSL "https://terraform-docs.io/dl/${TERRAFORM_DOCS_VERSION}/terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" -o "$terraform_docs_archive"
+curl -fsSL "https://github.com/terraform-docs/terraform-docs/releases/download/${TERRAFORM_DOCS_VERSION}/terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" -o "$terraform_docs_archive"
 verify_sha256 "$terraform_docs_archive" "$TERRAFORM_DOCS_SHA256"
 tar -xzf "$terraform_docs_archive" -C "$tmpdir" terraform-docs
 sudo install -m 0755 "$tmpdir/terraform-docs" /usr/local/bin/terraform-docs
@@ -46,6 +46,7 @@ ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a
 actionlint_archive="$tmpdir/actionlint.tar.gz"
 curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -o "$actionlint_archive"
 verify_sha256 "$actionlint_archive" "$ACTIONLINT_SHA256"
+gh attestation verify "$actionlint_archive" -R rhysd/actionlint
 tar -xzf "$actionlint_archive" -C "$tmpdir" actionlint
 sudo install -m 0755 "$tmpdir/actionlint" /usr/local/bin/actionlint
 
@@ -65,12 +66,19 @@ fi
 verify_sha256 "$yq_binary" "$yq_expected"
 sudo install -m 0755 "$yq_binary" /usr/local/bin/yq
 
-log "TFLint avec vérification GitHub Artifact Attestations"
+log "TFLint v0.64.0 avec GitHub Artifact Attestations"
+TFLINT_VERSION="v0.64.0"
+TFLINT_CHECKSUMS_SHA256="07496dc0ab06a39fa718a9f8e471112b6e6ab4fd3a9f1024210a55fe3f1a9ff9"
+tflint_archive="$tmpdir/tflint_linux_amd64.zip"
+tflint_checksums="$tmpdir/tflint-checksums.txt"
+curl -fsSL "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/tflint_linux_amd64.zip" -o "$tflint_archive"
+curl -fsSL "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/checksums.txt" -o "$tflint_checksums"
+verify_sha256 "$tflint_checksums" "$TFLINT_CHECKSUMS_SHA256"
+gh attestation verify "$tflint_checksums" -R terraform-linters/tflint
 (
   cd "$tmpdir"
-  curl -fsSLO https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip
-  curl -fsSLO https://github.com/terraform-linters/tflint/releases/latest/download/checksums.txt
-  gh attestation verify checksums.txt -R terraform-linters/tflint
+  cp "$tflint_checksums" checksums.txt
+  cp "$tflint_archive" tflint_linux_amd64.zip
   sha256sum --ignore-missing -c checksums.txt
   unzip -oq tflint_linux_amd64.zip
   sudo install -m 0755 tflint /usr/local/bin/tflint
