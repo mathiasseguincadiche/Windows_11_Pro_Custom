@@ -100,7 +100,8 @@ $currentExtensions = @(& $code --list-extensions 2>$null)
 $before = @($state.ExtensionsBefore)
 foreach ($extension in Get-RequestedExtensions) {
     if ($currentExtensions -contains $extension -and $before -notcontains $extension) {
-        & $code --uninstall-extension $extension --force
+        & $code --uninstall-extension $extension
+        if ($LASTEXITCODE -ne 0) { throw "Désinstallation extension VS Code échouée: $extension" }
     }
 }
 Write-Host '[OK] Configuration VS Code restaurée.' -ForegroundColor Green
