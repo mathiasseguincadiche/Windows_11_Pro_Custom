@@ -19,7 +19,7 @@ if (-not (Test-Path $configSource)) { throw "Profil WSL introuvable: $configSour
 
 $dVolume = Get-Volume -DriveLetter D -ErrorAction Stop
 if ($dVolume.FileSystem -ne 'NTFS') { throw 'D: doit rester NTFS.' }
-if ($dVolume.SizeRemaining -lt 50GB) { throw 'D: dispose de moins de 50 Go libres. Libérer de l’espace avant l’installation WSL.' }
+if ($dVolume.SizeRemaining -lt 50GB) { throw "D: dispose de moins de 50 Go libres. Libérer de l’espace avant l’installation WSL." }
 
 New-Item -ItemType Directory -Force -Path (Split-Path $InstallLocation) | Out-Null
 New-Item -ItemType Directory -Force -Path $swapDir | Out-Null
@@ -48,4 +48,4 @@ if ($installed -notcontains $Distribution) {
 
 wsl.exe --shutdown
 Write-Host '[OK] WSL2 configuré. C: et D: restent NTFS.' -ForegroundColor Green
-Write-Host '[INFO] Après modification d’un profil, toujours utiliser: wsl --shutdown' -ForegroundColor Yellow
+Write-Host "[INFO] Après modification d’un profil, toujours utiliser: wsl --shutdown" -ForegroundColor Yellow
