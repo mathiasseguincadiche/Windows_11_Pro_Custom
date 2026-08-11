@@ -84,6 +84,13 @@ else
   ko 'Profil shell V3 invalide.'
 fi
 
+printf '\nVS Code WSL\n'
+if bash "$SCRIPT_DIR/manage-vscode-extensions.sh" verify; then
+  ok 'Extensions VS Code WSL opérationnelles.'
+else
+  ko 'Extensions VS Code WSL invalides.'
+fi
+
 printf '\nQualité GitHub Actions\n'
 if compgen -G "$REPO_ROOT/.github/workflows/*.yml" >/dev/null; then
   if actionlint "$REPO_ROOT"/.github/workflows/*.yml; then
