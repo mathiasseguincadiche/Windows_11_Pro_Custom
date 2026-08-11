@@ -67,6 +67,36 @@ Gestion :
 
 Le premier `Apply` sauvegarde le `settings.json` existant et la liste des extensions déjà présentes. Le rollback restaure le fichier initial et ne désinstalle que les extensions ajoutées par le dépôt.
 
+## Client OpenSSH Windows
+
+Remote - SSH a besoin d'un client SSH local fiable. Windows 11 ne doit donc pas être supposé posséder OpenSSH Client sur une installation fraîche.
+
+Le dépôt gère explicitement la capacité Windows :
+
+```text
+OpenSSH.Client~~~~0.0.1.0
+```
+
+avec :
+
+```powershell
+.\scripts\windows\32_openssh_client.ps1 -Mode Audit
+.\scripts\windows\32_openssh_client.ps1 -Mode Apply
+.\scripts\windows\32_openssh_client.ps1 -Mode Verify
+.\scripts\windows\32_openssh_client.ps1 -Mode Rollback
+```
+
+Le premier `Apply` enregistre si le client était déjà installé. Le rollback ne le supprime que si le dépôt l'avait lui-même ajouté.
+
+Le **serveur OpenSSH Windows n'est pas installé** : le besoin de cette workstation est de se connecter vers des serveurs distants, pas d'exposer Windows comme serveur SSH.
+
+Vérifier :
+
+```powershell
+ssh -V
+Get-Command ssh.exe
+```
+
 ## VS Code Remote - SSH
 
 Remote - SSH sert à travailler **directement sur le filesystem d'un serveur distant**.
