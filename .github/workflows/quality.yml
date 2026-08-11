@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  powershell-parse:
+  powershell:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -31,6 +31,16 @@ jobs:
             }
           }
           if ($failed) { exit 1 }
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $results = @(Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error)
+          if ($results.Count -gt 0) {
+            $results | Format-Table -AutoSize
+            exit 1
+          }
 
   shell:
     runs-on: ubuntu-latest
@@ -54,7 +64,7 @@ jobs:
             shellcheck "${files[@]}"
           fi
 
-  json:
+  structured-config:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -65,3 +75,42 @@ jobs:
           find . -type f -name '*.json' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do
             jq empty "$file"
           done
+      - name: Validate WezTerm Lua syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
+          luac -p config/wezterm/wezterm.lua
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='1.7.12'
+          expected='8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz" -o actionlint.tar.gz
+          echo "${expected}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+      - name: Lint workflows
+        run: actionlint .github/workflows/*.yml
+
+  safety-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reject destructive Windows operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|DisableRealtimeMonitoring[^\n]*(true|\$true)'
+          if grep -RInE "$forbidden" scripts --include='*.ps1'; then
+            echo 'A destructive or Defender-disabling command was detected in executable PowerShell.' >&2
+            exit 1
+          fi
+          echo 'Safety guard: OK'
