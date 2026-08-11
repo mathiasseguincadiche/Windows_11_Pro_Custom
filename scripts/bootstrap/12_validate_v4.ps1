@@ -31,9 +31,9 @@ $forbiddenServices = @(
 )
 
 $forbiddenRegistryFragments = @(
-    '\\Windows Defender',
-    '\\WindowsUpdate',
-    '\\WindowsFirewall'
+    '\Windows Defender',
+    '\WindowsUpdate',
+    '\WindowsFirewall'
 )
 
 $profileResults = @()
