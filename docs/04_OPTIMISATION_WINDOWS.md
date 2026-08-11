@@ -2,56 +2,98 @@
 
 ## Objectif
 
-La machine dispose de 48 Go de RAM et de deux SSD PCIe 5.0. L'objectif n'est pas de supprimer des composants Windows au hasard, mais de réduire le bruit inutile sans casser Windows Update, Microsoft Store, Defender, WSL2, Hyper-V ou le gaming.
+La machine dispose de 48 Go de RAM et de deux SSD PCIe 5.0. L'objectif est de réduire le bruit Windows sans casser Windows Update, Microsoft Store, Defender, WSL2, Hyper-V, Intel Arc ou le gaming.
 
-La V2 automatise uniquement des réglages documentés et réversibles. Aucun service système critique n'est désactivé.
+La stratégie est désormais en deux couches :
 
-## Moteur de tuning
+1. `scripts/windows/10_tune.ps1` — base V2/V3 ;
+2. `scripts/windows/40_v4_optimize.ps1` — profils V4 inspirés de WinUtil.
 
-```powershell
-.\scripts\windows\10_tune.ps1 -Mode Audit
-.\scripts\windows\10_tune.ps1 -Mode Apply
-.\scripts\windows\10_tune.ps1 -Mode Verify
-.\scripts\windows\10_tune.ps1 -Mode Rollback
-```
+## Base V2/V3
 
-Lors du premier `Apply`, les valeurs d'origine sont sauvegardées dans :
+Le moteur historique gère notamment :
+
+- extensions de fichiers visibles ;
+- fichiers cachés visibles ;
+- notifications publicitaires Explorer désactivées ;
+- Widgets masqués ;
+- Advertising ID désactivé ;
+- expériences personnalisées désactivées ;
+- installations silencieuses d'applications suggérées désactivées ;
+- conseils et suggestions Windows réduits ;
+- Windows Consumer Features désactivées ;
+- télémétrie maintenue à un niveau requis plutôt que cassée.
+
+Son état initial est sauvegardé dans :
 
 ```text
 state/windows-tweaks-backup.json
 ```
 
-Cette sauvegarde n'est pas écrasée lors des exécutions suivantes afin de conserver le véritable état initial.
+## V4 — profils WinUtil sur mesure
 
-## Réglages automatisés
+Moteur :
 
-- affichage des extensions de fichiers ;
-- affichage des fichiers cachés ;
-- suppression des notifications publicitaires de l'Explorateur ;
-- masquage des Widgets de la barre des tâches ;
-- désactivation de l'identifiant publicitaire ;
-- désactivation des expériences personnalisées fondées sur les données de diagnostic ;
-- désactivation des installations silencieuses d'applications suggérées ;
-- désactivation des conseils et suggestions Windows non essentiels ;
-- désactivation des « Windows consumer features » sur Windows Pro ;
-- niveau de diagnostic maintenu au niveau requis, pas de tentative de neutralisation complète de la télémétrie.
+```powershell
+.\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile standard
+.\scripts\windows\40_v4_optimize.ps1 -Mode Apply -Profile standard
+.\scripts\windows\40_v4_optimize.ps1 -Mode Verify -Profile standard
+.\scripts\windows\40_v4_optimize.ps1 -Mode Rollback -Profile standard
+```
 
-## Ce que le script ne touche pas
+Profils disponibles :
+
+- `standard` — quotidien, appliqué par défaut ;
+- `privacy` — localisation et métadonnées périphériques ;
+- `gaming` — Game Mode conservé, captures arrière-plan coupées ;
+- `optional` — tuning services limité à DiagTrack / MapsBroker.
+
+Détails complets : `docs/14_WINDOWS_OPTIMIZATION_V4.md`.
+
+## Principes non négociables
+
+Le dépôt ne désactive pas automatiquement :
 
 - Windows Update ;
 - Microsoft Store ;
 - Microsoft Defender ;
 - SmartScreen ;
 - Windows Firewall ;
-- Hyper-V / WSL ;
-- journalisation Windows ;
+- Hyper-V / WSL / HNS ;
 - compression mémoire ;
 - fichier d'échange ;
-- services réseau ;
-- services audio ;
-- pilotes GPU ;
 - Secure Boot / TPM.
+
+Il ne supprime pas automatiquement Edge, OneDrive, Copilot ou des packages Windows en masse.
 
 ## WinUtil
 
-WinUtil peut servir de référence pour comparer les réglages, mais aucun preset global n'est exécuté automatiquement. Toute évolution inspirée de WinUtil doit être ajoutée individuellement au moteur de tuning et posséder un chemin de rollback.
+WinUtil est utilisé comme **référence upstream**, pas comme exécuteur de la configuration du poste.
+
+Le mapping versionné se trouve dans :
+
+```text
+config/winutil/mathias-winutil.json
+```
+
+Ce fichier documente les tweaks intégrés, optionnels, différés ou refusés. Il n'est pas présenté comme un export WinUtil directement importable.
+
+## Restore point et rollback
+
+Avant une application V4 via `install.ps1`, le dépôt tente de créer un point de restauration Windows puis sauvegarde l'état Registry/services de chaque profil sous :
+
+```text
+state/windows-v4/<profile>.before.json
+```
+
+Les sauvegardes initiales ne sont jamais écrasées.
+
+## Mesure avant / après
+
+```text
+reports/windows/v4-benchmark-before.json
+reports/windows/v4-benchmark-after.json
+reports/windows/v4-benchmark-comparison.json
+```
+
+Le benchmark reste léger : aucun test synthétique générant de gros volumes d'écritures sur les SSD n'est exécuté.
