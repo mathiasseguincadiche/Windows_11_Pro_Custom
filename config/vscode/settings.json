@@ -1,0 +1,23 @@
+{
+  "telemetry.telemetryLevel": "off",
+  "files.eol": "\n",
+  "editor.formatOnSave": true,
+  "git.autofetch": true,
+  "terminal.integrated.profiles.windows": {
+    "Ubuntu WSL": {
+      "path": "C:\\Windows\\System32\\wsl.exe",
+      "args": ["-d", "Ubuntu"]
+    }
+  },
+  "terminal.integrated.defaultProfile.windows": "Ubuntu WSL",
+  "[terraform]": {
+    "editor.defaultFormatter": "hashicorp.terraform",
+    "editor.formatOnSave": true
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  "[shellscript]": {
+    "editor.formatOnSave": true
+  }
+}
