@@ -1,10 +1,14 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Audit', 'Apply')]
+    [ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')]
     [string]$Mode = 'Audit',
 
     [ValidateSet('standard', 'lab-heavy', 'nat-fallback')]
-    [string]$WslProfile = 'standard'
+    [string]$WslProfile = 'standard',
+
+    [string]$Distribution = 'Ubuntu',
+
+    [switch]$InstallDevOps
 )
 
 Set-StrictMode -Version Latest
@@ -13,14 +17,41 @@ $RepoRoot = $PSScriptRoot
 
 Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
 
-& "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
-
-if ($Mode -eq 'Apply') {
-    & "$RepoRoot\scripts\bootstrap\03_apps.ps1"
-    & "$RepoRoot\scripts\bootstrap\06_wsl.ps1" -Profile $WslProfile
+if ($Mode -eq 'Rollback') {
+    & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Rollback
+    & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Rollback
+    Write-Host 'Rollback des réglages gérés par le dépôt terminé.' -ForegroundColor Green
+    return
 }
 
-& "$RepoRoot\scripts\bootstrap\05_defender.ps1"
-& "$RepoRoot\scripts\bootstrap\07_validate.ps1"
+& "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
 
-Write-Host 'Termine. Consultez les rapports dans reports/.' -ForegroundColor Green
+switch ($Mode) {
+    'Audit' {
+        & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Audit
+        & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
+        & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Audit
+    }
+    'Apply' {
+        & "$RepoRoot\scripts\bootstrap\03_apps.ps1"
+        & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Apply
+        & "$RepoRoot\scripts\bootstrap\06_wsl.ps1" -Profile $WslProfile -Distribution $Distribution
+        & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Apply
+
+        if ($InstallDevOps) {
+            & "$RepoRoot\scripts\bootstrap\08_devops.ps1" -Distribution $Distribution
+        } else {
+            Write-Host '[INFO] Stack DevOps non installée dans ce passage. Après le premier lancement Ubuntu, utilise -InstallDevOps.' -ForegroundColor Yellow
+        }
+
+        & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
+        & "$RepoRoot\scripts\bootstrap\07_validate.ps1"
+    }
+    'Verify' {
+        & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Verify
+        & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
+        & "$RepoRoot\scripts\bootstrap\07_validate.ps1"
+    }
+}
+
+Write-Host 'Terminé. Consulte les rapports dans reports/.' -ForegroundColor Green
