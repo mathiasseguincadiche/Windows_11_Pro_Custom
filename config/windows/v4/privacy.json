@@ -1,0 +1,46 @@
+{
+  "profile": "privacy",
+  "description": "Profil optionnel de confidentialité. Désactive la localisation Windows et limite l'installation de logiciels compagnons via les métadonnées périphériques.",
+  "rebootRecommended": true,
+  "registry": [
+    {
+      "name": "Deny system location access",
+      "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location",
+      "property": "Value",
+      "value": "Deny",
+      "type": "String",
+      "source": "WinUtil:WPFTweaksLocation"
+    },
+    {
+      "name": "Disable location sensor permission",
+      "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Sensor\\Overrides\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}",
+      "property": "SensorPermissionState",
+      "value": 0,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksLocation"
+    },
+    {
+      "name": "Disable maps automatic location updates",
+      "path": "HKLM:\\SYSTEM\\Maps",
+      "property": "AutoUpdateEnabled",
+      "value": 0,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksLocation"
+    },
+    {
+      "name": "Prevent device companion metadata downloads",
+      "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Device Metadata",
+      "property": "PreventDeviceMetadataFromNetwork",
+      "value": 1,
+      "type": "DWord",
+      "source": "WinUtil:WPFTweaksPreventDeviceMetadataFromNetwork"
+    }
+  ],
+  "services": [
+    {
+      "name": "lfsvc",
+      "startupType": "Disabled",
+      "source": "WinUtil:WPFTweaksLocation"
+    }
+  ]
+}
