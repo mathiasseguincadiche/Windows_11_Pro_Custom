@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Windows_11_Pro_Custom - profil shell DevOps
 
 export EDITOR="code --wait"
@@ -16,11 +17,13 @@ alias dps='docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Por
 alias gst='git status --short --branch'
 
 if command -v kubectl >/dev/null 2>&1; then
+  # shellcheck disable=SC1090
   source <(kubectl completion bash)
   complete -o default -F __start_kubectl k
 fi
 
 if command -v helm >/dev/null 2>&1; then
+  # shellcheck disable=SC1090
   source <(helm completion bash)
 fi
 
