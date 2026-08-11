@@ -212,4 +212,4 @@ La planification Windows d'optimisation des SSD n'est jamais désactivée par le
 - V1 : architecture Windows 11 Pro / NTFS / WSL2 / Defender — intégrée.
 - V2 : tuning Windows réversible, Defender mesuré et stack DevOps — intégrée.
 - V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
-- V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — candidate à fusion après CI verte.
+- V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — périmètre complet et qualifié par CI.
