@@ -1,0 +1,7 @@
+hashicorp.terraform
+ms-kubernetes-tools.vscode-kubernetes-tools
+ms-azuretools.vscode-containers
+redhat.vscode-yaml
+github.vscode-github-actions
+timonwong.shellcheck
+foxundermoon.shell-format
