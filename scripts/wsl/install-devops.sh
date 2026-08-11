@@ -11,10 +11,19 @@ if [[ ! -r /etc/os-release ]]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+DOCKER_DAEMON_CONFIG="$REPO_ROOT/config/wsl/docker-daemon.json"
+
 # shellcheck disable=SC1091
 source /etc/os-release
 if [[ ${ID:-} != "ubuntu" ]]; then
   echo "[ERREUR] Ubuntu WSL2 est attendu. Distribution détectée: ${ID:-inconnue}." >&2
+  exit 1
+fi
+
+if [[ ! -r "$DOCKER_DAEMON_CONFIG" ]]; then
+  echo "[ERREUR] Configuration Docker absente: $DOCKER_DAEMON_CONFIG" >&2
   exit 1
 fi
 
@@ -52,7 +61,10 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo install -m 0755 -d /etc/docker
+sudo install -m 0644 "$DOCKER_DAEMON_CONFIG" /etc/docker/daemon.json
 sudo systemctl enable --now docker
+sudo systemctl restart docker
 sudo usermod -aG docker "$USER"
 
 log "kubectl depuis pkgs.k8s.io"
@@ -129,6 +141,7 @@ cat <<'EOF'
 
 [OK] Stack DevOps installée.
 
+Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
 Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL.
 Exécute ensuite :
   wsl.exe --shutdown   # depuis Windows
