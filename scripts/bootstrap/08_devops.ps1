@@ -28,10 +28,10 @@ if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $LinuxUser = (& wsl.exe -d $Distribution -- sh -lc 'id -un' 2>$null | Out-String).Trim()
     $userCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer l’utilisateur WSL par défaut.' }
+    if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer lʼutilisateur WSL par défaut.' }
 }
 if ($LinuxUser -eq 'root') {
-    throw 'Le bootstrap DevOps refuse root. Exécute d’abord la préparation utilisateur WSL V9; elle crée/configure un utilisateur normal de façon guidée.'
+    throw 'Le bootstrap DevOps refuse root. Exécute dʼabord la préparation utilisateur WSL V9; elle crée/configure un utilisateur normal de façon guidée.'
 }
 
 & wsl.exe -d $Distribution -u root -- sh -lc "getent passwd '$LinuxUser' >/dev/null"
@@ -57,4 +57,4 @@ if ($convertVsCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxVsCodeScript)) {
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxVsCodeScript, 'apply') -LogIdentity 'scripts/wsl/manage-vscode-extensions.sh' -DisplayName 'manage-vscode-extensions.sh'
 
 Write-Host '[FAIT] Stack DevOps exécutée; chaque sous-script possède son journal dédié.' -ForegroundColor Green
-Write-Host '[ACTION REQUISE] Si Docker vient d’ajouter ton utilisateur au groupe docker, exécute « wsl --shutdown » avant le premier usage Docker.' -ForegroundColor Magenta
+Write-Host '[ACTION REQUISE] Si Docker vient dʼajouter ton utilisateur au groupe docker, exécute « wsl --shutdown » avant le premier usage Docker.' -ForegroundColor Magenta

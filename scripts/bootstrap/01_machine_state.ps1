@@ -237,7 +237,7 @@ Write-Host ('-' * 70) -ForegroundColor DarkCyan
 switch ($state) {
     'FIRST_RUN' { Write-WpcStatus -Status 'A_FAIRE' -Message 'Première installation détectée' -Detail 'Les indicateurs principaux sont absents; le plan Apply peut commencer.' -Context $context }
     'PARTIAL' { Write-WpcStatus -Status 'A_FAIRE' -Message 'Installation partielle détectée' -Detail 'Une partie de la cible est déjà présente; seules les différences devront être appliquées.' -Context $context }
-    'READY_CANDIDATE' { Write-WpcStatus -Status 'DEJA_OK' -Message 'Machine proche de la cible complète' -Detail 'Les signaux principaux sont conformes; Verify reste l’autorité finale.' -Context $context }
+    'READY_CANDIDATE' { Write-WpcStatus -Status 'DEJA_OK' -Message 'Machine proche de la cible complète' -Detail 'Les signaux principaux sont conformes; Verify reste lʼautorité finale.' -Context $context }
 }
 Write-WpcStatus -Status $(if ($c.Present -and $c.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume C:' -Detail "Présent=$($c.Present) FS=$($c.FileSystem) Santé=$($c.HealthStatus) Libre=$($c.FreeGB) Go" -Context $context
 Write-WpcStatus -Status $(if ($d.Present -and $d.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume D:' -Detail "Présent=$($d.Present) FS=$($d.FileSystem) Santé=$($d.HealthStatus) Libre=$($d.FreeGB) Go" -Context $context

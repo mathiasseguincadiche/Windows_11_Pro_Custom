@@ -167,6 +167,6 @@ switch ($Mode) {
             $startupType = switch ([string]$entry.StartMode) { 'Auto' { 'Automatic' } 'Manual' { 'Manual' } 'Disabled' { 'Disabled' } default { $null } }
             if ($startupType) { Set-Service -Name $entry.Name -StartupType $startupType }
         }
-        Write-Host "[FAIT] Profil V4 '$Profile' restauré depuis l’état initial." -ForegroundColor Green
+        Write-Host "[FAIT] Profil V4 '$Profile' restauré depuis lʼétat initial." -ForegroundColor Green
     }
 }

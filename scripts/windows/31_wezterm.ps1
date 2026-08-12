@@ -44,7 +44,7 @@ if ($Mode -eq 'Verify') {
 }
 
 if ($Mode -eq 'Apply') {
-    if (-not $wezterm) { throw 'WezTerm est absent. Le bootstrap applications doit d’abord installer wez.wezterm.' }
+    if (-not $wezterm) { throw 'WezTerm est absent. Le bootstrap applications doit dʼabord installer wez.wezterm.' }
     if ($match) {
         Write-Host '[DÉJÀ OK] WezTerm est déjà conforme; aucun fichier réécrit.' -ForegroundColor Green
         return
@@ -73,4 +73,4 @@ if ($state.ConfigExisted) {
 } else {
     Remove-Item -Force $target -ErrorAction SilentlyContinue
 }
-Write-Host '[FAIT] Configuration WezTerm restaurée à l’état initial enregistré.' -ForegroundColor Green
+Write-Host '[FAIT] Configuration WezTerm restaurée à lʼétat initial enregistré.' -ForegroundColor Green

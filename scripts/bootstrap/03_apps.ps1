@@ -64,7 +64,7 @@ foreach ($app in @($manifest.apps)) {
 
     $missing.Add("$name ($id)")
     if ($Mode -eq 'Audit') {
-        Write-Host "[À FAIRE] $name [$id] n’est pas détecté par WinGet." -ForegroundColor Yellow
+        Write-Host "[À FAIRE] $name [$id] nʼest pas détecté par WinGet." -ForegroundColor Yellow
         continue
     }
     if ($Mode -eq 'Verify') {
@@ -81,7 +81,7 @@ foreach ($app in @($manifest.apps)) {
     }
     $after = Get-WingetPackageFact -Id $id
     if (-not $after.Installed) {
-        throw "Installation de $name terminée sans preuve WinGet exploitable. Aucune réussite n’est déclarée sans vérification."
+        throw "Installation de $name terminée sans preuve WinGet exploitable. Aucune réussite nʼest déclarée sans vérification."
     }
     $changed.Add($name)
     Write-Host "[FAIT] $name installé et revalidé par WinGet." -ForegroundColor Green

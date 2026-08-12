@@ -67,7 +67,7 @@ if ($Mode -eq 'Audit') {
     return
 }
 
-if (-not $code) { throw 'VS Code est absent ou son CLI est introuvable. Le bootstrap applications doit d’abord installer Microsoft.VisualStudioCode.' }
+if (-not $code) { throw 'VS Code est absent ou son CLI est introuvable. Le bootstrap applications doit dʼabord installer Microsoft.VisualStudioCode.' }
 
 if ($Mode -eq 'Verify') {
     $failures = [System.Collections.Generic.List[string]]::new()
@@ -80,7 +80,7 @@ if ($Mode -eq 'Verify') {
 
 if ($Mode -eq 'Apply') {
     if ($settingsMatch -and $missing.Count -eq 0) {
-        Write-Host '[DÉJÀ OK] VS Code est déjà conforme; aucune copie ni réinstallation d’extension.' -ForegroundColor Green
+        Write-Host '[DÉJÀ OK] VS Code est déjà conforme; aucune copie ni réinstallation dʼextension.' -ForegroundColor Green
         return
     }
 
@@ -146,4 +146,4 @@ foreach ($extension in $requested) {
         if ($removeCode -ne 0) { throw "Désinstallation extension VS Code échouée: $extension" }
     }
 }
-Write-Host '[FAIT] Configuration VS Code restaurée à l’état initial enregistré.' -ForegroundColor Green
+Write-Host '[FAIT] Configuration VS Code restaurée à lʼétat initial enregistré.' -ForegroundColor Green

@@ -25,10 +25,10 @@ $target = Get-Content -Raw $targetPath | ConvertFrom-Json
 
 $descriptions = [ordered]@{
     uefi_csm_disabled = 'UEFI démarré et CSM/Legacy désactivé.'
-    above_4g_enabled = 'Above 4G Decoding activé dans l’UEFI.'
+    above_4g_enabled = 'Above 4G Decoding activé dans lʼUEFI.'
     resizable_bar_enabled = 'Resizable BAR activé et confirmé dans Intel Graphics Software ou Intel DSA.'
     t705_in_m2_1_and_m2_2 = 'Les deux Crucial T705 sont physiquement installés dans M2_1 et M2_2.'
-    t705_heatsinks_and_airflow_verified = 'Les deux T705 disposent d’un dissipateur et d’un flux d’air correct.'
+    t705_heatsinks_and_airflow_verified = 'Les deux T705 disposent dʼun dissipateur et dʼun flux dʼair correct.'
     memory_6000_stability_verified = 'La DDR5 6000 MT/s a passé un vrai test de stabilité mémoire sans erreur.'
     latest_stable_bios_reviewed = 'La version BIOS MSI stable actuelle a été vérifiée avant qualification.'
     current_vendor_drivers_reviewed = 'Les pilotes AMD chipset, Intel Arc et MSI ont été vérifiés depuis les sources constructeur.'

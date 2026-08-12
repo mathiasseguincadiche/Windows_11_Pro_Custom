@@ -82,7 +82,7 @@ if ($Mode -eq 'Apply') {
 }
 
 if (-not (Test-Path $statePath)) {
-    Write-Host '[DÉJÀ OK] Aucune exclusion gérée par le dépôt n’a d’état de rollback.' -ForegroundColor Green
+    Write-Host '[DÉJÀ OK] Aucune exclusion gérée par le dépôt nʼa dʼétat de rollback.' -ForegroundColor Green
     return
 }
 $backup = Get-Content -Raw $statePath | ConvertFrom-Json
@@ -97,5 +97,5 @@ foreach ($path in $managed) {
         Write-Host "[FAIT] Exclusion retirée: $path" -ForegroundColor Green
     }
 }
-if ($removed -eq 0) { Write-Host '[DÉJÀ OK] Aucune exclusion gérée n’avait besoin d’être retirée.' -ForegroundColor Green }
+if ($removed -eq 0) { Write-Host '[DÉJÀ OK] Aucune exclusion gérée nʼavait besoin dʼêtre retirée.' -ForegroundColor Green }
 else { Write-Host '[FAIT] Rollback des exclusions gérées terminé.' -ForegroundColor Green }

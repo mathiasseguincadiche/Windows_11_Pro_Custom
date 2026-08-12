@@ -59,11 +59,11 @@ if ($Mode -eq 'Apply') {
         Write-Host '[EN COURS] Installation du client OpenSSH Windows...' -ForegroundColor Cyan
         $result = Add-WindowsCapability -Online -Name $capabilityName
         if ($result.RestartNeeded) {
-            Write-Host '[ACTION REQUISE] Windows indique qu’un redémarrage est nécessaire pour OpenSSH Client.' -ForegroundColor Magenta
+            Write-Host '[ACTION REQUISE] Windows indique quʼun redémarrage est nécessaire pour OpenSSH Client.' -ForegroundColor Magenta
         }
     }
     $capability = Get-OpenSshClientCapability
-    if ($capability.State -ne 'Installed') { throw 'OpenSSH Client n’est pas installé après Apply.' }
+    if ($capability.State -ne 'Installed') { throw 'OpenSSH Client nʼest pas installé après Apply.' }
     if (-not (Test-SshCommand)) { throw 'OpenSSH Client est installé mais ssh.exe reste introuvable.' }
     Write-Host '[FAIT] OpenSSH Client installé/réparé et revalidé.' -ForegroundColor Green
     return
@@ -75,12 +75,12 @@ if (-not (Test-Path $statePath)) {
 }
 $state = Get-Content -Raw $statePath | ConvertFrom-Json
 if (-not [bool]$state.InstalledBefore -and $installed) {
-    Write-Host '[EN COURS] Restauration de l’état initial: suppression du client OpenSSH ajouté par le dépôt.' -ForegroundColor Cyan
+    Write-Host '[EN COURS] Restauration de lʼétat initial: suppression du client OpenSSH ajouté par le dépôt.' -ForegroundColor Cyan
     $result = Remove-WindowsCapability -Online -Name $capabilityName
     if ($result.RestartNeeded) {
         Write-Host '[ACTION REQUISE] Un redémarrage Windows est nécessaire pour terminer le rollback OpenSSH.' -ForegroundColor Magenta
     }
-    Write-Host '[FAIT] OpenSSH Client restauré à l’état initial.' -ForegroundColor Green
+    Write-Host '[FAIT] OpenSSH Client restauré à lʼétat initial.' -ForegroundColor Green
 } else {
     Write-Host '[DÉJÀ OK] OpenSSH Client était déjà présent avant le dépôt; aucun retrait effectué.' -ForegroundColor Green
 }

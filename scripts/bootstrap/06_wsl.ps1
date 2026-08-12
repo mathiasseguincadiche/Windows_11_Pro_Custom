@@ -113,7 +113,7 @@ function Get-WslState {
 
 $dVolume = Get-Volume -DriveLetter D -ErrorAction Stop
 if ($dVolume.FileSystem -ne 'NTFS') { throw 'D: doit rester NTFS.' }
-if ($Mode -eq 'Apply' -and $dVolume.SizeRemaining -lt 50GB) { throw "D: dispose de moins de 50 Go libres. Libère de l’espace avant l’installation WSL." }
+if ($Mode -eq 'Apply' -and $dVolume.SizeRemaining -lt 50GB) { throw "D: dispose de moins de 50 Go libres. Libère de lʼespace avant lʼinstallation WSL." }
 
 $readRelease = $Mode -eq 'Verify'
 $state = Get-WslState -ReadRelease:$readRelease
@@ -135,7 +135,7 @@ if ($Mode -eq 'Audit') {
 if ($Mode -eq 'Verify') {
     $failures = [System.Collections.Generic.List[string]]::new()
     if (-not $state.Present) { $failures.Add("Distribution absente: $Distribution") }
-    if ($state.Present -and $state.Version -ne 2) { $failures.Add("$Distribution n’est pas en WSL2 (version=$($state.Version))") }
+    if ($state.Present -and $state.Version -ne 2) { $failures.Add("$Distribution nʼest pas en WSL2 (version=$($state.Version))") }
     if (-not $state.ConfigMatches) { $failures.Add("$configTarget diffère du profil $Profile") }
     if ($state.Present -and $state.LocationMatches -ne $true) { $failures.Add("emplacement non prouvé/conforme: observé=$($state.BasePath) attendu=$InstallLocation") }
     if ($state.Release) {
@@ -167,7 +167,7 @@ if ($UpdateWsl -or -not $state.Present) {
     $updateCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($updateCode -ne 0) {
-        Write-Warning 'wsl --update n’a pas abouti. Le script continue avec le runtime disponible; vérifie Microsoft Store/Windows Update si l’installation échoue.'
+        Write-Warning 'wsl --update nʼa pas abouti. Le script continue avec le runtime disponible; vérifie Microsoft Store/Windows Update si lʼinstallation échoue.'
     } else {
         $changes.Add('runtime WSL vérifié/mis à jour')
     }
@@ -204,12 +204,12 @@ if (-not (Test-WslConfigMatch)) {
 
 $locationMatch = Test-WslLocationMatch
 if ($locationMatch -ne $true) {
-    throw "La distribution existe mais son emplacement n’est pas conforme/prouvable. Observé=$(Get-WslBasePath) Attendu=$InstallLocation. Aucune suppression automatique n’est effectuée."
+    throw "La distribution existe mais son emplacement nʼest pas conforme/prouvable. Observé=$(Get-WslBasePath) Attendu=$InstallLocation. Aucune suppression automatique nʼest effectuée."
 }
 
 $release = Get-WslRelease
 if ($release.VersionId -ne $expectedVersionId -or $release.Codename -ne $expectedCodename) {
-    throw "Release Ubuntu non conforme: VERSION_ID=$($release.VersionId) CODENAME=$($release.Codename) ; attendu $expectedVersionId/$expectedCodename. Aucune suppression automatique n’est effectuée."
+    throw "Release Ubuntu non conforme: VERSION_ID=$($release.VersionId) CODENAME=$($release.Codename) ; attendu $expectedVersionId/$expectedCodename. Aucune suppression automatique nʼest effectuée."
 }
 
 if ($changes.Count -gt 0) {

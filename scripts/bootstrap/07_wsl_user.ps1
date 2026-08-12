@@ -105,7 +105,7 @@ if ($Mode -eq 'Audit') {
     if ($compliant) {
         Write-Host "[DÉJÀ OK] Utilisateur WSL '$targetUser' présent, membre de sudo et réellement utilisé par défaut." -ForegroundColor Green
     } elseif (-not $targetUser) {
-        Write-Host '[ACTION REQUISE] Aucun utilisateur Linux non-root n’est encore défini. Apply te demandera un nom d’utilisateur.' -ForegroundColor Magenta
+        Write-Host '[ACTION REQUISE] Aucun utilisateur Linux non-root nʼest encore défini. Apply te demandera un nom dʼutilisateur.' -ForegroundColor Magenta
     } else {
         Write-Host "[À FAIRE] Utilisateur WSL '$targetUser' incomplet: présent=$exists sudo=$sudo défaut=$defaultUser config=$configuredUser" -ForegroundColor Yellow
     }
@@ -113,9 +113,9 @@ if ($Mode -eq 'Audit') {
 }
 
 if ($Mode -eq 'Verify') {
-    if (-not $targetUser) { throw 'Aucun utilisateur Linux cible n’est connu. Fournis -WslUser à install.ps1 ou exécute le mode Apply interactif.' }
+    if (-not $targetUser) { throw 'Aucun utilisateur Linux cible nʼest connu. Fournis -WslUser à install.ps1 ou exécute le mode Apply interactif.' }
     if (-not $exists) { throw "Utilisateur Linux absent: $targetUser" }
-    if (-not $sudo) { throw "Utilisateur Linux '$targetUser' n’est pas membre du groupe sudo." }
+    if (-not $sudo) { throw "Utilisateur Linux '$targetUser' nʼest pas membre du groupe sudo." }
     if ($configuredUser -ne $targetUser) { throw "/etc/wsl.conf ne définit pas '$targetUser' comme utilisateur par défaut." }
     if ($defaultUser -ne $targetUser) { throw "WSL démarre actuellement avec '$defaultUser', attendu '$targetUser'. Exécute wsl --terminate $Distribution puis relance." }
     Write-Host "[OK] Utilisateur WSL '$targetUser' vérifié: non-root, sudo, utilisateur par défaut." -ForegroundColor Green
@@ -132,14 +132,14 @@ if (-not (Test-LinuxUserExists -Name $targetUser)) {
         throw "Utilisateur WSL '$targetUser' absent. Sa création nécessite une saisie interactive sécurisée du mot de passe. Relance sans -NonInteractive ou crée-le manuellement puis relance."
     }
     Write-Host ''
-    Write-Host "[ACTION REQUISE] Création de l’utilisateur Linux '$targetUser'." -ForegroundColor Magenta
-    Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et n’est jamais passée dans une variable, un argument ou un fichier log.' -ForegroundColor Yellow
+    Write-Host "[ACTION REQUISE] Création de lʼutilisateur Linux '$targetUser'." -ForegroundColor Magenta
+    Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et nʼest jamais passée dans une variable, un argument ou un fichier log.' -ForegroundColor Yellow
     Write-Host 'Les champs complémentaires sont laissés vides automatiquement.' -ForegroundColor DarkGray
     & wsl.exe -d $Distribution -u root -- adduser --gecos '' $targetUser
     $addUserCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($addUserCode -ne 0) { throw "Création Linux de '$targetUser' échouée (code=$addUserCode)." }
-    if (-not (Test-LinuxUserExists -Name $targetUser)) { throw "L’utilisateur '$targetUser' n’est pas détecté après adduser." }
+    if (-not (Test-LinuxUserExists -Name $targetUser)) { throw "Lʼutilisateur '$targetUser' nʼest pas détecté après adduser." }
     Write-Host "[FAIT] Utilisateur Linux '$targetUser' créé et vérifié." -ForegroundColor Green
 } else {
     Write-Host "[DÉJÀ OK] Utilisateur Linux '$targetUser' existe déjà." -ForegroundColor Green
@@ -147,7 +147,7 @@ if (-not (Test-LinuxUserExists -Name $targetUser)) {
 
 if (-not (Test-LinuxUserSudo -Name $targetUser)) {
     [void](Invoke-WslText -User root -Command "usermod -aG sudo '$targetUser'")
-    if (-not (Test-LinuxUserSudo -Name $targetUser)) { throw "Impossible d’ajouter '$targetUser' au groupe sudo." }
+    if (-not (Test-LinuxUserSudo -Name $targetUser)) { throw "Impossible dʼajouter '$targetUser' au groupe sudo." }
     Write-Host "[FAIT] '$targetUser' ajouté au groupe sudo." -ForegroundColor Green
 } else {
     Write-Host "[DÉJÀ OK] '$targetUser' est déjà membre de sudo." -ForegroundColor Green
@@ -157,13 +157,13 @@ $configuredUser = Get-ConfiguredDefaultUser
 if ($configuredUser -ne $targetUser) {
     Set-ConfiguredDefaultUser -Name $targetUser
     $configuredUser = Get-ConfiguredDefaultUser
-    if ($configuredUser -ne $targetUser) { throw 'Échec de configuration de l’utilisateur WSL par défaut.' }
+    if ($configuredUser -ne $targetUser) { throw 'Échec de configuration de lʼutilisateur WSL par défaut.' }
     Write-Host "[FAIT] /etc/wsl.conf: default=$targetUser" -ForegroundColor Green
 } else {
     Write-Host "[DÉJÀ OK] /etc/wsl.conf utilise déjà '$targetUser' par défaut." -ForegroundColor Green
 }
 
-Write-Host "[EN COURS] Redémarrage logique de $Distribution pour appliquer l’utilisateur par défaut..." -ForegroundColor Cyan
+Write-Host "[EN COURS] Redémarrage logique de $Distribution pour appliquer lʼutilisateur par défaut..." -ForegroundColor Cyan
 & wsl.exe --terminate $Distribution
 $terminateCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0

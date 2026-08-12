@@ -22,9 +22,9 @@ if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $LinuxUser = (& wsl.exe -d $Distribution -- sh -lc 'id -un' 2>$null | Out-String).Trim()
     $userCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer l’utilisateur WSL par défaut.' }
+    if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer lʼutilisateur WSL par défaut.' }
 }
-if ($LinuxUser -eq 'root') { throw 'Validation DevOps refusée sous root: configure d’abord un utilisateur WSL normal.' }
+if ($LinuxUser -eq 'root') { throw 'Validation DevOps refusée sous root: configure dʼabord un utilisateur WSL normal.' }
 
 $linuxScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $windowsScript).Trim()
 $convertCode = $LASTEXITCODE

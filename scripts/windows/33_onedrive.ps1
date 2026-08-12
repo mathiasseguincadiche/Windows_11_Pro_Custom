@@ -74,7 +74,7 @@ function Remove-OneDriveClient {
         & winget.exe uninstall --id $config.wingetId --exact --source winget --silent --accept-source-agreements --disable-interactivity
         $wingetExitCode = $LASTEXITCODE
         $global:LASTEXITCODE = 0
-        if ($wingetExitCode -ne 0) { Write-Warning 'WinGet n’a pas confirmé la désinstallation; fallback Microsoft autorisé.' }
+        if ($wingetExitCode -ne 0) { Write-Warning 'WinGet nʼa pas confirmé la désinstallation; fallback Microsoft autorisé.' }
     }
     Stop-OneDriveProcess
     if (Test-OneDriveInstalled) {
@@ -96,7 +96,7 @@ function Install-OneDriveClient {
     & winget.exe install --id $config.wingetId --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
     $wingetExitCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($wingetExitCode -ne 0 -or -not (Test-OneDriveInstalled)) { throw 'Rollback OneDrive impossible: la réinstallation n’a pas été confirmée.' }
+    if ($wingetExitCode -ne 0 -or -not (Test-OneDriveInstalled)) { throw 'Rollback OneDrive impossible: la réinstallation nʼa pas été confirmée.' }
 }
 
 $syncPolicy = $config.disableFileSyncPolicy

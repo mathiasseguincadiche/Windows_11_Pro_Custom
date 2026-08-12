@@ -189,10 +189,10 @@ function Invoke-WpcManagedScript {
 function Test-WpcManagedScript {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Path,[hashtable]$Arguments=@{},[string]$DisplayName='')
     if ([string]::IsNullOrWhiteSpace($DisplayName)) { $DisplayName=[IO.Path]::GetFileName($Path) }
-    Write-WpcStatus -Status 'ANALYSE' -Message $DisplayName -Detail 'Lecture de l’état réel de la machine avant décision.' -Context $Context
+    Write-WpcStatus -Status 'ANALYSE' -Message $DisplayName -Detail 'Lecture de lʼétat réel de la machine avant décision.' -Context $Context
     $result=Invoke-WpcManagedScript -Context $Context -Path $Path -Arguments $Arguments -DisplayName $DisplayName -Phase 'Probe' -Purpose 'Probe' -AllowFailure -Quiet
     if ($result.Success) { Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'La cible est déjà conforme; aucune modification nécessaire.' -Context $Context; return $true }
-    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'La cible n’est pas conforme; cette étape est planifiée.' -Context $Context
+    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'La cible nʼest pas conforme; cette étape est planifiée.' -Context $Context
     return $false
 }
 

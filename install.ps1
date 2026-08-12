@@ -89,7 +89,7 @@ function Add-PlanItem {
 function Show-Plan {
     Write-Host ''
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
-    Write-Host '  PLAN FACTUEL V9 — calculé depuis l’état actuel de la machine' -ForegroundColor Cyan
+    Write-Host '  PLAN FACTUEL V9 — calculé depuis lʼétat actuel de la machine' -ForegroundColor Cyan
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
     foreach ($item in $script:plan) {
         if ($item.Compliant) {
@@ -269,7 +269,7 @@ try {
     if ($InstallDevOps) {
         Add-PlanItem -Name 'Stack DevOps WSL' -VerifyRelativePath 'scripts\bootstrap\09_validate_devops.ps1' -VerifyArguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -ApplyRelativePath 'scripts\bootstrap\08_devops.ps1' -ApplyArguments @{ Distribution=$Distribution; LinuxUser=$WslUser }
     } else {
-        Write-WpcStatus -Status 'IGNORE' -Message 'Stack DevOps non demandée dans cet Apply' -Detail 'Ajoute -InstallDevOps ou utilise -FullInstall pour l’inclure.' -Context $context
+        Write-WpcStatus -Status 'IGNORE' -Message 'Stack DevOps non demandée dans cet Apply' -Detail 'Ajoute -InstallDevOps ou utilise -FullInstall pour lʼinclure.' -Context $context
     }
 
     if ($InstallOpenClawAI) {
@@ -280,7 +280,7 @@ try {
 
     Show-Plan
     if ($PlanOnly) {
-        Write-WpcStatus -Status 'OK' -Message 'PlanOnly terminé' -Detail 'Aucune modification n’a été effectuée après la phase de découverte.' -Context $context
+        Write-WpcStatus -Status 'OK' -Message 'PlanOnly terminé' -Detail 'Aucune modification nʼa été effectuée après la phase de découverte.' -Context $context
         $runSuccess = $true
         return
     }
@@ -295,7 +295,7 @@ try {
         }
         [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='before' } -Name 'Mesure avant changements' -Phase 'Measurement')
     } else {
-        Write-WpcStatus -Status 'DEJA_OK' -Message 'Installation demandée déjà conforme' -Detail 'Aucune modification système, réinstallation ou point de restauration n’est nécessaire.' -Context $context
+        Write-WpcStatus -Status 'DEJA_OK' -Message 'Installation demandée déjà conforme' -Detail 'Aucune modification système, réinstallation ou point de restauration nʼest nécessaire.' -Context $context
     }
 
     Invoke-PlannedItems
@@ -308,7 +308,7 @@ try {
         $beforeReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-before.json'
         $afterReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-after.json'
         if (-not ((Test-Path $beforeReport) -and (Test-Path $afterReport))) {
-            Write-WpcStatus -Status 'ANALYSE' -Message 'Preuves V4 absentes malgré configuration conforme' -Detail 'Création de deux snapshots non mutatifs pour disposer d’une base de validation.' -Context $context
+            Write-WpcStatus -Status 'ANALYSE' -Message 'Preuves V4 absentes malgré configuration conforme' -Detail 'Création de deux snapshots non mutatifs pour disposer dʼune base de validation.' -Context $context
             [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='before' } -Name 'Mesure de référence' -Phase 'Measurement')
             [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='after' } -Name 'Mesure de confirmation' -Phase 'Measurement')
             [void](Invoke-Step -RelativePath 'scripts\windows\43_compare_benchmarks.ps1' -Name 'Comparaison de confirmation' -Phase 'Measurement')

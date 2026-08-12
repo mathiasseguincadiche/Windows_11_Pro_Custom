@@ -38,7 +38,7 @@ foreach ($component in $components) {
 }
 
 if ($Mode -eq 'Apply' -and $changed -eq 0) {
-    Write-Host '[DÉJÀ OK] Poste de travail déjà conforme; aucune configuration n’a été réappliquée.' -ForegroundColor Green
+    Write-Host '[DÉJÀ OK] Poste de travail déjà conforme; aucune configuration nʼa été réappliquée.' -ForegroundColor Green
 } elseif ($Mode -eq 'Apply') {
     Write-Host "[FAIT] Poste de travail: $changed composant(s) corrigé(s), tous revalidés." -ForegroundColor Green
 } else {
