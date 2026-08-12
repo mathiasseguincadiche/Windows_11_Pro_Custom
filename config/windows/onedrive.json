@@ -1,0 +1,17 @@
+{
+  "schema": "windows11-pro-custom.onedrive.v1",
+  "desiredState": "absent",
+  "wingetId": "Microsoft.OneDrive",
+  "disableFileSyncPolicy": {
+    "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\OneDrive",
+    "property": "DisableFileSyncNGSC",
+    "value": 1
+  },
+  "preventNetworkTrafficPolicy": {
+    "path": "HKLM:\\SOFTWARE\\Microsoft\\OneDrive",
+    "property": "PreventNetworkTrafficPreUserSignIn",
+    "value": 1
+  },
+  "rollback": "restore-previous-state",
+  "scope": "explicit-user-preference"
+}
