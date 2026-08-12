@@ -22,7 +22,7 @@ param(
     [switch]$ValidateOpenClawAI,
     [string]$OpenClawRoot = 'D:\AI\OpenClaw',
     [string]$OpenClawControlPlanePath = 'D:\AI\OpenClaw\control-plane',
-    [string]$OpenClawRepositoryRef = 'main',
+    [string]$OpenClawRepositoryRef = '',
 
     [ValidateSet('None', 'Create', 'Verify', 'RestorePlan')]
     [string]$BackupAction = 'None',
@@ -34,6 +34,18 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
+
+$OpenClawConfigPath = Join-Path $RepoRoot 'config\openclaw\control-plane.json'
+if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) {
+    if (-not (Test-Path $OpenClawConfigPath)) {
+        throw "OpenClaw control-plane pin is missing: $OpenClawConfigPath"
+    }
+    $OpenClawConfig = Get-Content -Raw $OpenClawConfigPath | ConvertFrom-Json
+    $OpenClawRepositoryRef = [string]$OpenClawConfig.ref
+    if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) {
+        throw 'OpenClaw control-plane pin is empty.'
+    }
+}
 
 if ($BackupAction -ne 'None') {
     if ([string]::IsNullOrWhiteSpace($BackupTargetDrive) -or $BackupTargetDrive -notmatch '^[A-Za-z]:$') {
@@ -72,6 +84,7 @@ Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
 Write-Host "WSL2 profile: $WslProfile" -ForegroundColor Cyan
 Write-Host "V4 optimization profiles: $($OptimizationProfiles -join ', ')" -ForegroundColor Cyan
 Write-Host "OpenClaw AI root: $OpenClawRoot" -ForegroundColor Cyan
+Write-Host "OpenClaw control-plane ref: $OpenClawRepositoryRef" -ForegroundColor Cyan
 
 if ($Mode -eq 'Rollback') {
     & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Rollback

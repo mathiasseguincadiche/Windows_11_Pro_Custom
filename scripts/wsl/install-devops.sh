@@ -14,6 +14,7 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 DOCKER_DAEMON_CONFIG="$REPO_ROOT/config/wsl/docker-daemon.json"
+VERSIONS_FILE="$REPO_ROOT/config/devops/tool-versions.env"
 
 # shellcheck disable=SC1091
 source /etc/os-release
@@ -26,6 +27,20 @@ if [[ ! -r "$DOCKER_DAEMON_CONFIG" ]]; then
   echo "[ERREUR] Configuration Docker absente: $DOCKER_DAEMON_CONFIG" >&2
   exit 1
 fi
+
+if [[ ! -r "$VERSIONS_FILE" ]]; then
+  echo "[ERREUR] Matrice de versions DevOps absente: $VERSIONS_FILE" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$VERSIONS_FILE"
+: "${KUBECTL_VERSION:?KUBECTL_VERSION absent}"
+: "${HELM_VERSION:?HELM_VERSION absent}"
+: "${TERRAFORM_VERSION:?TERRAFORM_VERSION absent}"
+: "${AWS_CLI_VERSION:?AWS_CLI_VERSION absent}"
+: "${MINIKUBE_VERSION:?MINIKUBE_VERSION absent}"
+: "${KIND_VERSION:?KIND_VERSION absent}"
 
 ARCH="$(dpkg --print-architecture)"
 if [[ ${ARCH} != "amd64" ]]; then
@@ -42,7 +57,7 @@ log() { printf '\n==> %s\n' "$*"; }
 log "Paquets de base"
 sudo apt-get update
 sudo apt-get install -y \
-  ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client rsync \
+  ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client rsync tar gzip \
   python3 python3-pip python3-venv pipx shellcheck shfmt ansible-core bash-completion
 
 log "Docker Engine + Buildx + Compose depuis le dépôt Docker officiel"
@@ -67,36 +82,34 @@ sudo systemctl enable --now docker
 sudo systemctl restart docker
 sudo usermod -aG docker "$USER"
 
-log "kubectl depuis pkgs.k8s.io"
-KUBERNETES_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-KUBERNETES_MINOR="$(printf '%s' "$KUBERNETES_VERSION" | sed -E 's/^(v[0-9]+\.[0-9]+)\..*$/\1/')"
-curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBERNETES_MINOR}/deb/Release.key" \
-  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-sudo chmod 0644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBERNETES_MINOR}/deb/ /" \
-  | sudo tee /etc/apt/sources.list.d/kubernetes.list >/dev/null
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
 
-log "Helm depuis le dépôt Debian/Ubuntu recommandé par le projet Helm"
-HELM_KEY_ID="DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"
-helm_key="$(mktemp)"
-curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey -o "$helm_key"
-actual_helm_key="$(gpg --show-keys --with-colons "$helm_key" | awk -F: '$1 == "fpr" {print $10}' | head -n1)"
-if [[ "$actual_helm_key" != "$HELM_KEY_ID" ]]; then
-  echo "[ERREUR] Empreinte de clé Helm inattendue: $actual_helm_key" >&2
-  rm -f "$helm_key"
-  exit 1
-fi
-gpg --dearmor < "$helm_key" | sudo tee /usr/share/keyrings/helm.gpg >/dev/null
-rm -f "$helm_key"
-echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" \
-  | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list >/dev/null
+log "kubectl ${KUBECTL_VERSION} avec checksum upstream"
+curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
+curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" -o "$tmpdir/kubectl.sha256"
+echo "$(cat "$tmpdir/kubectl.sha256")  $tmpdir/kubectl" | sha256sum -c -
+sudo install -m 0755 "$tmpdir/kubectl" /usr/local/bin/kubectl
 
-log "Terraform depuis HashiCorp"
-wget -qO- https://apt.releases.hashicorp.com/gpg \
-  | sudo gpg --dearmor --yes -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-ubuntu_codename="${UBUNTU_CODENAME:-$(lsb_release -cs)}"
-echo "deb [arch=${ARCH} signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${ubuntu_codename} main" \
-  | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
+log "Helm ${HELM_VERSION} avec checksum upstream"
+helm_archive="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+curl -fsSL "https://get.helm.sh/${helm_archive}" -o "$tmpdir/$helm_archive"
+curl -fsSL "https://get.helm.sh/${helm_archive}.sha256sum" -o "$tmpdir/$helm_archive.sha256sum"
+helm_sha="$(awk '{print $1}' "$tmpdir/$helm_archive.sha256sum")"
+echo "$helm_sha  $tmpdir/$helm_archive" | sha256sum -c -
+tar -xzf "$tmpdir/$helm_archive" -C "$tmpdir"
+sudo install -m 0755 "$tmpdir/linux-amd64/helm" /usr/local/bin/helm
+
+log "Terraform ${TERRAFORM_VERSION} avec checksum HashiCorp"
+terraform_archive="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${terraform_archive}" -o "$tmpdir/$terraform_archive"
+curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" -o "$tmpdir/terraform_SHA256SUMS"
+(
+  cd "$tmpdir"
+  grep " ${terraform_archive}$" terraform_SHA256SUMS | sha256sum -c -
+  unzip -qo "$terraform_archive"
+)
+sudo install -m 0755 "$tmpdir/terraform" /usr/local/bin/terraform
 
 log "GitHub CLI depuis le dépôt officiel"
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -112,25 +125,26 @@ echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.
   | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
 
 sudo apt-get update
-sudo apt-get install -y kubectl helm terraform gh trivy
+sudo apt-get install -y gh trivy
 
-log "AWS CLI v2 depuis l'installateur officiel"
-tmpdir="$(mktemp -d)"
-trap 'rm -rf "$tmpdir"' EXIT
-curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o "$tmpdir/awscliv2.zip"
-unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir"
+log "AWS CLI v2 ${AWS_CLI_VERSION} depuis l'archive officielle versionnée"
+aws_archive="awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip"
+curl -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$tmpdir/awscliv2.zip"
+unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir/aws-cli"
 if command -v aws >/dev/null 2>&1; then
-  sudo "$tmpdir/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+  sudo "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
 else
-  sudo "$tmpdir/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
+  sudo "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
 fi
 
-log "Minikube stable"
-curl -fsSL https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64 -o "$tmpdir/minikube"
+log "Minikube ${MINIKUBE_VERSION} avec checksum upstream"
+minikube_url="https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64"
+curl -fsSL "$minikube_url" -o "$tmpdir/minikube"
+curl -fsSL "${minikube_url}.sha256" -o "$tmpdir/minikube.sha256"
+echo "$(cat "$tmpdir/minikube.sha256")  $tmpdir/minikube" | sha256sum -c -
 sudo install -m 0755 "$tmpdir/minikube" /usr/local/bin/minikube
 
-log "kind"
-KIND_VERSION="${KIND_VERSION:-v0.32.0}"
+log "kind ${KIND_VERSION}"
 curl -fsSL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" -o "$tmpdir/kind"
 sudo install -m 0755 "$tmpdir/kind" /usr/local/bin/kind
 
@@ -143,11 +157,20 @@ bash "$SCRIPT_DIR/manage-shell-profile.sh" apply
 log "Répertoires de travail"
 mkdir -p "$HOME"/{projects,labs,repositories,scripts,workspace,backups}
 
+log "Contrat runtime des versions épinglées"
+kubectl version --client --output=json | jq -e --arg expected "$KUBECTL_VERSION" '.clientVersion.gitVersion == $expected' >/dev/null
+helm version --short | grep -F "$HELM_VERSION" >/dev/null
+terraform version -json | jq -e --arg expected "$TERRAFORM_VERSION" '.terraform_version == $expected' >/dev/null
+aws --version 2>&1 | grep -F "aws-cli/${AWS_CLI_VERSION}" >/dev/null
+minikube version --short | grep -F "$MINIKUBE_VERSION" >/dev/null
+kind version | grep -F "$KIND_VERSION" >/dev/null
+
 cat <<'EOF'
 
-[OK] Stack DevOps V3 installée.
+[OK] Stack DevOps V3 installée avec versions cœur épinglées.
 
 Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
+Les versions kubectl, Helm, Terraform, AWS CLI, Minikube et kind sont pilotées par config/devops/tool-versions.env.
 Les outils IaC et le profil shell DevOps sont installés.
 Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL.
 Exécute ensuite :

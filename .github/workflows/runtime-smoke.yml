@@ -1,0 +1,99 @@
+name: runtime-smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  reproducibility-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate pinned DevOps version matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          versions='config/devops/tool-versions.env'
+          test -f "$versions"
+          # shellcheck disable=SC1090
+          source "$versions"
+          [[ "$KUBECTL_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$HELM_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$TERRAFORM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$AWS_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$MINIKUBE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$KIND_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          # This grep intentionally searches the literal shell variable reference in the installer.
+          # shellcheck disable=SC2016
+          grep -q 'source "$VERSIONS_FILE"' scripts/wsl/install-devops.sh
+          if grep -nE 'release/stable\.txt|minikube/releases/latest/download|awscli-exe-linux-x86_64\.zip"' scripts/wsl/install-devops.sh; then
+            echo 'A rolling core-tool URL bypasses config/devops/tool-versions.env.' >&2
+            exit 1
+          fi
+      - name: Validate upstream pinned artifacts exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source config/devops/tool-versions.env
+          curl --retry 3 -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" | grep -Eq '^[0-9a-f]{64}$'
+          curl --retry 3 -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz.sha256sum" | grep -Eq '^[0-9a-f]{64}([[:space:]]|$)'
+          curl --retry 3 -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" | grep -q " terraform_${TERRAFORM_VERSION}_linux_amd64.zip$"
+          curl --retry 3 -fsSL "https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64.sha256" | grep -Eq '^[0-9a-f]{64}$'
+          curl --retry 3 -fsIL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" >/dev/null
+          curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" >/dev/null
+      - name: Validate OpenClaw immutable pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          cfg='config/openclaw/control-plane.json'
+          jq -e '
+            (.repository | type == "string") and
+            (.ref | test("^[0-9a-fA-F]{40}$")) and
+            (.policy == "pinned-commit")
+          ' "$cfg" >/dev/null
+          grep -q 'checkout --detach FETCH_HEAD' scripts/bootstrap/15_openclaw_ai.ps1
+          grep -q "OpenClawRepositoryRef = ''" install.ps1
+      - name: Validate V7 capacity policy wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            (.minimumTargetFreeGB >= 100) and
+            (.capacitySafetyMarginPercent >= 10) and
+            (.capacitySafetyMarginPercent <= 50) and
+            (.destructiveRestoreAutomation == false)
+          ' config/backup/v7-policy.json >/dev/null
+          grep -q 'capacity-preflight.json' scripts/backup/60_create_backup_v7.ps1
+          grep -q 'RequiredTargetFreeGB' scripts/backup/60_create_backup_v7.ps1
+
+  windows-runtime:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Execute safe Windows runtime audits
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\windows\20_system_audit.ps1
+          .\scripts\windows\21_storage_trim.ps1 -Mode Audit
+          .\scripts\windows\42_benchmark.ps1 -Stage snapshot
+          foreach ($profile in @('standard', 'privacy', 'gaming', 'optional')) {
+            .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
+          }
+      - name: Validate generated runtime reports
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $audit = Get-Content -Raw .\reports\windows\system-audit.json | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$audit.Computer)) {
+            throw 'system-audit.json does not contain a computer identity.'
+          }
+          $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json
+          if ($null -eq $benchmark.Timestamp) {
+            throw 'Runtime benchmark report is incomplete.'
+          }
