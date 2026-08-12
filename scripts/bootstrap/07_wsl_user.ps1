@@ -68,20 +68,27 @@ function Set-ConfiguredDefaultUser {
 set -eu
 file=/etc/wsl.conf
 tmp="$(mktemp)"
-awk '
+user='__USER__'
+touch "$file"
+awk -v user="$user" '
 BEGIN { inuser=0; wrote=0 }
-/^\[user\]$/ { if (!wrote) { print "[user]"; print "default=__USER__"; wrote=1 } inuser=1; next }
+/^\[user\]$/ {
+  if (!wrote) { print "[user]"; print "default=" user; wrote=1 }
+  inuser=1
+  next
+}
 /^\[/ { inuser=0 }
 { if (!inuser) print }
-END { if (!wrote) { print ""; print "[user]"; print "default=__USER__" } }
-' "$file" | sed 's/__USER__/__SAFE_USER__/g' > "$tmp"
+END {
+  if (!wrote) { print ""; print "[user]"; print "default=" user }
+}
+' "$file" > "$tmp"
 install -m 0644 "$tmp" "$file"
 rm -f "$tmp"
 '@
-    $script = $script.Replace('__SAFE_USER__', $Name)
+    $script = $script.Replace('__USER__', $Name)
     $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
-    $command = "printf '%s' '$encoded' | base64 -d | sh"
-    [void](Invoke-WslText -User root -Command $command)
+    [void](Invoke-WslText -User root -Command "printf '%s' '$encoded' | base64 -d | sh")
 }
 
 $defaultUser = Get-DefaultLinuxUser
@@ -127,7 +134,7 @@ if (-not (Test-LinuxUserExists -Name $targetUser)) {
     Write-Host ''
     Write-Host "[ACTION REQUISE] Création de l’utilisateur Linux '$targetUser'." -ForegroundColor Magenta
     Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et n’est jamais passée dans une variable, un argument ou un fichier log.' -ForegroundColor Yellow
-    Write-Host 'Les champs nom complet/téléphone sont facultatifs; tu peux appuyer sur Entrée.' -ForegroundColor DarkGray
+    Write-Host 'Les champs complémentaires sont laissés vides automatiquement.' -ForegroundColor DarkGray
     & wsl.exe -d $Distribution -u root -- adduser --gecos '' $targetUser
     $addUserCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
