@@ -63,11 +63,11 @@ jobs:
             echo 'Unsafe V8 responsiveness tweak detected.' >&2
             exit 1
           fi
-          grep -Fq 'AutomaticManagedPagefile = $true' "$script"
+          grep -Fq "AutomaticManagedPagefile = \$true" "$script"
           grep -Fq 'Enable-MMAgent -MemoryCompression' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationLaunchPrefetching' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationPreLaunch' "$script"
-          grep -Fq "Startup applications are inventory-only" "$script"
+          grep -Fq 'Startup applications are inventory-only' "$script"
           grep -Fq '53_responsiveness_v8.ps1" -Mode Apply' install.ps1
           grep -Fq '53_responsiveness_v8.ps1" -Mode Verify' install.ps1
       - name: Protect benchmark methodology
