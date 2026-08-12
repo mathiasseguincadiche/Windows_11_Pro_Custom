@@ -5,18 +5,25 @@ on:
     branches: ['**']
     paths:
       - 'config/wsl/**'
+      - 'config/devops/**'
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/wsl/install-devops.sh'
+      - 'scripts/wsl/install-quality-tools.sh'
       - '.github/workflows/wsl-runtime-contract.yml'
   pull_request:
     paths:
       - 'config/wsl/**'
+      - 'config/devops/**'
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/wsl/install-devops.sh'
+      - 'scripts/wsl/install-quality-tools.sh'
       - '.github/workflows/wsl-runtime-contract.yml'
 
 permissions:
   contents: read
+  attestations: read
 
 jobs:
   contract:
@@ -51,3 +58,129 @@ jobs:
             echo 'Destructive WSL automation detected.' >&2
             exit 1
           fi
+
+  ubuntu-2604-devops-compatibility:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:26.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate Resolute package baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$VERSION_ID" = 26.04
+          test "$VERSION_CODENAME" = resolute
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            sudo ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client \
+            rsync tar gzip python3 python3-pip python3-venv pipx shellcheck shfmt \
+            ansible-core bash-completion yamllint
+          ansible-playbook --version | head -n 1 | grep -F 'core 2.20.1'
+          python3 --version
+
+      - name: Validate Docker repository for Ubuntu 26.04
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 0755 -d /etc/apt/keyrings
+          curl --retry 5 --retry-all-errors -fsSL https://download.docker.com/linux/ubuntu/gpg \
+            -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+          cat >/etc/apt/sources.list.d/docker.sources <<'EOF'
+          Types: deb
+          URIs: https://download.docker.com/linux/ubuntu
+          Suites: resolute
+          Components: stable
+          Architectures: amd64
+          Signed-By: /etc/apt/keyrings/docker.asc
+          EOF
+          apt-get update
+          apt-cache policy docker-ce-cli | grep -F 'Candidate:' | grep -v '(none)'
+          apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin docker-compose-plugin
+          docker --version
+          docker buildx version
+          docker compose version
+
+      - name: Validate GitHub CLI and Trivy repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 5 --retry-all-errors -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' \
+            >/etc/apt/sources.list.d/github-cli.list
+          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | gpg --dearmor >/usr/share/keyrings/trivy.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main' \
+            >/etc/apt/sources.list.d/trivy.list
+          apt-get update
+          apt-get install -y --no-install-recommends gh trivy
+          gh --version
+          trivy --version
+
+      - name: Validate pinned portable DevOps binaries on Ubuntu 26.04
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source config/devops/tool-versions.env
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+
+          curl --retry 5 --retry-all-errors -fsSL \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
+          kubectl_sha="$(curl --retry 5 --retry-all-errors -fsSL \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256")"
+          echo "$kubectl_sha  $tmpdir/kubectl" | sha256sum -c -
+          chmod +x "$tmpdir/kubectl"
+          "$tmpdir/kubectl" version --client --output=json \
+            | jq -e --arg expected "$KUBECTL_VERSION" '.clientVersion.gitVersion == $expected' >/dev/null
+
+          helm_archive="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          curl --retry 5 --retry-all-errors -fsSL "https://get.helm.sh/${helm_archive}" -o "$tmpdir/$helm_archive"
+          helm_sha="$(curl --retry 5 --retry-all-errors -fsSL "https://get.helm.sh/${helm_archive}.sha256sum" | awk '{print $1}')"
+          echo "$helm_sha  $tmpdir/$helm_archive" | sha256sum -c -
+          tar -xzf "$tmpdir/$helm_archive" -C "$tmpdir"
+          "$tmpdir/linux-amd64/helm" version --short | grep -F "$HELM_VERSION"
+
+          terraform_archive="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          curl --retry 5 --retry-all-errors -fsSL \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${terraform_archive}" \
+            -o "$tmpdir/$terraform_archive"
+          curl --retry 5 --retry-all-errors -fsSL \
+            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" \
+            -o "$tmpdir/terraform_SHA256SUMS"
+          (cd "$tmpdir" && grep " ${terraform_archive}$" terraform_SHA256SUMS | sha256sum -c - && unzip -qo "$terraform_archive")
+          "$tmpdir/terraform" version -json | jq -e --arg expected "$TERRAFORM_VERSION" '.terraform_version == $expected' >/dev/null
+
+          aws_archive="awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip"
+          curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$tmpdir/aws.zip"
+          unzip -q "$tmpdir/aws.zip" -d "$tmpdir/aws-cli"
+          "$tmpdir/aws-cli/aws/install" --install-dir "$tmpdir/aws-install" --bin-dir "$tmpdir/aws-bin"
+          "$tmpdir/aws-bin/aws" --version 2>&1 | grep -F "aws-cli/${AWS_CLI_VERSION}"
+
+          minikube_url="https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64"
+          curl --retry 5 --retry-all-errors -fsSL "$minikube_url" -o "$tmpdir/minikube"
+          minikube_sha="$(curl --retry 5 --retry-all-errors -fsSL "${minikube_url}.sha256")"
+          echo "$minikube_sha  $tmpdir/minikube" | sha256sum -c -
+          chmod +x "$tmpdir/minikube"
+          "$tmpdir/minikube" version --short | grep -F "$MINIKUBE_VERSION"
+
+          curl --retry 5 --retry-all-errors -fsSL \
+            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" -o "$tmpdir/kind"
+          chmod +x "$tmpdir/kind"
+          "$tmpdir/kind" version | grep -F "$KIND_VERSION"
+
+      - name: Validate pinned IaC quality tools on Ubuntu 26.04
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/wsl/install-quality-tools.sh
