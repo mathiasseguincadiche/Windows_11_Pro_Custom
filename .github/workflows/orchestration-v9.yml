@@ -99,7 +99,7 @@ jobs:
           grep -Fq 'LocationMatches' scripts/bootstrap/06_wsl.ps1
 
           grep -Fq 'adduser' scripts/bootstrap/07_wsl_user.ps1
-          grep -Fq 'n’est jamais passée dans une variable, un argument ou un fichier log' scripts/bootstrap/07_wsl_user.ps1
+          grep -Fq 'nʼest jamais passée dans une variable, un argument ou un fichier log' scripts/bootstrap/07_wsl_user.ps1
           grep -Fq -- '--user' scripts/bootstrap/08_devops.ps1
           grep -Fq 'scripts/wsl/install-devops.sh' scripts/bootstrap/08_devops.ps1
           grep -Fq 'scripts/wsl/validate-devops.sh' scripts/bootstrap/09_validate_devops.ps1
@@ -142,7 +142,7 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
             foreach ($parseError in @($errors)) {
               $failed = $true
-              Write-Host "::error file=$($file.FullName),line=$($parseError.Extent.StartLineNumber),col=$($parseError.Extent.StartColumnNumber)::$($parseError.Message)"
+              Write-Host "PARSE $($file.FullName):$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
             }
           }
           if ($failed) { throw 'PowerShell parse errors detected.' }
