@@ -2,7 +2,7 @@
 param(
     [ValidateSet('Show', 'Record', 'Verify', 'Reset')]
     [string]$Mode = 'Show',
-
+    [switch]$Interactive,
     [switch]$UefiCsmDisabled,
     [switch]$Above4GEnabled,
     [switch]$ResizableBarEnabled,
@@ -24,48 +24,32 @@ $statePath = Join-Path $stateDir 'hardware-v5-manual.json'
 $target = Get-Content -Raw $targetPath | ConvertFrom-Json
 
 $descriptions = [ordered]@{
-    uefi_csm_disabled = 'UEFI boot confirmed and CSM/Legacy disabled.'
-    above_4g_enabled = 'Above 4G Decoding enabled in UEFI.'
-    resizable_bar_enabled = 'Resizable BAR enabled and confirmed in Intel Graphics Software or Intel DSA.'
-    t705_in_m2_1_and_m2_2 = 'The two Crucial T705 drives are physically installed in M2_1 and M2_2.'
-    t705_heatsinks_and_airflow_verified = 'Both T705 drives have a motherboard/SSD heatsink and usable airflow.'
-    memory_6000_stability_verified = 'DDR5 6000 MT/s has passed a deliberate memory stability test without errors.'
-    latest_stable_bios_reviewed = 'The current MSI stable BIOS was reviewed before qualification.'
-    current_vendor_drivers_reviewed = 'AMD chipset, Intel Arc and MSI device drivers were reviewed from vendor sources.'
+    uefi_csm_disabled = 'UEFI démarré et CSM/Legacy désactivé.'
+    above_4g_enabled = 'Above 4G Decoding activé dans l’UEFI.'
+    resizable_bar_enabled = 'Resizable BAR activé et confirmé dans Intel Graphics Software ou Intel DSA.'
+    t705_in_m2_1_and_m2_2 = 'Les deux Crucial T705 sont physiquement installés dans M2_1 et M2_2.'
+    t705_heatsinks_and_airflow_verified = 'Les deux T705 disposent d’un dissipateur et d’un flux d’air correct.'
+    memory_6000_stability_verified = 'La DDR5 6000 MT/s a passé un vrai test de stabilité mémoire sans erreur.'
+    latest_stable_bios_reviewed = 'La version BIOS MSI stable actuelle a été vérifiée avant qualification.'
+    current_vendor_drivers_reviewed = 'Les pilotes AMD chipset, Intel Arc et MSI ont été vérifiés depuis les sources constructeur.'
 }
 
 function New-EmptyState {
     $checks = [ordered]@{}
-    foreach ($name in @($target.manualChecks)) {
-        $checks[$name] = $false
-    }
-    return [ordered]@{
-        Version = 'V5'
-        UpdatedAt = $null
-        Checks = $checks
-        Notes = ''
-    }
+    foreach ($name in @($target.manualChecks)) { $checks[$name] = $false }
+    return [ordered]@{ Version='V5'; UpdatedAt=$null; Checks=$checks; Notes='' }
 }
 
 function Read-State {
     $state = New-EmptyState
-    if (-not (Test-Path $statePath)) {
-        return $state
-    }
-
+    if (-not (Test-Path $statePath)) { return $state }
     $existing = Get-Content -Raw $statePath | ConvertFrom-Json
     foreach ($name in @($target.manualChecks)) {
         $property = $existing.Checks.PSObject.Properties[$name]
-        if ($null -ne $property) {
-            $state.Checks[$name] = [bool]$property.Value
-        }
+        if ($null -ne $property) { $state.Checks[$name] = [bool]$property.Value }
     }
-    if ($null -ne $existing.UpdatedAt) {
-        $state.UpdatedAt = [string]$existing.UpdatedAt
-    }
-    if ($null -ne $existing.Notes) {
-        $state.Notes = [string]$existing.Notes
-    }
+    if ($null -ne $existing.UpdatedAt) { $state.UpdatedAt = [string]$existing.UpdatedAt }
+    if ($null -ne $existing.Notes) { $state.Notes = [string]$existing.Notes }
     return $state
 }
 
@@ -73,28 +57,37 @@ function Show-State {
     param([Parameter(Mandatory)]$State)
     foreach ($name in @($target.manualChecks)) {
         $value = [bool]$State.Checks[$name]
-        $status = if ($value) { 'OK' } else { 'TODO' }
-        Write-Host ("[{0}] {1} - {2}" -f $status, $name, $descriptions[$name])
+        if ($value) {
+            Write-Host "[DÉJÀ OK] $name - $($descriptions[$name])" -ForegroundColor Green
+        } else {
+            Write-Host "[ACTION REQUISE] $name - $($descriptions[$name])" -ForegroundColor Magenta
+        }
     }
-    if ($State.Notes) {
-        Write-Host "Notes: $($State.Notes)"
+    if ($State.Notes) { Write-Host "Notes: $($State.Notes)" }
+}
+
+function Read-ManualConfirmation {
+    param([Parameter(Mandatory)][string]$Name,[Parameter(Mandatory)][string]$Description)
+    Write-Host ''
+    Write-Host "Vérification: $Name" -ForegroundColor Cyan
+    Write-Host $Description
+    Write-Host 'Réponds O uniquement si tu as réellement contrôlé ce point. Le script ne peut pas le deviner.' -ForegroundColor Yellow
+    while ($true) {
+        $answer = (Read-Host 'Confirmé ? [O/N]').Trim().ToLowerInvariant()
+        if ($answer -in @('o','oui','y','yes')) { return $true }
+        if ($answer -in @('n','non','no')) { return $false }
+        Write-Host 'Répondre O (oui, réellement vérifié) ou N (pas encore vérifié).' -ForegroundColor Yellow
     }
 }
 
 if ($Mode -eq 'Reset') {
-    if (Test-Path $statePath) {
-        Remove-Item -LiteralPath $statePath -Force
-    }
-    Write-Host '[OK] V5 manual hardware proof reset.' -ForegroundColor Green
+    if (Test-Path $statePath) { Remove-Item -LiteralPath $statePath -Force }
+    Write-Host '[FAIT] Preuves manuelles V5 réinitialisées.' -ForegroundColor Green
     return
 }
 
 $state = Read-State
-
-if ($Mode -eq 'Show') {
-    Show-State -State $state
-    return
-}
+if ($Mode -eq 'Show') { Show-State -State $state; return }
 
 if ($Mode -eq 'Record') {
     $map = [ordered]@{
@@ -108,33 +101,37 @@ if ($Mode -eq 'Record') {
         current_vendor_drivers_reviewed = $CurrentVendorDriversReviewed.IsPresent
     }
 
-    foreach ($entry in $map.GetEnumerator()) {
-        if ($entry.Value) {
-            $state.Checks[$entry.Key] = $true
+    if ($Interactive) {
+        foreach ($name in @($target.manualChecks)) {
+            if ([bool]$state.Checks[$name]) {
+                Write-Host "[DÉJÀ OK] $name déjà confirmé précédemment; aucune nouvelle saisie." -ForegroundColor Green
+                continue
+            }
+            if (Read-ManualConfirmation -Name $name -Description $descriptions[$name]) { $map[$name] = $true }
         }
     }
-    if ($Notes) {
-        $state.Notes = $Notes
-    }
-    $state.UpdatedAt = (Get-Date).ToString('o')
 
+    $changed = 0
+    foreach ($entry in $map.GetEnumerator()) {
+        if ($entry.Value -and -not [bool]$state.Checks[$entry.Key]) {
+            $state.Checks[$entry.Key] = $true
+            $changed++
+        }
+    }
+    if ($Notes) { $state.Notes = $Notes }
+    $state.UpdatedAt = (Get-Date).ToString('o')
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
     $state | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $statePath
-    Write-Host "[OK] V5 manual proof updated: $statePath" -ForegroundColor Green
+    if ($changed -gt 0) { Write-Host "[FAIT] $changed preuve(s) manuelle(s) ajoutée(s): $statePath" -ForegroundColor Green }
+    else { Write-Host '[DÉJÀ OK] Aucune nouvelle preuve manuelle confirmée.' -ForegroundColor Green }
     Show-State -State $state
     return
 }
 
 $missing = @()
-foreach ($name in @($target.manualChecks)) {
-    if (-not [bool]$state.Checks[$name]) {
-        $missing += $name
-    }
-}
-
+foreach ($name in @($target.manualChecks)) { if (-not [bool]$state.Checks[$name]) { $missing += $name } }
 Show-State -State $state
 if ($missing.Count -gt 0) {
-    throw "V5 manual hardware qualification incomplete: $($missing -join ', ')"
+    throw "Qualification matérielle manuelle V5 incomplète: $($missing -join ', '). Pour une saisie guidée: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
 }
-
 Write-Host 'VERDICT: V5 HARDWARE MANUAL CHECKS READY' -ForegroundColor Green
