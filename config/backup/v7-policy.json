@@ -3,6 +3,7 @@
   "description": "Golden backup and disaster recovery policy for Windows 11 Pro Custom",
   "systemVolumes": ["C:", "D:"],
   "minimumTargetFreeGB": 100,
+  "capacitySafetyMarginPercent": 20,
   "requireUsbTargetByDefault": true,
   "wslDistribution": "Ubuntu",
   "wslExportFormat": "vhdx",
