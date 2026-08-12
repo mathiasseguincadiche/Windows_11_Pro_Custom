@@ -112,6 +112,7 @@ if ($Mode -eq 'Rollback') {
 & "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
 & "$RepoRoot\scripts\windows\20_system_audit.ps1"
 & "$RepoRoot\scripts\windows\50_hardware_inventory.ps1"
+& "$RepoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Audit
 & "$RepoRoot\scripts\windows\21_storage_trim.ps1" -Mode Audit
 
 switch ($Mode) {
