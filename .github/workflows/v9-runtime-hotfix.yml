@@ -24,12 +24,19 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           path = Path('scripts/core/runtime.psm1')
-          text = path.read_text(encoding='utf-8')
-          old = "    $relative = $relative -replace '^scripts\\\\', ''\n"
-          new = "    if ($relative.StartsWith('scripts\\', [StringComparison]::OrdinalIgnoreCase)) { $relative = $relative.Substring(8) }\n"
-          if old not in text:
-              raise SystemExit('Expected runtime log-path line not found')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          lines = path.read_text(encoding='utf-8').splitlines(keepends=True)
+          replacement = "    if ($relative.StartsWith('scripts\\', [StringComparison]::OrdinalIgnoreCase)) { $relative = $relative.Substring(8) }\n"
+          hits = 0
+          out = []
+          for line in lines:
+              if "$relative = $relative -replace '^scripts" in line:
+                  out.append(replacement)
+                  hits += 1
+              else:
+                  out.append(line)
+          if hits != 1:
+              raise SystemExit(f'Expected exactly one runtime log-path line, found {hits}')
+          path.write_text(''.join(out), encoding='utf-8', newline='\n')
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
