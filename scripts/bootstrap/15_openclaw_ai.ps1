@@ -31,6 +31,7 @@ if ([string]::IsNullOrWhiteSpace($Repository) -or [string]::IsNullOrWhiteSpace($
 }
 
 $InstallerRelativePath = 'scripts\windows\00_install_openclaw_windows.ps1'
+$WslValidatorRelativePath = 'scripts\windows\02_validate_wsl_backend.ps1'
 
 function Write-Section([string]$Message) {
     Write-Host "`n=== $Message ===" -ForegroundColor Cyan
@@ -82,6 +83,10 @@ function Assert-Git {
 
 function Get-ControlPlaneInstaller {
     return Join-Path $ControlPlanePath $InstallerRelativePath
+}
+
+function Get-ControlPlaneWslValidator {
+    return Join-Path $ControlPlanePath $WslValidatorRelativePath
 }
 
 function Get-ControlPlaneHead {
@@ -165,6 +170,7 @@ function Show-Audit {
     Write-Section 'Audit intégration OpenClaw + OpenRouter'
     Assert-TargetDrive
     $installer = Get-ControlPlaneInstaller
+    $wslValidator = Get-ControlPlaneWslValidator
     $facts = [ordered]@{
         Root = $Root
         ControlPlanePath = $ControlPlanePath
@@ -174,6 +180,7 @@ function Show-Audit {
         Git = Get-CommandPath 'git.exe'
         ControlPlanePresent = Test-Path $ControlPlanePath
         InstallerPresent = Test-Path $installer
+        WslBackendValidatorPresent = Test-Path $wslValidator
         OpenClawLauncher = Test-Path (Join-Path $Root 'npm-global\openclaw.cmd')
         ClawOpsLauncher = Test-Path (Join-Path $Root 'venv\Scripts\clawops.exe')
         OPENCLAW_STATE_DIR = [Environment]::GetEnvironmentVariable('OPENCLAW_STATE_DIR', 'User')
@@ -211,8 +218,12 @@ function Verify-Integration {
     Write-Section 'Qualification intégration OpenClaw + OpenRouter'
     Assert-TargetDrive
     $installer = Get-ControlPlaneInstaller
+    $wslValidator = Get-ControlPlaneWslValidator
     if (-not (Test-Path $installer)) {
         throw "Plan de contrôle absent ou incomplet: $installer"
+    }
+    if (-not (Test-Path $wslValidator)) {
+        throw "Validateur WSL2 DevOps absent du plan de contrôle: $wslValidator"
     }
 
     $head = Assert-PinnedHead
@@ -220,7 +231,15 @@ function Verify-Integration {
     if (-not $?) {
         throw 'La validation OpenClaw a échoué.'
     }
+
+    Write-Section 'Qualification backend DevOps WSL2'
+    & $wslValidator
+    if (-not $?) {
+        throw 'La validation du backend DevOps WSL2 OpenClaw a échoué.'
+    }
+
     Write-Host "[OK] OpenClaw control-plane pin: $head" -ForegroundColor Green
+    Write-Host '[OK] OpenClaw Windows et backend WSL2 DevOps qualifiés ensemble.' -ForegroundColor Green
     Write-Host 'VERDICT: OPENCLAW AI READY' -ForegroundColor Green
 }
 
