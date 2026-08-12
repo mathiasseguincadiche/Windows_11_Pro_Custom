@@ -95,7 +95,9 @@ function Test-OneDriveInstalled {
 
     if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
         $output = (& winget.exe list --id $config.wingetId --exact --accept-source-agreements --disable-interactivity 2>$null | Out-String)
-        if ($LASTEXITCODE -eq 0 -and $output -match [regex]::Escape([string]$config.wingetId)) {
+        $wingetExitCode = $LASTEXITCODE
+        $global:LASTEXITCODE = 0
+        if ($wingetExitCode -eq 0 -and $output -match [regex]::Escape([string]$config.wingetId)) {
             return $true
         }
     }
@@ -116,6 +118,11 @@ function Remove-OneDriveClient {
     if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
         Write-Host "[INFO] Desinstallation ciblee de $($config.wingetId) via WinGet..."
         & winget.exe uninstall --id $config.wingetId --exact --source winget --silent --accept-source-agreements --disable-interactivity
+        $wingetExitCode = $LASTEXITCODE
+        $global:LASTEXITCODE = 0
+        if ($wingetExitCode -ne 0) {
+            Write-Warning "WinGet n'a pas confirme la desinstallation; tentative du fallback Microsoft."
+        }
     }
 
     Stop-OneDriveProcess
@@ -148,7 +155,9 @@ function Install-OneDriveClient {
     }
 
     & winget.exe install --id $config.wingetId --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0 -or -not (Test-OneDriveInstalled)) {
+    $wingetExitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($wingetExitCode -ne 0 -or -not (Test-OneDriveInstalled)) {
         throw "Rollback OneDrive impossible: la reinstallation n'a pas ete confirmee."
     }
 }
