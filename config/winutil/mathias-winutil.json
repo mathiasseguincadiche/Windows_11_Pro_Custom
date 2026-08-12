@@ -66,9 +66,9 @@
       "reason": "Tentative de point de restauration avant Apply, en complément du backup Registry."
     },
     "WPFTweaksRemoveOneDrive": {
-      "decision": "rejected-default",
-      "implementation": null,
-      "reason": "Pas de suppression automatique de composant utilisateur."
+      "decision": "native-explicit-user-preference",
+      "implementation": "scripts/windows/33_onedrive.ps1",
+      "reason": "Le poste cible explicitement un état sans OneDrive. La suppression est isolée, vérifiée et son état antérieur est enregistré pour Rollback."
     },
     "WPFTweaksWindowsAI": {
       "decision": "rejected-default",
