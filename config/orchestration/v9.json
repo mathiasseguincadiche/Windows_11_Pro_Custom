@@ -1,0 +1,33 @@
+{
+  "version": "V9",
+  "reviewedAt": "2026-08-12",
+  "evidencePolicy": "machine-first",
+  "stateFilesAreSourceOfTruth": false,
+  "verifyBeforeApply": true,
+  "reverifyAfterApply": true,
+  "interactiveByDefault": true,
+  "requireYesWhenNonInteractive": true,
+  "persistentPerScriptLogs": true,
+  "redactSensitiveArguments": true,
+  "passwordsMayBeLogged": false,
+  "statusVocabulary": [
+    "DEJA_OK",
+    "A_FAIRE",
+    "EN_COURS",
+    "FAIT",
+    "ACTION_REQUISE",
+    "ATTENTE",
+    "IGNORE",
+    "AVERTISSEMENT",
+    "ERREUR"
+  ],
+  "logLayout": {
+    "root": "logs",
+    "orchestrator": "logs/install.log",
+    "perScriptPattern": "logs/<script-category>/<script-name>.log",
+    "runEventsPattern": "logs/runs/<run-id>/events.ndjson",
+    "runSummaryPattern": "logs/runs/<run-id>/summary.json",
+    "latestSummary": "reports/orchestration/latest-run.json",
+    "machineState": "reports/orchestration/machine-state.json"
+  }
+}

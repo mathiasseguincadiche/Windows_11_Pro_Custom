@@ -11,6 +11,7 @@ param(
 
     [string]$Distribution = 'Ubuntu',
     [string]$WslInstallLocation = 'D:\WSL\Ubuntu-DevOps',
+    [string]$WslUser = '',
 
     [switch]$InstallDevOps,
     [switch]$ValidateDevOps,
@@ -26,202 +27,312 @@ param(
 
     [ValidateSet('None', 'Create', 'Verify', 'RestorePlan')]
     [string]$BackupAction = 'None',
-    [string]$BackupTargetDrive,
+    [string]$BackupTargetDrive = '',
     [switch]$AllowNonUsbBackupTarget,
-    [switch]$SkipBackupRestorePoint
+    [switch]$SkipBackupRestorePoint,
+
+    [switch]$FullInstall,
+    [switch]$PlanOnly,
+    [switch]$NonInteractive,
+    [switch]$Yes
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
+$runtimeModule = Join-Path $RepoRoot 'scripts\core\runtime.psm1'
+if (-not (Test-Path $runtimeModule)) { throw "Moteur V9 introuvable: $runtimeModule" }
+Import-Module $runtimeModule -Force
+$context = New-WpcRunContext -RepoRoot $RepoRoot -Mode $Mode -NonInteractive:$NonInteractive
+$runSuccess = $false
+$failureMessage = ''
 
-$OpenClawConfigPath = Join-Path $RepoRoot 'config\openclaw\control-plane.json'
-if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) {
-    if (-not (Test-Path $OpenClawConfigPath)) {
-        throw "OpenClaw control-plane pin is missing: $OpenClawConfigPath"
+function Get-RepoScript {
+    param([Parameter(Mandatory)][string]$RelativePath)
+    return (Join-Path $RepoRoot $RelativePath)
+}
+
+function Invoke-Step {
+    param(
+        [Parameter(Mandatory)][string]$RelativePath,
+        [hashtable]$Arguments = @{},
+        [string]$Name = '',
+        [string]$Phase = 'Run',
+        [switch]$AllowFailure
+    )
+    $path = Get-RepoScript -RelativePath $RelativePath
+    if ([string]::IsNullOrWhiteSpace($Name)) { $Name = [IO.Path]::GetFileName($path) }
+    return Invoke-WpcManagedScript -Context $context -Path $path -Arguments $Arguments -DisplayName $Name -Phase $Phase -AllowFailure:$AllowFailure
+}
+
+function Add-PlanItem {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$VerifyRelativePath,
+        [hashtable]$VerifyArguments = @{},
+        [Parameter(Mandatory)][string]$ApplyRelativePath,
+        [hashtable]$ApplyArguments = @{}
+    )
+    $verifyPath = Get-RepoScript -RelativePath $VerifyRelativePath
+    $applyPath = Get-RepoScript -RelativePath $ApplyRelativePath
+    $compliant = Test-WpcManagedScript -Context $context -Path $verifyPath -Arguments $VerifyArguments -DisplayName $Name
+    $script:plan += [pscustomobject]@{
+        Name = $Name
+        VerifyPath = $verifyPath
+        VerifyArguments = $VerifyArguments
+        ApplyPath = $applyPath
+        ApplyArguments = $ApplyArguments
+        Compliant = [bool]$compliant
     }
-    $OpenClawConfig = Get-Content -Raw $OpenClawConfigPath | ConvertFrom-Json
-    $OpenClawRepositoryRef = [string]$OpenClawConfig.ref
+}
+
+function Show-Plan {
+    Write-Host ''
+    Write-Host ('=' * 78) -ForegroundColor DarkCyan
+    Write-Host '  PLAN FACTUEL V9 — calculé depuis lʼétat actuel de la machine' -ForegroundColor Cyan
+    Write-Host ('=' * 78) -ForegroundColor DarkCyan
+    foreach ($item in $script:plan) {
+        if ($item.Compliant) {
+            Write-WpcStatus -Status 'DEJA_OK' -Message $item.Name -Detail 'Aucune modification planifiée.' -Context $context
+        } else {
+            Write-WpcStatus -Status 'A_FAIRE' -Message $item.Name -Detail 'Écart détecté par Verify; Apply puis re-Verify seront exécutés.' -Context $context
+        }
+    }
+    $pendingCount = @($script:plan | Where-Object { -not $_.Compliant }).Count
+    Write-Host ''
+    Write-Host ("Résumé du plan: {0} déjà conforme(s) | {1} à traiter" -f ($script:plan.Count - $pendingCount), $pendingCount) -ForegroundColor $(if ($pendingCount -eq 0) { 'Green' } else { 'Yellow' })
+}
+
+function Invoke-PlannedItems {
+    foreach ($item in $script:plan) {
+        $knownState = if ($item.Compliant) { 'Compliant' } else { 'NeedsChange' }
+        [void](Invoke-WpcPlannedComponent -Context $context -DisplayName $item.Name -VerifyPath $item.VerifyPath -VerifyArguments $item.VerifyArguments -ApplyPath $item.ApplyPath -ApplyArguments $item.ApplyArguments -KnownState $knownState)
+    }
+}
+
+function Invoke-HardwareQualification {
+    $manualPath = Get-RepoScript -RelativePath 'scripts\windows\51_hardware_manual_checks.ps1'
+    $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Preuves matérielles manuelles V5'
+    if (-not $manualReady) {
+        Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves matérielles manuelles incomplètes' -Detail 'Ces données BIOS/placement/stabilité ne peuvent pas être inventées par Windows.' -Context $context
+        if ($context.NonInteractive) {
+            throw 'Validation matérielle requiert des preuves manuelles. Exécute: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive puis relance Verify -ValidateHardware.'
+        }
+        $answer = (Read-Host 'Veux-tu enregistrer maintenant les contrôles matériels manuels ? [O/N]').Trim().ToLowerInvariant()
+        if ($answer -in @('o','oui','y','yes')) {
+            [void](Invoke-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Record'; Interactive=[switch]::Present } -DisplayName 'Saisie guidée des preuves matérielles' -Phase 'ManualEvidence')
+        } else {
+            throw 'Qualification matérielle laissée incomplète par choix utilisateur. Aucune réussite V5 ne sera déclarée.'
+        }
+    }
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\13_validate_hardware_v5.ps1' -Arguments @{ RequireManualChecks=[switch]::Present } -Name 'Qualification matérielle V5' -Phase 'FinalValidation')
+}
+
+try {
+    if ($FullInstall) {
+        $InstallDevOps = $true
+        $ValidateDevOps = $true
+        $ValidateWsl = $true
+        $ValidateHardware = $true
+        $InstallOpenClawAI = $true
+        $ValidateOpenClawAI = $true
+    }
+
+    $openClawConfigPath = Join-Path $RepoRoot 'config\openclaw\control-plane.json'
     if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) {
-        throw 'OpenClaw control-plane pin is empty.'
-    }
-}
-
-if ($BackupAction -ne 'None') {
-    if ([string]::IsNullOrWhiteSpace($BackupTargetDrive) -or $BackupTargetDrive -notmatch '^[A-Za-z]:$') {
-        throw 'V7 backup actions require -BackupTargetDrive with a drive letter such as E:.'
+        if (-not (Test-Path $openClawConfigPath)) { throw "OpenClaw control-plane pin absent: $openClawConfigPath" }
+        $openClawConfig = Get-Content -Raw $openClawConfigPath | ConvertFrom-Json
+        $OpenClawRepositoryRef = [string]$openClawConfig.ref
+        if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) { throw 'OpenClaw control-plane pin vide.' }
     }
 
-    Write-Host "Windows 11 Pro Custom - V7 backup action: $BackupAction" -ForegroundColor Cyan
-    Write-Host "Backup target: $BackupTargetDrive" -ForegroundColor Cyan
+    Write-WpcBanner -Context $context -Title "Windows 11 Pro Custom — Orchestrateur V9 — $Mode"
+    Write-Host "Profil WSL2          : $WslProfile"
+    Write-Host "Distribution         : $Distribution"
+    Write-Host "Emplacement WSL      : $WslInstallLocation"
+    Write-Host "Utilisateur WSL      : $(if ($WslUser) { $WslUser } else { '<détection/prompt si nécessaire>' })"
+    Write-Host "Profils optimisation : $($OptimizationProfiles -join ', ')"
+    Write-Host "DevOps demandé        : $([bool]$InstallDevOps)"
+    Write-Host "OpenClaw demandé      : $([bool]$InstallOpenClawAI)"
+    Write-Host "Mode non interactif   : $([bool]$NonInteractive)"
 
-    switch ($BackupAction) {
-        'Create' {
-            $backupParameters = @{
-                BackupTargetDrive = $BackupTargetDrive
-                Distribution = $Distribution
+    if ($BackupAction -ne 'None') {
+        $BackupTargetDrive = Read-WpcRequiredValue -Context $context -Name 'BackupTargetDrive' -CurrentValue $BackupTargetDrive -Prompt 'Indique la lettre du disque de sauvegarde, avec deux-points' -Example 'E:' -Pattern '^[A-Za-z]:$'
+        $args = @{ BackupTargetDrive=$BackupTargetDrive }
+        switch ($BackupAction) {
+            'Create' {
+                $args.Distribution = $Distribution
+                if ($AllowNonUsbBackupTarget) { $args.AllowNonUsbTarget=[switch]::Present }
+                if ($SkipBackupRestorePoint) { $args.SkipRestorePoint=[switch]::Present }
+                [void](Invoke-Step -RelativePath 'scripts\backup\60_create_backup_v7.ps1' -Arguments $args -Name 'Création sauvegarde V7' -Phase 'Backup')
             }
-            if ($AllowNonUsbBackupTarget) {
-                $backupParameters.AllowNonUsbTarget = $true
-            }
-            if ($SkipBackupRestorePoint) {
-                $backupParameters.SkipRestorePoint = $true
-            }
-            & "$RepoRoot\scripts\backup\60_create_backup_v7.ps1" @backupParameters
+            'Verify' { [void](Invoke-Step -RelativePath 'scripts\backup\61_validate_backup_v7.ps1' -Arguments $args -Name 'Validation sauvegarde V7' -Phase 'Backup') }
+            'RestorePlan' { [void](Invoke-Step -RelativePath 'scripts\backup\62_restore_plan_v7.ps1' -Arguments $args -Name 'Plan de restauration V7' -Phase 'Backup') }
         }
-        'Verify' {
-            & "$RepoRoot\scripts\backup\61_validate_backup_v7.ps1" -BackupTargetDrive $BackupTargetDrive
-        }
-        'RestorePlan' {
-            & "$RepoRoot\scripts\backup\62_restore_plan_v7.ps1" -BackupTargetDrive $BackupTargetDrive
-        }
+        $runSuccess = $true
+        return
     }
 
-    return
-}
+    if ($Mode -eq 'Rollback') {
+        Write-WpcStatus -Status 'ANALYSE' -Message 'Rollback' -Detail 'Seuls les états initiaux réellement enregistrés par le dépôt seront restaurés.' -Context $context
+        $v8StatePath = Join-Path $RepoRoot 'state\windows-v8\responsiveness.before.json'
+        if (Test-Path $v8StatePath) { [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Rollback' } -Name 'Réactivité Windows V8' -Phase 'Rollback') }
+        else { Write-WpcStatus -Status 'DEJA_OK' -Message 'Réactivité Windows V8' -Detail 'Aucun état initial V8 enregistré; rien à restaurer.' -Context $context }
 
-Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
-Write-Host "WSL2 profile: $WslProfile" -ForegroundColor Cyan
-Write-Host "V4 optimization profiles: $($OptimizationProfiles -join ', ')" -ForegroundColor Cyan
-Write-Host 'V8 responsiveness policy: enabled' -ForegroundColor Cyan
-Write-Host "OpenClaw AI root: $OpenClawRoot" -ForegroundColor Cyan
-Write-Host "OpenClaw control-plane ref: $OpenClawRepositoryRef" -ForegroundColor Cyan
-
-if ($Mode -eq 'Rollback') {
-    $v8StatePath = Join-Path $RepoRoot 'state\windows-v8\responsiveness.before.json'
-    if (Test-Path $v8StatePath) {
-        & "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Rollback
-    } else {
-        Write-Host '[INFO] No V8 responsiveness state backup found; V8 rollback skipped.' -ForegroundColor Yellow
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\10_workstation.ps1' -Arguments @{ Mode='Rollback' } -Name 'Poste de travail' -Phase 'Rollback')
+        $profilesToRollback = @($OptimizationProfiles)
+        if (-not $PSBoundParameters.ContainsKey('OptimizationProfiles')) {
+            $profilesToRollback = @('optional','gaming','privacy','standard') | Where-Object { Test-Path (Join-Path $RepoRoot "state\windows-v4\${_}.before.json") }
+        } else { [array]::Reverse($profilesToRollback) }
+        foreach ($profile in $profilesToRollback) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Rollback'; Profile=$profile } -Name "Profil V4 $profile" -Phase 'Rollback') }
+        [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Rollback' } -Name 'Réglages Windows de base' -Phase 'Rollback')
+        [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Rollback' } -Name 'Exclusions Defender' -Phase 'Rollback')
+        Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'OpenClaw non supprimé automatiquement' -Detail 'Son état et ses identifiants sur D: nécessitent une décision explicite; le rollback ne les efface jamais.' -Context $context
+        $runSuccess = $true
+        return
     }
 
-    & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Rollback
+    # La vérité machine est relue à chaque exécution avant toute décision.
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\00_preflight.ps1' -Name 'Préflight Windows' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\01_machine_state.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; WslInstallLocation=$WslInstallLocation; OpenClawRoot=$OpenClawRoot } -Name 'État réel de la machine' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\20_system_audit.ps1' -Name 'Audit système Windows' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\50_hardware_inventory.ps1' -Name 'Inventaire matériel' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\52_hardware_symbiosis.ps1' -Arguments @{ Mode='Audit' } -Name 'Symbiose matérielle V5' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\21_storage_trim.ps1' -Arguments @{ Mode='Audit' } -Name 'Stockage/TRIM' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Audit' } -Name 'Réactivité Windows V8' -Phase 'Discovery')
 
-    $profilesToRollback = @($OptimizationProfiles)
-    if (-not $PSBoundParameters.ContainsKey('OptimizationProfiles')) {
-        $profilesToRollback = @('optional', 'gaming', 'privacy', 'standard') | Where-Object {
-            Test-Path (Join-Path $RepoRoot "state\windows-v4\${_}.before.json")
-        }
-    } else {
-        [array]::Reverse($profilesToRollback)
+    if ($Mode -eq 'Audit') {
+        [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Audit' } -Name 'Réglages Windows de base' -Phase 'Audit')
+        foreach ($profile in $OptimizationProfiles) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Audit'; Profile=$profile } -Name "Profil V4 $profile" -Phase 'Audit') }
+        [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='snapshot' } -Name 'Mesure Windows' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\windows\51_hardware_manual_checks.ps1' -Arguments @{ Mode='Show' } -Name 'Preuves matérielles manuelles' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\03_apps.ps1' -Arguments @{ Mode='Audit' } -Name 'Applications WinGet' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\06_wsl.ps1' -Arguments @{ Mode='Audit'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'WSL2' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\07_wsl_user.ps1' -Arguments @{ Mode='Audit'; Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Utilisateur WSL' -Phase 'Audit' -AllowFailure)
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\10_workstation.ps1' -Arguments @{ Mode='Audit' } -Name 'Poste de travail' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\05_defender.ps1' -Name 'Microsoft Defender' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Audit' } -Name 'Exclusions Defender' -Phase 'Audit')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Audit'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'OpenClaw/OpenRouter' -Phase 'Audit')
+        $runSuccess = $true
+        return
     }
 
-    foreach ($profile in $profilesToRollback) {
-        & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Rollback -Profile $profile
-    }
-
-    & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Rollback
-    & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Rollback
-    Write-Host '[INFO] OpenClaw AI is not deleted by Rollback. Runtime state and credentials on D: require an explicit manual decision.' -ForegroundColor Yellow
-    Write-Host 'Rollback of repository-managed settings completed.' -ForegroundColor Green
-    return
-}
-
-& "$RepoRoot\scripts\bootstrap\00_preflight.ps1"
-& "$RepoRoot\scripts\windows\20_system_audit.ps1"
-& "$RepoRoot\scripts\windows\50_hardware_inventory.ps1"
-& "$RepoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Audit
-& "$RepoRoot\scripts\windows\21_storage_trim.ps1" -Mode Audit
-& "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Audit
-
-switch ($Mode) {
-    'Audit' {
-        & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Audit
-        foreach ($profile in $OptimizationProfiles) {
-            & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Audit -Profile $profile
-        }
-        & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage snapshot
-        & "$RepoRoot\scripts\windows\51_hardware_manual_checks.ps1" -Mode Show
-        & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Audit
-        & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
-        & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Audit
-        & "$RepoRoot\scripts\bootstrap\15_openclaw_ai.ps1" -Mode Audit -Root $OpenClawRoot -ControlPlanePath $OpenClawControlPlanePath -RepositoryRef $OpenClawRepositoryRef
-    }
-
-    'Apply' {
-        & "$RepoRoot\scripts\bootstrap\03_apps.ps1"
-
-        if (-not $SkipV4RestorePoint) {
-            & "$RepoRoot\scripts\windows\41_restore_point.ps1"
-        } else {
-            Write-Host '[INFO] V4/V8 restore point explicitly skipped.' -ForegroundColor Yellow
-        }
-
-        & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage before
-        & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Apply
-        foreach ($profile in $OptimizationProfiles) {
-            & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Apply -Profile $profile
-        }
-        & "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Apply
-        & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage after
-        & "$RepoRoot\scripts\windows\43_compare_benchmarks.ps1"
-        & "$RepoRoot\scripts\bootstrap\12_validate_v4.ps1" -OptimizationProfiles $OptimizationProfiles
-
-        & "$RepoRoot\scripts\bootstrap\06_wsl.ps1" -Profile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
-        & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Apply
-        & "$RepoRoot\scripts\defender\03_apply_approved_exclusions.ps1" -Mode Apply
-
-        if ($InstallDevOps) {
-            & "$RepoRoot\scripts\bootstrap\08_devops.ps1" -Distribution $Distribution
-            & "$RepoRoot\scripts\bootstrap\14_validate_wsl_v6.ps1" -WslProfile $WslProfile -Distribution $Distribution
-        } else {
-            Write-Host '[INFO] DevOps stack not installed in this pass. Relaunch Apply with -InstallDevOps after first Ubuntu launch.' -ForegroundColor Yellow
-        }
-
-        if ($InstallOpenClawAI) {
-            & "$RepoRoot\scripts\bootstrap\15_openclaw_ai.ps1" -Mode Apply -Root $OpenClawRoot -ControlPlanePath $OpenClawControlPlanePath -RepositoryRef $OpenClawRepositoryRef
-        } else {
-            Write-Host '[INFO] OpenClaw AI not installed in this pass. Relaunch Apply with -InstallOpenClawAI when desired.' -ForegroundColor Yellow
-        }
-
-        & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
-        & "$RepoRoot\scripts\bootstrap\11_validate_v3.ps1" -WslProfile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
-        Write-Host '[INFO] Hardware V5 is observational only. BIOS, ReBAR, memory tuning and device placement are never changed automatically.' -ForegroundColor Yellow
-        Write-Host '[INFO] V8 startup applications remain inventory-only; no startup program is disabled automatically.' -ForegroundColor Yellow
-    }
-
-    'Verify' {
-        & "$RepoRoot\scripts\windows\10_tune.ps1" -Mode Verify
-        foreach ($profile in $OptimizationProfiles) {
-            & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Verify -Profile $profile
-        }
-        & "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Verify
-        & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Verify
-        & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
-        & "$RepoRoot\scripts\bootstrap\11_validate_v3.ps1" -WslProfile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
+    if ($Mode -eq 'Verify') {
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\03_apps.ps1' -Arguments @{ Mode='Verify' } -Name 'Applications WinGet' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Verify' } -Name 'Réglages Windows de base' -Phase 'Verify')
+        foreach ($profile in $OptimizationProfiles) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Verify'; Profile=$profile } -Name "Profil V4 $profile" -Phase 'Verify') }
+        [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Verify' } -Name 'Réactivité Windows V8' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\06_wsl.ps1' -Arguments @{ Mode='Verify'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'WSL2' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\07_wsl_user.ps1' -Arguments @{ Mode='Verify'; Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Utilisateur WSL' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\10_workstation.ps1' -Arguments @{ Mode='Verify' } -Name 'Poste de travail' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Verify' } -Name 'Exclusions Defender' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\05_defender.ps1' -Name 'Microsoft Defender' -Phase 'Verify')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\11_validate_v3.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'Qualification Windows V3' -Phase 'FinalValidation')
 
         $beforeReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-before.json'
         $afterReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-after.json'
         if ((Test-Path $beforeReport) -and (Test-Path $afterReport)) {
-            & "$RepoRoot\scripts\windows\43_compare_benchmarks.ps1"
+            [void](Invoke-Step -RelativePath 'scripts\windows\43_compare_benchmarks.ps1' -Name 'Comparaison mesures Windows' -Phase 'Verify')
+            [void](Invoke-Step -RelativePath 'scripts\bootstrap\12_validate_v4.ps1' -Arguments @{ OptimizationProfiles=$OptimizationProfiles } -Name 'Qualification Windows V4' -Phase 'FinalValidation')
+        } else {
+            Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves avant/après V4 absentes' -Detail 'Exécute une fois .\install.ps1 -Mode Apply pour générer les mesures factuelles, puis relance Verify.' -Context $context
         }
 
-        & "$RepoRoot\scripts\bootstrap\12_validate_v4.ps1" -OptimizationProfiles $OptimizationProfiles
+        if ($ValidateHardware) { Invoke-HardwareQualification }
+        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification physique V5 non demandée' -Detail 'Ajoute -ValidateHardware pour vérifier aussi les preuves BIOS/placement/stabilité.' -Context $context }
 
-        if ($ValidateHardware) {
-            & "$RepoRoot\scripts\bootstrap\13_validate_hardware_v5.ps1" -RequireManualChecks
+        if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2 V6' -Phase 'FinalValidation') }
+        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification runtime WSL2 V6 non demandée' -Detail 'Ajoute -ValidateWsl.' -Context $context }
+
+        if ($ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\09_validate_devops.ps1' -Arguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Qualification stack DevOps' -Phase 'FinalValidation') }
+        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification DevOps non demandée' -Detail 'Ajoute -ValidateDevOps après installation de la stack.' -Context $context }
+
+        if ($ValidateOpenClawAI) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'Qualification OpenClaw/OpenRouter' -Phase 'FinalValidation') }
+        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification OpenClaw non demandée' -Detail 'Ajoute -ValidateOpenClawAI.' -Context $context }
+        $runSuccess = $true
+        return
+    }
+
+    # APPLY: établir tout le plan depuis Verify AVANT la première mutation.
+    $script:plan = @()
+    Add-PlanItem -Name 'Applications WinGet' -VerifyRelativePath 'scripts\bootstrap\03_apps.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\bootstrap\03_apps.ps1' -ApplyArguments @{ Mode='Apply' }
+    Add-PlanItem -Name 'Réglages Windows de base' -VerifyRelativePath 'scripts\windows\10_tune.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\windows\10_tune.ps1' -ApplyArguments @{ Mode='Apply' }
+    foreach ($profile in $OptimizationProfiles) {
+        Add-PlanItem -Name "Profil V4 $profile" -VerifyRelativePath 'scripts\windows\40_v4_optimize.ps1' -VerifyArguments @{ Mode='Verify'; Profile=$profile } -ApplyRelativePath 'scripts\windows\40_v4_optimize.ps1' -ApplyArguments @{ Mode='Apply'; Profile=$profile }
+    }
+    Add-PlanItem -Name 'Réactivité Windows V8' -VerifyRelativePath 'scripts\windows\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\windows\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }
+    Add-PlanItem -Name 'WSL2' -VerifyRelativePath 'scripts\bootstrap\06_wsl.ps1' -VerifyArguments @{ Mode='Verify'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -ApplyRelativePath 'scripts\bootstrap\06_wsl.ps1' -ApplyArguments @{ Mode='Apply'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation }
+    Add-PlanItem -Name 'Utilisateur WSL' -VerifyRelativePath 'scripts\bootstrap\07_wsl_user.ps1' -VerifyArguments @{ Mode='Verify'; Distribution=$Distribution; LinuxUser=$WslUser } -ApplyRelativePath 'scripts\bootstrap\07_wsl_user.ps1' -ApplyArguments @{ Mode='Apply'; Distribution=$Distribution; LinuxUser=$WslUser }
+    Add-PlanItem -Name 'Poste de travail' -VerifyRelativePath 'scripts\bootstrap\10_workstation.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\bootstrap\10_workstation.ps1' -ApplyArguments @{ Mode='Apply' }
+    Add-PlanItem -Name 'Exclusions Defender approuvées' -VerifyRelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -ApplyArguments @{ Mode='Apply' }
+
+    if ($InstallDevOps) {
+        Add-PlanItem -Name 'Stack DevOps WSL' -VerifyRelativePath 'scripts\bootstrap\09_validate_devops.ps1' -VerifyArguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -ApplyRelativePath 'scripts\bootstrap\08_devops.ps1' -ApplyArguments @{ Distribution=$Distribution; LinuxUser=$WslUser }
+    } else {
+        Write-WpcStatus -Status 'IGNORE' -Message 'Stack DevOps non demandée dans cet Apply' -Detail 'Ajoute -InstallDevOps ou utilise -FullInstall pour lʼinclure.' -Context $context
+    }
+
+    if ($InstallOpenClawAI) {
+        Add-PlanItem -Name 'OpenClaw/OpenRouter' -VerifyRelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -VerifyArguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -ApplyRelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -ApplyArguments @{ Mode='Apply'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef }
+    } else {
+        Write-WpcStatus -Status 'IGNORE' -Message 'OpenClaw/OpenRouter non demandé dans cet Apply' -Detail 'Ajoute -InstallOpenClawAI ou utilise -FullInstall.' -Context $context
+    }
+
+    Show-Plan
+    if ($PlanOnly) {
+        Write-WpcStatus -Status 'OK' -Message 'PlanOnly terminé' -Detail 'Aucune modification nʼa été effectuée après la phase de découverte.' -Context $context
+        $runSuccess = $true
+        return
+    }
+
+    $pending = @($script:plan | Where-Object { -not $_.Compliant })
+    if ($pending.Count -gt 0) {
+        Confirm-WpcChanges -Context $context -Yes:$Yes
+        if (-not $SkipV4RestorePoint) {
+            [void](Invoke-Step -RelativePath 'scripts\windows\41_restore_point.ps1' -Name 'Point de restauration pré-changements' -Phase 'Safety')
         } else {
-            Write-Host '[INFO] Final hardware V5 qualification not requested. Use -ValidateHardware after recording the manual BIOS/placement/stability checks.' -ForegroundColor Yellow
+            Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Point de restauration ignoré explicitement' -Detail '-SkipV4RestorePoint a été fourni.' -Context $context
         }
+        [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='before' } -Name 'Mesure avant changements' -Phase 'Measurement')
+    } else {
+        Write-WpcStatus -Status 'DEJA_OK' -Message 'Installation demandée déjà conforme' -Detail 'Aucune modification système, réinstallation ou point de restauration nʼest nécessaire.' -Context $context
+    }
 
-        if ($ValidateWsl -or $ValidateDevOps) {
-            & "$RepoRoot\scripts\bootstrap\14_validate_wsl_v6.ps1" -WslProfile $WslProfile -Distribution $Distribution
-        } else {
-            Write-Host '[INFO] WSL2 V6 runtime qualification not requested. Use -ValidateWsl.' -ForegroundColor Yellow
-        }
+    Invoke-PlannedItems
 
-        if ($ValidateDevOps) {
-            & "$RepoRoot\scripts\bootstrap\09_validate_devops.ps1" -Distribution $Distribution
-        } else {
-            Write-Host '[INFO] Full Linux validation not requested. Use -ValidateDevOps after installing the stack.' -ForegroundColor Yellow
-        }
-
-        if ($ValidateOpenClawAI) {
-            & "$RepoRoot\scripts\bootstrap\15_openclaw_ai.ps1" -Mode Verify -Root $OpenClawRoot -ControlPlanePath $OpenClawControlPlanePath -RepositoryRef $OpenClawRepositoryRef
-        } else {
-            Write-Host '[INFO] OpenClaw AI qualification not requested. Use -ValidateOpenClawAI after installation.' -ForegroundColor Yellow
+    # Les mesures restent factuelles; sur une relance totalement conforme on ne réécrit pas inutilement les preuves existantes.
+    if ($pending.Count -gt 0) {
+        [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='after' } -Name 'Mesure après changements' -Phase 'Measurement')
+        [void](Invoke-Step -RelativePath 'scripts\windows\43_compare_benchmarks.ps1' -Name 'Comparaison avant/après' -Phase 'Measurement')
+    } else {
+        $beforeReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-before.json'
+        $afterReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-after.json'
+        if (-not ((Test-Path $beforeReport) -and (Test-Path $afterReport))) {
+            Write-WpcStatus -Status 'ANALYSE' -Message 'Preuves V4 absentes malgré configuration conforme' -Detail 'Création de deux snapshots non mutatifs pour disposer dʼune base de validation.' -Context $context
+            [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='before' } -Name 'Mesure de référence' -Phase 'Measurement')
+            [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='after' } -Name 'Mesure de confirmation' -Phase 'Measurement')
+            [void](Invoke-Step -RelativePath 'scripts\windows\43_compare_benchmarks.ps1' -Name 'Comparaison de confirmation' -Phase 'Measurement')
         }
     }
-}
 
-Write-Host 'Completed. Review reports under reports/.' -ForegroundColor Green
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\05_defender.ps1' -Name 'Microsoft Defender' -Phase 'FinalValidation')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\11_validate_v3.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'Qualification Windows V3' -Phase 'FinalValidation')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\12_validate_v4.ps1' -Arguments @{ OptimizationProfiles=$OptimizationProfiles } -Name 'Qualification Windows V4' -Phase 'FinalValidation')
+
+    if ($ValidateHardware) { Invoke-HardwareQualification }
+    else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification physique V5 non demandée' -Detail 'Le script ne suppose jamais les données BIOS/placement/stabilité.' -Context $context }
+
+    if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2 V6' -Phase 'FinalValidation') }
+    if ($ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\09_validate_devops.ps1' -Arguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Qualification stack DevOps' -Phase 'FinalValidation') }
+    if ($ValidateOpenClawAI) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'Qualification OpenClaw/OpenRouter' -Phase 'FinalValidation') }
+
+    $runSuccess = $true
+}
+catch {
+    $failureMessage = $_.Exception.Message
+    Write-WpcStatus -Status 'ERREUR' -Message 'Orchestration interrompue' -Detail $failureMessage -Context $context
+    throw
+}
+finally {
+    Complete-WpcRun -Context $context -Success:$runSuccess -FailureMessage $failureMessage
+}
