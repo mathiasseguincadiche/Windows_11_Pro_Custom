@@ -150,6 +150,7 @@ function Invoke-WpcManagedScript {
     $effectivePurpose = if ($parentPurpose -match '^Probe') { 'ProbeNested' } else { $Purpose }
     $started = Get-Date
     $argText = ConvertTo-WpcSafeArgumentText -Arguments $Arguments
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath) | Out-Null
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
     Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Phase=$Phase Purpose=$effectivePurpose Script=$relative Args=$argText"
@@ -234,6 +235,7 @@ function Invoke-WpcExternalCommand {
     if ([string]::IsNullOrWhiteSpace($DisplayName)) { $DisplayName=[IO.Path]::GetFileName($LogIdentity) }
     $logPath=Get-WpcLogPath -Context $Context -Identity $LogIdentity
     $safeArgs=Protect-WpcCommandText -Text ($ArgumentList -join ' ')
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath) | Out-Null
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
     Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Command=$FilePath $safeArgs"
