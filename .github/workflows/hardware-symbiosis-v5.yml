@@ -62,14 +62,14 @@ jobs:
           grep -Fq 'scripts\windows\52_hardware_symbiosis.ps1' scripts/bootstrap/13_validate_hardware_v5.ps1
           grep -Fq -- '-Mode Verify' scripts/bootstrap/13_validate_hardware_v5.ps1
 
-      - name: Validate bootstrap wiring
+      - name: Validate V9 bootstrap wiring
         shell: bash
         run: |
           set -euo pipefail
-          inventory_pattern="& \"\$RepoRoot\\scripts\\windows\\50_hardware_inventory.ps1\""
-          symbiosis_pattern="& \"\$RepoRoot\\scripts\\windows\\52_hardware_symbiosis.ps1\" -Mode Audit"
-          trim_pattern="& \"\$RepoRoot\\scripts\\windows\\21_storage_trim.ps1\" -Mode Audit"
-          final_validation_pattern="& \"\$RepoRoot\\scripts\\bootstrap\\13_validate_hardware_v5.ps1\" -RequireManualChecks"
+          inventory_pattern="Invoke-Step -RelativePath 'scripts\\windows\\50_hardware_inventory.ps1'"
+          symbiosis_pattern="Invoke-Step -RelativePath 'scripts\\windows\\52_hardware_symbiosis.ps1' -Arguments @{ Mode='Audit' }"
+          trim_pattern="Invoke-Step -RelativePath 'scripts\\windows\\21_storage_trim.ps1' -Arguments @{ Mode='Audit' }"
+          final_validation_pattern="Invoke-Step -RelativePath 'scripts\\bootstrap\\13_validate_hardware_v5.ps1' -Arguments @{ RequireManualChecks=[switch]::Present }"
 
           grep -Fq "$inventory_pattern" install.ps1
           grep -Fq "$symbiosis_pattern" install.ps1
@@ -83,7 +83,7 @@ jobs:
             echo 'V5 symbiosis audit must run after inventory and before storage tuning audit.' >&2
             exit 1
           fi
-          echo 'V5 bootstrap wiring: OK'
+          echo 'V5 V9 bootstrap wiring: OK'
 
       - name: Enforce observational safety boundary
         shell: bash
