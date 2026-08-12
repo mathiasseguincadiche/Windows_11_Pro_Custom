@@ -82,15 +82,13 @@ log "TFLint v0.64.0 avec GitHub Artifact Attestations"
 TFLINT_VERSION="v0.64.0"
 TFLINT_CHECKSUMS_SHA256="07496dc0ab06a39fa718a9f8e471112b6e6ab4fd3a9f1024210a55fe3f1a9ff9"
 tflint_archive="$tmpdir/tflint_linux_amd64.zip"
-tflint_checksums="$tmpdir/tflint-checksums.txt"
+tflint_checksums="$tmpdir/checksums.txt"
 curl --retry 5 --retry-all-errors -fsSL "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/tflint_linux_amd64.zip" -o "$tflint_archive"
 curl --retry 5 --retry-all-errors -fsSL "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/checksums.txt" -o "$tflint_checksums"
 verify_sha256 "$tflint_checksums" "$TFLINT_CHECKSUMS_SHA256"
 gh attestation verify "$tflint_checksums" -R terraform-linters/tflint
 (
   cd "$tmpdir"
-  cp "$tflint_checksums" checksums.txt
-  cp "$tflint_archive" tflint_linux_amd64.zip
   sha256sum --ignore-missing -c checksums.txt
   unzip -oq tflint_linux_amd64.zip
   sudo install -m 0755 tflint /usr/local/bin/tflint
