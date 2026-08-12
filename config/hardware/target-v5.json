@@ -1,5 +1,6 @@
 {
   "version": "V5",
+  "symbiosisPolicy": "config/hardware/symbiosis-v5.json",
   "cpu": {
     "nameContains": "AMD Ryzen 7 7700",
     "cores": 8,
