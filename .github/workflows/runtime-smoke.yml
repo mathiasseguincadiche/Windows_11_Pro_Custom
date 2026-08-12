@@ -27,6 +27,8 @@ jobs:
           [[ "$AWS_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$MINIKUBE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$KIND_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          # This grep intentionally searches the literal shell variable reference in the installer.
+          # shellcheck disable=SC2016
           grep -q 'source "$VERSIONS_FILE"' scripts/wsl/install-devops.sh
           if grep -nE 'release/stable\.txt|minikube/releases/latest/download|awscli-exe-linux-x86_64\.zip"' scripts/wsl/install-devops.sh; then
             echo 'A rolling core-tool URL bypasses config/devops/tool-versions.env.' >&2
