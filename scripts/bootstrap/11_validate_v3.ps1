@@ -12,14 +12,12 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
-
 $checks = [ordered]@{}
 $details = [ordered]@{}
 
 $os = Get-CimInstance Win32_OperatingSystem
 $checks.Windows11 = ($os.Caption -match 'Windows 11')
 $details.Windows = $os.Caption
-
 $cVolume = Get-Volume -DriveLetter C
 $dVolume = Get-Volume -DriveLetter D
 $checks.C_NTFS = ($cVolume.FileSystem -eq 'NTFS')
@@ -41,62 +39,35 @@ $wslTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $wslSource = Join-Path $repoRoot "config\wsl\$WslProfile.wslconfig"
 $checks.WslConfigExists = Test-Path $wslTarget
 $checks.WslProfileMatches = $false
-if ((Test-Path $wslTarget) -and (Test-Path $wslSource)) {
-    $checks.WslProfileMatches = ((Get-FileHash $wslTarget -Algorithm SHA256).Hash -eq (Get-FileHash $wslSource -Algorithm SHA256).Hash)
-}
+if ((Test-Path $wslTarget) -and (Test-Path $wslSource)) { $checks.WslProfileMatches = ((Get-FileHash $wslTarget -Algorithm SHA256).Hash -eq (Get-FileHash $wslSource -Algorithm SHA256).Hash) }
 
 $distros = @()
-if ($wsl) {
-    $distros = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-}
+if ($wsl) { $distros = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ }); $global:LASTEXITCODE=0 }
 $checks.WslDistribution = ($distros -contains $Distribution)
 $details.WslDistributions = $distros
-
 $checks.WslInstallLocation = Test-Path $InstallLocation
 $vhdx = @()
-if (Test-Path $InstallLocation) {
-    $vhdx = @(Get-ChildItem -Path $InstallLocation -Filter '*.vhdx' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
-}
+if (Test-Path $InstallLocation) { $vhdx = @(Get-ChildItem -Path $InstallLocation -Filter '*.vhdx' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName) }
 $checks.WslVhdxOnDataSSD = ($vhdx.Count -gt 0)
 $details.WslVhdx = $vhdx
 
 $vscodeSource = Join-Path $repoRoot 'config\vscode\settings.json'
 $vscodeTarget = Join-Path $env:APPDATA 'Code\User\settings.json'
 $checks.VSCodeSettings = $false
-if ((Test-Path $vscodeSource) -and (Test-Path $vscodeTarget)) {
-    $checks.VSCodeSettings = ((Get-FileHash $vscodeSource -Algorithm SHA256).Hash -eq (Get-FileHash $vscodeTarget -Algorithm SHA256).Hash)
-}
-
+if ((Test-Path $vscodeSource) -and (Test-Path $vscodeTarget)) { $checks.VSCodeSettings = ((Get-FileHash $vscodeSource -Algorithm SHA256).Hash -eq (Get-FileHash $vscodeTarget -Algorithm SHA256).Hash) }
 $weztermSource = Join-Path $repoRoot 'config\wezterm\wezterm.lua'
 $weztermTarget = Join-Path $env:USERPROFILE '.wezterm.lua'
 $checks.WezTermConfig = $false
-if ((Test-Path $weztermSource) -and (Test-Path $weztermTarget)) {
-    $checks.WezTermConfig = ((Get-FileHash $weztermSource -Algorithm SHA256).Hash -eq (Get-FileHash $weztermTarget -Algorithm SHA256).Hash)
-}
+if ((Test-Path $weztermSource) -and (Test-Path $weztermTarget)) { $checks.WezTermConfig = ((Get-FileHash $weztermSource -Algorithm SHA256).Hash -eq (Get-FileHash $weztermTarget -Algorithm SHA256).Hash) }
 
 $failed = @($checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object { $_.Key })
-$report = [ordered]@{
-    Timestamp = (Get-Date).ToString('o')
-    Profile = $WslProfile
-    Distribution = $Distribution
-    InstallLocation = $InstallLocation
-    Checks = $checks
-    FailedChecks = $failed
-    Details = $details
-}
+$report = [ordered]@{ Timestamp=(Get-Date).ToString('o'); Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$InstallLocation; Checks=$checks; FailedChecks=$failed; Details=$details }
 $reportPath = Join-Path $reportDir 'validation-v3.json'
 $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
-
-foreach ($check in $checks.GetEnumerator()) {
-    $state = if ($check.Value) { 'OK' } else { 'KO' }
-    Write-Host ("[{0}] {1}" -f $state, $check.Key)
-}
-
+foreach ($check in $checks.GetEnumerator()) { Write-Host ("[{0}] {1}" -f $(if ($check.Value) { 'OK' } else { 'KO' }), $check.Key) }
 if ($failed.Count -gt 0) {
     Write-Host "VERDICT: V3 WINDOWS KO ($($failed.Count) contrôle(s))" -ForegroundColor Red
-    Write-Host "Rapport: $reportPath"
-    exit 1
+    throw "V3 Windows non conforme: $($failed -join ', '). Rapport: $reportPath"
 }
-
 Write-Host 'VERDICT: V3 WINDOWS READY' -ForegroundColor Green
 Write-Host "Rapport: $reportPath"
