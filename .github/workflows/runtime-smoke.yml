@@ -79,7 +79,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           .\scripts\windows\20_system_audit.ps1
           .\scripts\windows\21_storage_trim.ps1 -Mode Audit
-          .\scripts\windows\42_benchmark.ps1 -Stage ci
+          .\scripts\windows\42_benchmark.ps1 -Stage snapshot
           foreach ($profile in @('standard', 'privacy', 'gaming', 'optional')) {
             .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
           }
@@ -91,7 +91,7 @@ jobs:
           if ([string]::IsNullOrWhiteSpace([string]$audit.Computer)) {
             throw 'system-audit.json does not contain a computer identity.'
           }
-          $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-ci.json | ConvertFrom-Json
+          $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json
           if ($null -eq $benchmark.Timestamp) {
             throw 'Runtime benchmark report is incomplete.'
           }
