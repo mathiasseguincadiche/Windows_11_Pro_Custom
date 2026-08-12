@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/hardware-symbiosis-v5.yml'
+      - 'config/hardware/target-v5.json'
       - 'config/hardware/symbiosis-v5.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
       - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/hardware-symbiosis-v5.yml'
+      - 'config/hardware/target-v5.json'
       - 'config/hardware/symbiosis-v5.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
       - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
@@ -50,8 +52,9 @@ jobs:
             (.bios.autoFlash == false)
           ' "$policy" >/dev/null
 
+          jq -e '.symbiosisPolicy == "config/hardware/symbiosis-v5.json"' config/hardware/target-v5.json >/dev/null
           grep -Fq 'scripts\windows\52_hardware_symbiosis.ps1' scripts/bootstrap/13_validate_hardware_v5.ps1
-          grep -Fq "-Mode Verify" scripts/bootstrap/13_validate_hardware_v5.ps1
+          grep -Fq -- '-Mode Verify' scripts/bootstrap/13_validate_hardware_v5.ps1
 
       - name: Enforce observational safety boundary
         shell: bash
