@@ -66,13 +66,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq '& "$RepoRoot\scripts\windows\50_hardware_inventory.ps1"' install.ps1
-          grep -Fq '& "$RepoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Audit' install.ps1
-          grep -Fq '& "$RepoRoot\scripts\bootstrap\13_validate_hardware_v5.ps1" -RequireManualChecks' install.ps1
+          inventory_pattern="& \"\$RepoRoot\\scripts\\windows\\50_hardware_inventory.ps1\""
+          symbiosis_pattern="& \"\$RepoRoot\\scripts\\windows\\52_hardware_symbiosis.ps1\" -Mode Audit"
+          trim_pattern="& \"\$RepoRoot\\scripts\\windows\\21_storage_trim.ps1\" -Mode Audit"
+          final_validation_pattern="& \"\$RepoRoot\\scripts\\bootstrap\\13_validate_hardware_v5.ps1\" -RequireManualChecks"
 
-          inventory_line="$(grep -nF '& "$RepoRoot\scripts\windows\50_hardware_inventory.ps1"' install.ps1 | head -n1 | cut -d: -f1)"
-          symbiosis_line="$(grep -nF '& "$RepoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Audit' install.ps1 | head -n1 | cut -d: -f1)"
-          trim_line="$(grep -nF '& "$RepoRoot\scripts\windows\21_storage_trim.ps1" -Mode Audit' install.ps1 | head -n1 | cut -d: -f1)"
+          grep -Fq "$inventory_pattern" install.ps1
+          grep -Fq "$symbiosis_pattern" install.ps1
+          grep -Fq "$final_validation_pattern" install.ps1
+
+          inventory_line="$(grep -nF "$inventory_pattern" install.ps1 | head -n1 | cut -d: -f1)"
+          symbiosis_line="$(grep -nF "$symbiosis_pattern" install.ps1 | head -n1 | cut -d: -f1)"
+          trim_line="$(grep -nF "$trim_pattern" install.ps1 | head -n1 | cut -d: -f1)"
 
           if (( symbiosis_line <= inventory_line || symbiosis_line >= trim_line )); then
             echo 'V5 symbiosis audit must run after inventory and before storage tuning audit.' >&2
