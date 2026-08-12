@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased — V8 Windows Responsiveness
+## Unreleased — V9 Orchestration, Logs & Idempotence
+
+- `install.ps1` devient l'orchestrateur unique : découverte machine, plan factuel, confirmation, Apply ciblé, re-Verify et synthèse ;
+- ajout du moteur commun `scripts/core/runtime.psm1` ;
+- ajout d'un journal persistant dédié à chaque script sous `logs/<catégorie>/<script>.log` ;
+- ajout d'un `RunId`, d'événements NDJSON et d'un `summary.json` par exécution ;
+- ajout de `reports/orchestration/machine-state.json` et `latest-run.json` ;
+- les fichiers `state/` restent réservés au rollback/historique et ne constituent jamais une source de vérité ;
+- WinGet, WSL2, VS Code, WezTerm, OpenSSH, OneDrive, réglages Windows, profils V4 et exclusions Defender vérifient leur état avant mutation ;
+- les composants déjà conformes sont signalés `DÉJÀ OK` et ne sont pas réappliqués ;
+- les changements sont revalidés avant d'être déclarés `FAIT` ;
+- ajout d'une préparation guidée de l'utilisateur WSL non-root avec mot de passe saisi directement par Linux et jamais journalisé ;
+- les scripts Bash DevOps et validation DevOps disposent de journaux séparés ;
+- ajout de `-PlanOnly`, `-NonInteractive`, `-Yes`, `-WslUser` et `-FullInstall` ;
+- les contrôles physiques/BIOS impossibles à automatiser sont explicitement marqués `ACTION REQUISE` et peuvent être saisis avec `51_hardware_manual_checks.ps1 -Mode Record -Interactive` ;
+- masquage automatique des arguments sensibles dans les journaux ;
+- documentation `docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md` et `logs/README.md`.
+
+## V8 Windows Responsiveness
 
 - ajout de `config/windows/v8/responsiveness.json` pour figer la politique de réactivité Windows ;
 - Memory Compression, Application Launch Prefetching et Application PreLaunch attendus actifs ;
