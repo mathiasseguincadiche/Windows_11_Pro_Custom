@@ -1,0 +1,90 @@
+name: OneDrive absent contract
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/onedrive-contract.yml'
+      - 'config/windows/onedrive.json'
+      - 'config/winutil/mathias-winutil.json'
+      - 'scripts/windows/33_onedrive.ps1'
+      - 'scripts/bootstrap/10_workstation.ps1'
+      - 'docs/08_APPLICATIONS.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/onedrive-contract.yml'
+      - 'config/windows/onedrive.json'
+      - 'config/winutil/mathias-winutil.json'
+      - 'scripts/windows/33_onedrive.ps1'
+      - 'scripts/bootstrap/10_workstation.ps1'
+      - 'docs/08_APPLICATIONS.md'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate OneDrive desired state
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='config/windows/onedrive.json'
+          jq -e '
+            (.schema == "windows11-pro-custom.onedrive.v1") and
+            (.desiredState == "absent") and
+            (.wingetId == "Microsoft.OneDrive") and
+            (.disableFileSyncPolicy.property == "DisableFileSyncNGSC") and
+            (.disableFileSyncPolicy.value == 1) and
+            (.preventNetworkTrafficPolicy.property == "PreventNetworkTrafficPreUserSignIn") and
+            (.preventNetworkTrafficPolicy.value == 1) and
+            (.rollback == "restore-previous-state") and
+            (.scope == "explicit-user-preference")
+          ' "$contract" >/dev/null
+
+          grep -Fq 'scripts\\windows\\33_onedrive.ps1' scripts/bootstrap/10_workstation.ps1
+          jq -e '
+            .mapping.WPFTweaksRemoveOneDrive.decision == "native-explicit-user-preference" and
+            .mapping.WPFTweaksRemoveOneDrive.implementation == "scripts/windows/33_onedrive.ps1"
+          ' config/winutil/mathias-winutil.json >/dev/null
+
+      - name: Enforce targeted removal only
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/windows/33_onedrive.ps1'
+
+          grep -Fq 'winget.exe uninstall --id $config.wingetId --exact --source winget' "$script"
+          grep -Fq "OneDriveSetup.exe" "$script"
+          grep -Fq "'/uninstall'" "$script"
+          grep -Fq 'DisableFileSyncNGSC' config/windows/onedrive.json
+          grep -Fq 'PreventNetworkTrafficPreUserSignIn' config/windows/onedrive.json
+
+          if grep -nE 'Remove-AppxPackage|Remove-Item[[:space:]].*(OneDrive|Documents|Desktop|Pictures)' "$script"; then
+            echo 'Le contrat OneDrive ne doit jamais supprimer directement des packages AppX ou des données utilisateur.' >&2
+            exit 1
+          fi
+
+          mapfile -t uninstall_files < <(grep -RIlE 'winget(\.exe)?[[:space:]]+uninstall' scripts --include='*.ps1' || true)
+          for file in "${uninstall_files[@]}"; do
+            if [[ "$file" != "$script" ]]; then
+              echo "Désinstallation WinGet non autorisée hors du contrat OneDrive: $file" >&2
+              exit 1
+            fi
+          done
+
+          echo 'Contrat de suppression ciblée OneDrive: OK'
+
+  audit-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Load contract and execute non-mutating audit
+        shell: pwsh
+        run: |
+          $contract = Get-Content -Raw .\config\windows\onedrive.json | ConvertFrom-Json
+          if ($contract.desiredState -ne 'absent') { throw 'Unexpected OneDrive desired state.' }
+          & .\scripts\windows\33_onedrive.ps1 -Mode Audit
