@@ -125,6 +125,24 @@ function Get-MemoryManagerState {
     }
 }
 
+function Set-MemoryFeatureState {
+    param(
+        [Parameter(Mandatory)][ValidateSet('MemoryCompression', 'ApplicationLaunchPrefetching', 'ApplicationPreLaunch')][string]$Feature,
+        [Parameter(Mandatory)][bool]$Enabled
+    )
+    switch ($Feature) {
+        'MemoryCompression' {
+            if ($Enabled) { Enable-MMAgent -MemoryCompression } else { Disable-MMAgent -MemoryCompression }
+        }
+        'ApplicationLaunchPrefetching' {
+            if ($Enabled) { Enable-MMAgent -ApplicationLaunchPrefetching } else { Disable-MMAgent -ApplicationLaunchPrefetching }
+        }
+        'ApplicationPreLaunch' {
+            if ($Enabled) { Enable-MMAgent -ApplicationPreLaunch } else { Disable-MMAgent -ApplicationPreLaunch }
+        }
+    }
+}
+
 function Get-PageFileState {
     $computer = Get-CimInstance Win32_ComputerSystem | Select-Object -First 1
     $pagingFiles = $null
@@ -238,7 +256,9 @@ if ($Mode -eq 'Apply') {
     if (-not [bool]$computer.AutomaticManagedPagefile) {
         Set-CimInstance -InputObject $computer -Property @{ AutomaticManagedPagefile = $true } | Out-Null
     }
-    New-Item -ItemType Directory -Force -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl' | Out-Null
+    if (-not (Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl')) {
+        New-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl' -Force | Out-Null
+    }
     New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl' -Name CrashDumpEnabled -PropertyType DWord -Value ([int]$policy.pageFile.crashDumpEnabled) -Force | Out-Null
 
     if ((Get-ActivePowerSchemeGuid) -ne [string]$policy.power.activeSchemeGuid) {
@@ -264,11 +284,7 @@ elseif ($Mode -eq 'Rollback') {
         $original = $before.Memory.$feature
         $current = $mmNow.$feature
         if ($null -ne $original -and $original -ne $current) {
-            if ([bool]$original) {
-                & Enable-MMAgent -$feature
-            } else {
-                & Disable-MMAgent -$feature
-            }
+            Set-MemoryFeatureState -Feature $feature -Enabled ([bool]$original)
         }
     }
 
@@ -282,6 +298,7 @@ elseif ($Mode -eq 'Rollback') {
     }
     if ($before.ActivePowerSchemeGuid) {
         & powercfg.exe /SetActive ([string]$before.ActivePowerSchemeGuid) | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to restore previous power scheme.' }
     }
     if ($before.AcPowerModeGuid) { Set-AcPowerModeGuid -Guid ([string]$before.AcPowerModeGuid) }
     if ($null -ne $before.UI.MinimizeRestoreAnimation -and $null -ne $before.UI.ClientAreaAnimations) {
