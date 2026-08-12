@@ -68,8 +68,9 @@ jobs:
           grep -Fq 'Enable-MMAgent -ApplicationLaunchPrefetching' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationPreLaunch' "$script"
           grep -Fq 'Startup applications are inventory-only' "$script"
-          grep -Fq '53_responsiveness_v8.ps1" -Mode Apply' install.ps1
-          grep -Fq '53_responsiveness_v8.ps1" -Mode Verify' install.ps1
+          grep -Fq "Add-PlanItem -Name 'Réactivité Windows V8'" install.ps1
+          grep -Fq "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
+          grep -Fq "-ApplyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
       - name: Protect benchmark methodology
         shell: bash
         run: |
