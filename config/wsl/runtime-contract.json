@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "distribution": "Ubuntu",
+  "expectedVersionId": "26.04",
+  "expectedCodename": "resolute",
+  "installLocation": "D:\\WSL\\Ubuntu-DevOps",
+  "homeFilesystem": "ext4",
+  "workingRoots": [
+    "~/projects",
+    "~/labs",
+    "~/repositories"
+  ],
+  "forbiddenRoots": [
+    "/mnt/c",
+    "/mnt/d"
+  ]
+}

@@ -1,0 +1,53 @@
+name: wsl-runtime-contract
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'config/wsl/**'
+      - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - '.github/workflows/wsl-runtime-contract.yml'
+  pull_request:
+    paths:
+      - 'config/wsl/**'
+      - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - '.github/workflows/wsl-runtime-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate Ubuntu WSL contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='config/wsl/runtime-contract.json'
+          jq -e '
+            (.schemaVersion == "1.0") and
+            (.distribution == "Ubuntu") and
+            (.expectedVersionId == "26.04") and
+            (.expectedCodename == "resolute") and
+            (.installLocation == "D:\\WSL\\Ubuntu-DevOps") and
+            (.homeFilesystem == "ext4") and
+            (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
+            (.forbiddenRoots == ["/mnt/c", "/mnt/d"])
+          ' "$contract" >/dev/null
+      - name: Validate runtime wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'config\wsl\runtime-contract.json' scripts/bootstrap/06_wsl.ps1
+          grep -Fq 'config\wsl\runtime-contract.json' scripts/bootstrap/14_validate_wsl_v6.ps1
+          grep -Fq 'expectedVersionId' scripts/bootstrap/06_wsl.ps1
+          grep -Fq 'expectedVersionId' scripts/bootstrap/14_validate_wsl_v6.ps1
+          grep -Fq "Aucune suppression automatique n'est effectuée" scripts/bootstrap/06_wsl.ps1
+          if grep -RInE 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
+            echo 'Destructive WSL automation detected.' >&2
+            exit 1
+          fi

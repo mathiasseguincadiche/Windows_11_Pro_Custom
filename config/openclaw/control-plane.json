@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/mathiasseguincadiche/openclaw_openrouter.git",
-  "ref": "ca6b53df174db19ba489f4c82280bdb1d4cd971b",
+  "ref": "08c8333bbfe0709443aa8ea24fcc506e3984fb95",
   "policy": "pinned-commit",
-  "description": "OpenClaw/OpenRouter control plane pin validated for the Windows 11 D: integration. Update deliberately after validating the target commit in openclaw_openrouter."
+  "description": "OpenClaw/OpenRouter control plane pin validated for the Windows 11 D: integration with the Windows-native runtime and Ubuntu 26.04 WSL2 DevOps boundary. Update deliberately after validating the target commit in openclaw_openrouter."
 }
