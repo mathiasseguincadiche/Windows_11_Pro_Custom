@@ -13,7 +13,7 @@ function Get-WpcLogPath {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Identity)
     $relative = $Identity -replace '/', '\'
     if ([IO.Path]::IsPathRooted($relative)) { $relative = Get-WpcRelativePath -RepoRoot $Context.RepoRoot -Path $relative }
-    $relative = $relative -replace '^scripts\', ''
+    if ($relative.StartsWith('scripts\', [StringComparison]::OrdinalIgnoreCase)) { $relative = $relative.Substring(8) }
     $directory = Split-Path -Parent $relative
     $name = [IO.Path]::GetFileNameWithoutExtension($relative)
     if ([string]::IsNullOrWhiteSpace($directory)) { return (Join-Path $Context.LogRoot "$name.log") }
