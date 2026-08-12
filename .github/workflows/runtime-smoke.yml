@@ -27,7 +27,6 @@ jobs:
           [[ "$AWS_CLI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$MINIKUBE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$KIND_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          # This grep intentionally searches the literal shell variable reference in the installer.
           # shellcheck disable=SC2016
           grep -q 'source "$VERSIONS_FILE"' scripts/wsl/install-devops.sh
           if grep -nE 'release/stable\.txt|minikube/releases/latest/download|awscli-exe-linux-x86_64\.zip"' scripts/wsl/install-devops.sh; then
@@ -73,6 +72,24 @@ jobs:
           ' config/backup/v7-policy.json >/dev/null
           grep -q 'capacity-preflight.json' scripts/backup/60_create_backup_v7.ps1
           grep -q 'RequiredTargetFreeGB' scripts/backup/60_create_backup_v7.ps1
+      - name: Validate V8 responsiveness wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            (.version == "V8") and
+            (.memory.memoryCompression == true) and
+            (.memory.applicationLaunchPrefetching == true) and
+            (.memory.applicationPreLaunch == true) and
+            (.pageFile.systemManaged == true) and
+            (.pageFile.crashDumpEnabled == 7) and
+            (.power.activeScheme == "Balanced") and
+            (.power.acPowerMode == "Best Performance") and
+            (.startup.automaticDisable == false) and
+            (.backgroundApps.globalDisable == false)
+          ' config/windows/v8/responsiveness.json >/dev/null
+          grep -Fq 'scripts\windows\53_responsiveness_v8.ps1" -Mode Apply' install.ps1
+          grep -Fq 'scripts\windows\53_responsiveness_v8.ps1" -Mode Verify' install.ps1
 
   windows-runtime:
     runs-on: windows-latest
@@ -84,6 +101,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           .\scripts\windows\20_system_audit.ps1
           .\scripts\windows\21_storage_trim.ps1 -Mode Audit
+          .\scripts\windows\53_responsiveness_v8.ps1 -Mode Audit
           .\scripts\windows\42_benchmark.ps1 -Stage snapshot
           foreach ($profile in @('standard', 'privacy', 'gaming', 'optional')) {
             .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
@@ -96,7 +114,14 @@ jobs:
           if ([string]::IsNullOrWhiteSpace([string]$audit.Computer)) {
             throw 'system-audit.json does not contain a computer identity.'
           }
+          $responsiveness = Get-Content -Raw .\reports\windows\v8-responsiveness.json | ConvertFrom-Json
+          if ($responsiveness.Version -ne 'V8' -or $null -eq $responsiveness.State) {
+            throw 'V8 responsiveness report is incomplete.'
+          }
+          if ($responsiveness.StartupAutomaticDisable -ne $false -or $responsiveness.BackgroundGlobalDisable -ne $false) {
+            throw 'V8 must not automatically disable startup or background apps.'
+          }
           $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json
-          if ($null -eq $benchmark.Timestamp) {
+          if ($null -eq $benchmark.Timestamp -or $null -eq $benchmark.AutomaticManagedPagefile) {
             throw 'Runtime benchmark report is incomplete.'
           }

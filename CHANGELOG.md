@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased — V7 / OpenClaw + OpenRouter
+## Unreleased — V8 Windows Responsiveness
+
+- ajout de `config/windows/v8/responsiveness.json` pour figer la politique de réactivité Windows ;
+- Memory Compression, Application Launch Prefetching et Application PreLaunch attendus actifs ;
+- pagefile géré par le système et Automatic Memory Dump (`CrashDumpEnabled=7`) ;
+- plan Balanced conservé avec mode secteur Best Performance via l'API Windows 11 officielle ;
+- animations réduire/restaurer et animations de zone cliente désactivées via `SystemParametersInfo` ;
+- inventaire des applications de démarrage sans désactivation automatique ;
+- TRIM et Scheduled Optimize conservés, alerte espace libre sous 15 % ;
+- benchmark léger enrichi : commit mémoire, pagefile, MMAgent, file d'attente disque et plan d'alimentation ;
+- aucun RAM cleaner, purge Standby List, tweak HPET/BCD, désactivation core parking/C-States, service massif ou benchmark SSD d'écriture ;
+- intégration complète Audit / Apply / Verify / Rollback dans `install.ps1` ;
+- workflow CI `Windows responsiveness V8` avec audit Windows réel et garde-fous anti-régression ;
+- documentation `docs/20_WINDOWS_RESPONSIVENESS_V8.md`.
+
+## V7 / OpenClaw + OpenRouter
 
 - ajout d'un bootstrap optionnel OpenClaw + OpenRouter natif Windows ;
 - séparation stricte entre `D:\WSL` pour les workloads Linux DevOps et `D:\AI\OpenClaw` pour la pile IA ;
