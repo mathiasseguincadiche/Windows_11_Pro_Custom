@@ -88,6 +88,16 @@ $trim = (& fsutil.exe behavior query DisableDeleteNotify 2>&1 | Out-String).Trim
 $checks.TrimEnabled = ($trim -match 'DisableDeleteNotify\s*=\s*0')
 $details.TrimStatus = $trim
 
+try {
+    & "$repoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Verify
+    $checks.HardwareSymbiosis = $true
+    $details.HardwareSymbiosisReport = 'reports\hardware\hardware-symbiosis-v5.json'
+} catch {
+    $checks.HardwareSymbiosis = $false
+    $details.HardwareSymbiosisError = $_.Exception.Message
+    $details.HardwareSymbiosisReport = 'reports\hardware\hardware-symbiosis-v5.json'
+}
+
 if ($RequireManualChecks) {
     try {
         & "$repoRoot\scripts\windows\51_hardware_manual_checks.ps1" -Mode Verify
