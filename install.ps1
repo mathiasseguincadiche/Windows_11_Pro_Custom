@@ -83,10 +83,18 @@ if ($BackupAction -ne 'None') {
 Write-Host "Windows 11 Pro Custom - mode: $Mode" -ForegroundColor Cyan
 Write-Host "WSL2 profile: $WslProfile" -ForegroundColor Cyan
 Write-Host "V4 optimization profiles: $($OptimizationProfiles -join ', ')" -ForegroundColor Cyan
+Write-Host 'V8 responsiveness policy: enabled' -ForegroundColor Cyan
 Write-Host "OpenClaw AI root: $OpenClawRoot" -ForegroundColor Cyan
 Write-Host "OpenClaw control-plane ref: $OpenClawRepositoryRef" -ForegroundColor Cyan
 
 if ($Mode -eq 'Rollback') {
+    $v8StatePath = Join-Path $RepoRoot 'state\windows-v8\responsiveness.before.json'
+    if (Test-Path $v8StatePath) {
+        & "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Rollback
+    } else {
+        Write-Host '[INFO] No V8 responsiveness state backup found; V8 rollback skipped.' -ForegroundColor Yellow
+    }
+
     & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Rollback
 
     $profilesToRollback = @($OptimizationProfiles)
@@ -114,6 +122,7 @@ if ($Mode -eq 'Rollback') {
 & "$RepoRoot\scripts\windows\50_hardware_inventory.ps1"
 & "$RepoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Audit
 & "$RepoRoot\scripts\windows\21_storage_trim.ps1" -Mode Audit
+& "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Audit
 
 switch ($Mode) {
     'Audit' {
@@ -135,7 +144,7 @@ switch ($Mode) {
         if (-not $SkipV4RestorePoint) {
             & "$RepoRoot\scripts\windows\41_restore_point.ps1"
         } else {
-            Write-Host '[INFO] V4 restore point explicitly skipped.' -ForegroundColor Yellow
+            Write-Host '[INFO] V4/V8 restore point explicitly skipped.' -ForegroundColor Yellow
         }
 
         & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage before
@@ -143,6 +152,7 @@ switch ($Mode) {
         foreach ($profile in $OptimizationProfiles) {
             & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Apply -Profile $profile
         }
+        & "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Apply
         & "$RepoRoot\scripts\windows\42_benchmark.ps1" -Stage after
         & "$RepoRoot\scripts\windows\43_compare_benchmarks.ps1"
         & "$RepoRoot\scripts\bootstrap\12_validate_v4.ps1" -OptimizationProfiles $OptimizationProfiles
@@ -167,6 +177,7 @@ switch ($Mode) {
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
         & "$RepoRoot\scripts\bootstrap\11_validate_v3.ps1" -WslProfile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
         Write-Host '[INFO] Hardware V5 is observational only. BIOS, ReBAR, memory tuning and device placement are never changed automatically.' -ForegroundColor Yellow
+        Write-Host '[INFO] V8 startup applications remain inventory-only; no startup program is disabled automatically.' -ForegroundColor Yellow
     }
 
     'Verify' {
@@ -174,6 +185,7 @@ switch ($Mode) {
         foreach ($profile in $OptimizationProfiles) {
             & "$RepoRoot\scripts\windows\40_v4_optimize.ps1" -Mode Verify -Profile $profile
         }
+        & "$RepoRoot\scripts\windows\53_responsiveness_v8.ps1" -Mode Verify
         & "$RepoRoot\scripts\bootstrap\10_workstation.ps1" -Mode Verify
         & "$RepoRoot\scripts\bootstrap\05_defender.ps1"
         & "$RepoRoot\scripts\bootstrap\11_validate_v3.ps1" -WslProfile $WslProfile -Distribution $Distribution -InstallLocation $WslInstallLocation
