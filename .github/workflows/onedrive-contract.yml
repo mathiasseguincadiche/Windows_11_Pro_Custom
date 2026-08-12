@@ -45,7 +45,7 @@ jobs:
             (.scope == "explicit-user-preference")
           ' "$contract" >/dev/null
 
-          grep -Fq 'scripts\\windows\\33_onedrive.ps1' scripts/bootstrap/10_workstation.ps1
+          grep -Fq 'scripts\windows\33_onedrive.ps1' scripts/bootstrap/10_workstation.ps1
           jq -e '
             .mapping.WPFTweaksRemoveOneDrive.decision == "native-explicit-user-preference" and
             .mapping.WPFTweaksRemoveOneDrive.implementation == "scripts/windows/33_onedrive.ps1"
