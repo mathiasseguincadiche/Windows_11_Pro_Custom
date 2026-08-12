@@ -4,20 +4,26 @@ on:
   pull_request:
     paths:
       - '.github/workflows/hardware-symbiosis-v5.yml'
+      - 'install.ps1'
       - 'config/hardware/target-v5.json'
       - 'config/hardware/symbiosis-v5.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
       - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
       - 'docs/15_HARDWARE_QUALIFICATION_V5.md'
+      - 'README.md'
+      - 'CHANGELOG.md'
   push:
     branches: [main]
     paths:
       - '.github/workflows/hardware-symbiosis-v5.yml'
+      - 'install.ps1'
       - 'config/hardware/target-v5.json'
       - 'config/hardware/symbiosis-v5.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
       - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
       - 'docs/15_HARDWARE_QUALIFICATION_V5.md'
+      - 'README.md'
+      - 'CHANGELOG.md'
 
 permissions:
   contents: read
@@ -55,6 +61,29 @@ jobs:
           jq -e '.symbiosisPolicy == "config/hardware/symbiosis-v5.json"' config/hardware/target-v5.json >/dev/null
           grep -Fq 'scripts\windows\52_hardware_symbiosis.ps1' scripts/bootstrap/13_validate_hardware_v5.ps1
           grep -Fq -- '-Mode Verify' scripts/bootstrap/13_validate_hardware_v5.ps1
+
+      - name: Validate bootstrap wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          inventory_pattern="& \"\$RepoRoot\\scripts\\windows\\50_hardware_inventory.ps1\""
+          symbiosis_pattern="& \"\$RepoRoot\\scripts\\windows\\52_hardware_symbiosis.ps1\" -Mode Audit"
+          trim_pattern="& \"\$RepoRoot\\scripts\\windows\\21_storage_trim.ps1\" -Mode Audit"
+          final_validation_pattern="& \"\$RepoRoot\\scripts\\bootstrap\\13_validate_hardware_v5.ps1\" -RequireManualChecks"
+
+          grep -Fq "$inventory_pattern" install.ps1
+          grep -Fq "$symbiosis_pattern" install.ps1
+          grep -Fq "$final_validation_pattern" install.ps1
+
+          inventory_line="$(grep -nF "$inventory_pattern" install.ps1 | head -n1 | cut -d: -f1)"
+          symbiosis_line="$(grep -nF "$symbiosis_pattern" install.ps1 | head -n1 | cut -d: -f1)"
+          trim_line="$(grep -nF "$trim_pattern" install.ps1 | head -n1 | cut -d: -f1)"
+
+          if (( symbiosis_line <= inventory_line || symbiosis_line >= trim_line )); then
+            echo 'V5 symbiosis audit must run after inventory and before storage tuning audit.' >&2
+            exit 1
+          fi
+          echo 'V5 bootstrap wiring: OK'
 
       - name: Enforce observational safety boundary
         shell: bash
