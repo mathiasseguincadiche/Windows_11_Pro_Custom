@@ -183,4 +183,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/wsl/install-quality-tools.sh
+          useradd --create-home --shell /bin/bash ci-wsl
+          echo 'ci-wsl ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/ci-wsl
+          chmod 0440 /etc/sudoers.d/ci-wsl
+          chown -R ci-wsl:ci-wsl "$GITHUB_WORKSPACE"
+          sudo -u ci-wsl -H env GH_TOKEN="$GH_TOKEN" \
+            bash -lc "cd '$GITHUB_WORKSPACE' && bash scripts/wsl/install-quality-tools.sh"
