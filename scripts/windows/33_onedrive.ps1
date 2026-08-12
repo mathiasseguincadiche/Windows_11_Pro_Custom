@@ -46,7 +46,7 @@ function Set-DwordPolicy {
         [Parameter(Mandatory = $true)][int]$Value
     )
 
-    New-Item -ItemType Directory -Force -Path $Path | Out-Null
+    New-Item -Force -Path $Path | Out-Null
     New-ItemProperty -Path $Path -Name $Property -PropertyType DWord -Value $Value -Force | Out-Null
 }
 
@@ -58,7 +58,7 @@ function Restore-RegistryValue {
     )
 
     if ([bool]$State.Exists) {
-        New-Item -ItemType Directory -Force -Path $Path | Out-Null
+        New-Item -Force -Path $Path | Out-Null
         New-ItemProperty -Path $Path -Name $Property -PropertyType DWord -Value ([int]$State.Value) -Force | Out-Null
         return
     }
@@ -93,11 +93,13 @@ function Test-OneDriveInstalled {
         }
     }
 
-    $appx = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object {
-        $_.Name -match 'OneDrive'
-    })
-    if ($appx.Count -gt 0) {
-        return $true
+    if (Get-Command Get-AppxPackage -ErrorAction SilentlyContinue) {
+        $appx = @(Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -match 'OneDrive'
+        })
+        if ($appx.Count -gt 0) {
+            return $true
+        }
     }
 
     if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
