@@ -57,14 +57,24 @@ if ($TargetVolume.FileSystem -ne 'NTFS') {
 
 $TargetDisk = Get-DiskForDriveLetter -DriveLetter $TargetLetter
 $ProtectedDiskNumbers = @()
+$ProtectedUsedBytes = [long]0
+$ProtectedCapacity = @()
 foreach ($volumeName in @($Policy.systemVolumes)) {
     $letter = ([string]$volumeName).TrimEnd(':')
-    if (-not (Get-Volume -DriveLetter $letter -ErrorAction SilentlyContinue)) {
+    $volume = Get-Volume -DriveLetter $letter -ErrorAction SilentlyContinue
+    if ($null -eq $volume) {
         throw "Required protected volume is missing: $volumeName"
     }
 
     $disk = Get-DiskForDriveLetter -DriveLetter $letter
     $ProtectedDiskNumbers += $disk.Number
+    $usedBytes = [long]($volume.Size - $volume.SizeRemaining)
+    $ProtectedUsedBytes += $usedBytes
+    $ProtectedCapacity += [ordered]@{
+        volume = $volumeName
+        usedBytes = $usedBytes
+        usedGB = [math]::Round($usedBytes / 1GB, 2)
+    }
 }
 
 if ($ProtectedDiskNumbers -contains $TargetDisk.Number) {
@@ -76,17 +86,57 @@ if ($Policy.requireUsbTargetByDefault -and -not $AllowNonUsbTarget -and $TargetB
     throw "V7 requires a USB backup disk by default. Detected BusType=$TargetBusType. Use -AllowNonUsbTarget only after verifying this is a separate backup disk."
 }
 
-$FreeGB = [math]::Round($TargetVolume.SizeRemaining / 1GB, 2)
-if ($FreeGB -lt [double]$Policy.minimumTargetFreeGB) {
-    throw "Backup target has only $FreeGB GB free. V7 requires at least $($Policy.minimumTargetFreeGB) GB before starting."
-}
-
 $DistroNames = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
 if ($DistroNames -notcontains $Distribution) {
     throw "WSL distribution '$Distribution' was not found. Available: $($DistroNames -join ', ')"
 }
 
+$WslUsedOutput = @(& wsl.exe -d $Distribution -- bash -lc 'df -B1 --output=used / | tail -n 1' 2>$null)
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to estimate used space for WSL distribution '$Distribution'."
+}
+$WslUsedText = (($WslUsedOutput -join '') -replace "`0", '').Trim()
+$WslUsedBytes = [long]0
+if (-not [long]::TryParse($WslUsedText, [ref]$WslUsedBytes)) {
+    throw "Unexpected WSL used-space value: '$WslUsedText'"
+}
+
+$MarginPercent = [double]$Policy.capacitySafetyMarginPercent
+if ($MarginPercent -lt 0 -or $MarginPercent -gt 100) {
+    throw "Invalid V7 capacitySafetyMarginPercent: $MarginPercent"
+}
+$EstimatedPayloadBytes = [long]($ProtectedUsedBytes + $WslUsedBytes)
+$EstimatedRequiredBytes = [long][math]::Ceiling($EstimatedPayloadBytes * (1 + ($MarginPercent / 100)))
+$EstimatedRequiredGB = [math]::Round($EstimatedRequiredBytes / 1GB, 2)
+$MinimumTargetFreeGB = [double]$Policy.minimumTargetFreeGB
+$RequiredTargetFreeGB = [math]::Max($MinimumTargetFreeGB, $EstimatedRequiredGB)
+$FreeGB = [math]::Round($TargetVolume.SizeRemaining / 1GB, 2)
+
+Write-Host "[INFO] Protected Windows data used: $([math]::Round($ProtectedUsedBytes / 1GB, 2)) GB" -ForegroundColor Cyan
+Write-Host "[INFO] WSL used data for independent export: $([math]::Round($WslUsedBytes / 1GB, 2)) GB" -ForegroundColor Cyan
+Write-Host "[INFO] Capacity margin: $MarginPercent%" -ForegroundColor Cyan
+Write-Host "[INFO] Backup target free: $FreeGB GB; required preflight: $RequiredTargetFreeGB GB" -ForegroundColor Cyan
+
+if ($FreeGB -lt $RequiredTargetFreeGB) {
+    throw "Backup target has only $FreeGB GB free. V7 estimates at least $RequiredTargetFreeGB GB are required (protected data + independent WSL export + $MarginPercent% margin, with an absolute floor of $MinimumTargetFreeGB GB)."
+}
+
 New-Item -ItemType Directory -Force -Path $WslBackupDirectory, $MetadataDirectory | Out-Null
+
+$CapacityPreflight = [ordered]@{
+    checkedAt = (Get-Date).ToString('o')
+    targetFreeGB = $FreeGB
+    minimumTargetFreeGB = $MinimumTargetFreeGB
+    safetyMarginPercent = $MarginPercent
+    protectedVolumes = $ProtectedCapacity
+    protectedUsedBytes = $ProtectedUsedBytes
+    wslUsedBytes = $WslUsedBytes
+    estimatedPayloadBytes = $EstimatedPayloadBytes
+    estimatedRequiredBytes = $EstimatedRequiredBytes
+    estimatedRequiredGB = $EstimatedRequiredGB
+    requiredTargetFreeGB = $RequiredTargetFreeGB
+}
+$CapacityPreflight | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'capacity-preflight.json')
 
 $WinReOutput = @(& reagentc.exe /info 2>&1)
 $WinReExitCode = $LASTEXITCODE
@@ -168,6 +218,7 @@ $Manifest = [ordered]@{
     backupTargetDiskNumber = $TargetDisk.Number
     backupTargetBusType = $TargetBusType
     backupTargetFreeGBBefore = $FreeGB
+    capacityPreflight = $CapacityPreflight
     protectedVolumes = @($Policy.systemVolumes)
     windowsImageBackupRoot = $WindowsImageRoot
     wbadminBackupExitCode = $WbadminExitCode
@@ -189,8 +240,9 @@ $Manifest = [ordered]@{
 }
 
 $ManifestPath = Join-Path $MetadataDirectory 'backup-manifest.json'
-$Manifest | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 $ManifestPath
+$Manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $ManifestPath
 
+Write-Host '[OK] Capacity preflight passed.' -ForegroundColor Green
 Write-Host '[OK] Windows image created and enumerated by wbadmin.' -ForegroundColor Green
 Write-Host '[OK] WSL2 VHDX exported and SHA-256 recorded.' -ForegroundColor Green
 Write-Host "[OK] Manifest: $ManifestPath" -ForegroundColor Green
