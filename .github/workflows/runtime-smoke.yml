@@ -46,7 +46,7 @@ jobs:
           curl --retry 3 -fsSL "https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64.sha256" | grep -Eq '^[0-9a-f]{64}$'
           curl --retry 3 -fsIL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" >/dev/null
           curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" >/dev/null
-      - name: Validate OpenClaw immutable pin
+      - name: Validate OpenClaw immutable pin and end-to-end wiring
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +58,9 @@ jobs:
           ' "$cfg" >/dev/null
           grep -q 'checkout --detach FETCH_HEAD' scripts/bootstrap/15_openclaw_ai.ps1
           grep -q "OpenClawRepositoryRef = ''" install.ps1
+          grep -q '02_validate_wsl_backend.ps1' scripts/bootstrap/15_openclaw_ai.ps1
+          grep -q 'WslBackendValidatorPresent' scripts/bootstrap/15_openclaw_ai.ps1
+          grep -q 'Qualification backend DevOps WSL2' scripts/bootstrap/15_openclaw_ai.ps1
       - name: Validate V7 capacity policy wiring
         shell: bash
         run: |
