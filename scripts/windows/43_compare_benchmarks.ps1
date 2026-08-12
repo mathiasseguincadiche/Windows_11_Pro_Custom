@@ -56,15 +56,35 @@ $comparison = [ordered]@{
         After = $after.FreeMemoryGB
         Delta = Get-Delta $before.FreeMemoryGB $after.FreeMemoryGB
     }
+    CommittedMemoryGB = [ordered]@{
+        Before = $before.CommittedMemoryGB
+        After = $after.CommittedMemoryGB
+        Delta = Get-Delta $before.CommittedMemoryGB $after.CommittedMemoryGB
+    }
+    CommitPercent = [ordered]@{
+        Before = $before.CommitPercent
+        After = $after.CommitPercent
+        Delta = Get-Delta $before.CommitPercent $after.CommitPercent
+    }
     CpuLoadPercent = [ordered]@{
         Before = $before.CpuLoadPercent
         After = $after.CpuLoadPercent
         Delta = Get-Delta $before.CpuLoadPercent $after.CpuLoadPercent
     }
+    DiskQueueLength = [ordered]@{
+        Before = $before.Disk.CurrentQueueLength
+        After = $after.Disk.CurrentQueueLength
+        Delta = Get-Delta $before.Disk.CurrentQueueLength $after.Disk.CurrentQueueLength
+    }
+    MemoryCompressionEnabledAfter = $after.MemoryCompressionEnabled
+    ApplicationLaunchPrefetchingAfter = $after.ApplicationLaunchPrefetching
+    ApplicationPreLaunchAfter = $after.ApplicationPreLaunch
+    AutomaticManagedPagefileAfter = $after.AutomaticManagedPagefile
+    ActivePowerSchemeAfter = $after.ActivePowerScheme
     DefenderStillEnabled = [bool]($after.Defender.AntivirusEnabled -and $after.Defender.RealTimeProtectionEnabled)
-    Interpretation = 'These snapshots are observational. Reboot, workload and background activity can affect deltas; they are not synthetic performance scores.'
+    Interpretation = 'Snapshots are observational. Reboot, workload, cache warm-up and background activity can affect deltas. No synthetic disk writes or RAM purges are used.'
 }
 
 $comparison | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $comparisonPath
 $comparison | ConvertTo-Json -Depth 8
-Write-Host "[OK] V4 comparison written to $comparisonPath" -ForegroundColor Green
+Write-Host "[OK] Windows responsiveness comparison written to $comparisonPath" -ForegroundColor Green
