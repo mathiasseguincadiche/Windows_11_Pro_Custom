@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           script='scripts/windows/33_onedrive.ps1'
 
-          grep -Fq 'winget.exe uninstall --id $config.wingetId --exact --source winget' "$script"
+          grep -Fq "winget.exe uninstall --id \$config.wingetId --exact --source winget" "$script"
           grep -Fq "OneDriveSetup.exe" "$script"
           grep -Fq "'/uninstall'" "$script"
           grep -Fq 'DisableFileSyncNGSC' config/windows/onedrive.json
