@@ -26,9 +26,9 @@ if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $LinuxUser = (& wsl.exe -d $Distribution -- sh -lc 'id -un' 2>$null | Out-String).Trim()
     $userCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer l’utilisateur WSL par défaut.' }
+    if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer lʼutilisateur WSL par défaut.' }
 }
-if ($LinuxUser -eq 'root') { throw 'La mise à jour Ubuntu doit s’exécuter avec l’utilisateur WSL normal, pas root.' }
+if ($LinuxUser -eq 'root') { throw 'La mise à jour Ubuntu doit sʼexécuter avec lʼutilisateur WSL normal, pas root.' }
 
 $linuxScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $linuxScriptWindows).Trim()
 $convertCode = $LASTEXITCODE
