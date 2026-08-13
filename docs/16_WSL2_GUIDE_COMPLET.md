@@ -1,12 +1,20 @@
 # Guide complet WSL2 — débuter proprement pour DevOps
 
-## 1. À quoi sert WSL2 ?
+Ce guide explique WSL2 **depuis les bases** puis montre comment l'utiliser correctement sur cette workstation.
+
+Il ne suppose pas que tu connais Linux, les différences de filesystem ou le fonctionnement de Docker dans WSL2.
+
+Pour la configuration de référence condensée, voir [`06_WSL2.md`](06_WSL2.md).
+
+---
+
+# 1. À quoi sert WSL2 ?
 
 WSL signifie **Windows Subsystem for Linux**.
 
-WSL2 permet d'utiliser un vrai environnement Linux directement depuis Windows 11, sans dual boot et sans gérer une VM traditionnelle au quotidien.
+WSL2 permet d'utiliser un vrai environnement Linux directement depuis Windows 11 sans dual boot et sans gérer une VM traditionnelle au quotidien.
 
-Dans cette machine, le rôle de chaque couche est clair :
+Sur cette machine :
 
 ```text
 Windows 11 Pro
@@ -14,11 +22,12 @@ Windows 11 Pro
 ├── applications Windows
 │   ├── VS Code
 │   ├── WezTerm
-│   ├── Firefox / Brave
-│   └── Office / outils desktop
+│   ├── navigateurs
+│   ├── bureautique
+│   └── gaming
 │
 └── WSL2
-    └── Ubuntu
+    └── Ubuntu 26.04
         ├── Bash
         ├── Git
         ├── Docker Engine
@@ -29,66 +38,50 @@ Windows 11 Pro
         └── projets DevOps
 ```
 
-L'idée n'est pas de « remplacer Windows par Linux ».
+L'idée n'est pas de remplacer Windows par Linux.
 
-L'idée est :
+Le modèle est :
 
 ```text
-Windows = poste de travail
-Linux WSL2 = environnement DevOps
+Windows = poste de travail et hôte
+Linux   = environnement DevOps
 ```
 
-## 2. Architecture de cette machine
+---
+
+# 2. Où se trouve Linux ?
 
 Les deux SSD physiques restent en NTFS :
 
 ```text
 SSD 1 — Crucial T705
 └── C:\ NTFS
-    ├── Windows 11 Pro
-    ├── Program Files
-    └── Users
+    └── Windows 11 Pro
 
 SSD 2 — Crucial T705
 └── D:\ NTFS
-    ├── DATA\
-    ├── WSL\
-    │   └── Ubuntu-DevOps\
-    │       └── ext4.vhdx
-    ├── ISO\
-    ├── Backups\
-    └── Temp\
+    └── WSL\Ubuntu-DevOps\
+        └── VHDX WSL
+            └── filesystem ext4 Linux
 ```
 
-Le fichier :
+Le point essentiel :
 
 ```text
-D:\WSL\Ubuntu-DevOps\ext4.vhdx
+D: reste NTFS
+Ubuntu utilise ext4
+ext4 se trouve à l'intérieur du VHDX
 ```
 
-est un **disque dur virtuel Linux**.
+Il n'existe donc **aucune partition EXT4 physique** à créer sur le second SSD.
 
-À l'intérieur de ce fichier se trouve le système de fichiers Linux ext4.
+---
 
-Donc :
+# 3. Le modèle mental Windows / Linux
 
-```text
-D: NTFS
-└── ext4.vhdx
-    └── ext4 Linux
-        ├── /etc
-        ├── /var
-        ├── /usr
-        └── /home/<user>
-```
+Il faut distinguer les deux univers.
 
-Il n'existe **aucune partition EXT4 physique** sur les SSD.
-
-## 3. Le modèle mental le plus important
-
-Il faut toujours distinguer les deux mondes.
-
-### Côté Windows
+## Côté Windows
 
 Chemins :
 
@@ -98,20 +91,21 @@ D:\DATA\...
 D:\WSL\...
 ```
 
-Shell :
+Shell principal d'administration :
 
 ```text
-PowerShell
+PowerShell 7
 ```
 
-Exécutables :
+Scripts :
 
 ```text
-.exe
 .ps1
+.cmd
+.exe
 ```
 
-### Côté Linux / Ubuntu
+## Côté Ubuntu
 
 Chemins :
 
@@ -134,7 +128,7 @@ Scripts :
 .sh
 ```
 
-Commandes :
+Commandes typiques :
 
 ```text
 ls
@@ -145,7 +139,9 @@ apt
 systemctl
 ```
 
-### Règle simple
+---
+
+# 4. La règle la plus importante pour les projets DevOps
 
 Si le projet est utilisé principalement par des outils Linux :
 
@@ -156,130 +152,111 @@ Ansible
 kubectl
 Helm
 Git Linux
+Node Linux
 ```
 
-le projet doit rester dans :
+alors le dépôt doit vivre dans le filesystem Linux :
 
 ```text
 /home/<user>/projects
+/home/<user>/labs
+/home/<user>/repositories
 ```
 
-et **pas** dans :
+Évite d'utiliser comme racine quotidienne :
 
 ```text
 /mnt/c/...
 /mnt/d/...
 ```
 
-Microsoft recommande de stocker les projets sur le même système de fichiers que les outils qui les utilisent afin d'éviter les pertes de performances dues aux accès croisés Windows/Linux.
+Les montages `/mnt/c` et `/mnt/d` sont utiles pour **échanger** des fichiers avec Windows, mais les workloads Linux intensifs se comportent mieux sur ext4.
 
-## 4. Installation WSL2 dans ce dépôt
+Pourquoi :
 
-Depuis PowerShell administrateur, le projet prépare WSL avec :
+- permissions POSIX ;
+- liens symboliques ;
+- nombreux petits fichiers ;
+- watchers ;
+- Git ;
+- dépendances Node ;
+- Docker ;
+- outils de build.
+
+---
+
+# 5. Installer WSL2 avec le dépôt
+
+La voie recommandée est l'orchestrateur :
 
 ```powershell
-.\install.ps1 -Mode Apply
+.\install.ps1 -Mode Apply -FullInstall
 ```
 
-Le bootstrap utilise une installation du type :
+ou le centre de contrôle :
 
-```powershell
-wsl --install --distribution Ubuntu --location D:\WSL\Ubuntu-DevOps --no-launch
+```text
+START_MENU.cmd
 ```
 
-Puis :
+Le dépôt prépare WSL selon le contrat actuel et place Ubuntu sous :
 
-```powershell
-wsl --set-default-version 2
-wsl --update
+```text
+D:\WSL\Ubuntu-DevOps
 ```
 
-### Vérifier l'installation
-
-Dans PowerShell :
+Après installation, vérifie depuis PowerShell :
 
 ```powershell
 wsl --version
-```
-
-Affiche la version de WSL, du noyau Linux et des composants associés.
-
-```powershell
 wsl --status
-```
-
-Affiche l'état général de WSL.
-
-```powershell
-wsl --list --verbose
-```
-
-Version courte :
-
-```powershell
 wsl -l -v
 ```
 
-Exemple attendu :
+La distribution `Ubuntu` doit fonctionner en **WSL 2**.
 
-```text
-NAME      STATE      VERSION
-Ubuntu    Stopped    2
-```
+---
 
-Le chiffre important est :
+# 6. Premier lancement Ubuntu
 
-```text
-VERSION = 2
-```
-
-## 5. Premier lancement Ubuntu
-
-Après l'installation :
+Lancer :
 
 ```powershell
 wsl -d Ubuntu
 ```
 
-ou lancer Ubuntu depuis WezTerm.
-
-Au premier démarrage, Ubuntu demande généralement :
+Au premier démarrage, Ubuntu peut demander :
 
 1. un nom d'utilisateur Linux ;
 2. un mot de passe Linux.
 
-Ce compte est **différent du compte Windows**.
+Ce compte est distinct du compte Windows.
 
-Exemple :
+Le mot de passe Linux n'affiche aucun caractère pendant la saisie : c'est normal.
 
-```text
-Windows user : Mathias
-Linux user   : mathias
+## Vérifier ton utilisateur
+
+```bash
+whoami
+id
+echo "$HOME"
 ```
 
-Le mot de passe Linux n'affiche aucun caractère lorsque tu le tapes dans le terminal.
-
-C'est normal.
-
-## 6. Comprendre `root`, ton utilisateur et `sudo`
-
-Linux possède un super-utilisateur :
+Le HOME doit ressembler à :
 
 ```text
-root
+/home/<user>
 ```
 
-Il peut tout modifier.
+---
 
-Pour le travail quotidien, **ne travaille pas en root**.
+# 7. Root et sudo
 
-Ton compte normal ressemble à :
+`root` est le super-utilisateur Linux.
 
-```text
-mathias
-```
+Ne travaille pas quotidiennement en root.
 
-Quand une opération exige les droits administrateur Linux :
+Pour une action administrative :
 
 ```bash
 sudo commande
@@ -291,281 +268,158 @@ Exemple :
 sudo apt update
 ```
 
-Linux demande alors ton mot de passe Linux.
+Le mot de passe demandé est celui de ton utilisateur Linux.
 
-### Vérifier qui tu es
+---
 
-```bash
-whoami
-```
+# 8. Mettre Ubuntu à jour
 
-### Afficher ton UID et tes groupes
-
-```bash
-id
-```
-
-### Voir ton dossier personnel
-
-```bash
-echo "$HOME"
-```
-
-Attendu :
-
-```text
-/home/<user>
-```
-
-## 7. Première mise à jour Ubuntu
-
-Après le premier lancement :
+Actualiser le catalogue :
 
 ```bash
 sudo apt update
 ```
 
-Cette commande actualise la liste des paquets disponibles.
-
-Puis :
+Mettre à jour les paquets :
 
 ```bash
 sudo apt upgrade
 ```
 
-Cette commande installe les mises à jour disponibles.
-
-Version non interactive :
-
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-### À retenir
+À retenir :
 
 ```text
-apt update  = actualise le catalogue
-apt upgrade = met les logiciels à jour
-apt install = installe un paquet
-apt remove  = désinstalle un paquet
+apt update   -> actualise le catalogue
+apt upgrade  -> met à jour les paquets
+apt install  -> installe
+apt remove   -> désinstalle
 ```
 
-## 8. Ton espace de travail Linux
+Le dépôt ne fait pas de changement majeur de distribution Ubuntu pendant une maintenance normale.
 
-Le bootstrap DevOps crée notamment :
+---
+
+# 9. Répertoires de travail
+
+Le bootstrap prépare notamment :
 
 ```text
-/home/<user>/
-├── projects/
-├── labs/
-├── repositories/
-├── workspace/
-└── backups/
+~/projects
+~/labs
+~/repositories
+~/workspace
+~/scripts
+~/backups
 ```
 
-Usage recommandé :
+Usage conseillé :
 
-```text
-projects/      projets actifs
-labs/          tests temporaires / Kubernetes / formations
-repositories/  dépôts de référence
-workspace/     travaux transitoires
-backups/       exports Linux locaux ciblés
-```
+| Répertoire | Usage |
+| --- | --- |
+| `projects` | projets actifs |
+| `labs` | formations, tests, Kubernetes |
+| `repositories` | dépôts de référence |
+| `workspace` | travaux temporaires |
+| `scripts` | scripts personnels Linux |
+| `backups` | exports Linux ciblés, pas backup machine complet |
 
-Pour aller dans tes projets :
+---
 
-```bash
-cd ~/projects
-```
+# 10. Navigation Linux essentielle
 
-`~` signifie :
-
-```text
-mon HOME
-```
-
-Donc :
-
-```bash
-cd ~
-```
-
-équivaut à :
-
-```bash
-cd /home/<user>
-```
-
-## 9. Commandes Linux essentielles — navigation
-
-### `pwd`
+Afficher le dossier courant :
 
 ```bash
 pwd
 ```
 
-Affiche le dossier courant.
-
-Exemple :
-
-```text
-/home/mathias/projects
-```
-
-### `ls`
+Lister :
 
 ```bash
 ls
-```
-
-Liste les fichiers.
-
-Plus détaillé :
-
-```bash
-ls -l
-```
-
-Inclure les fichiers cachés :
-
-```bash
 ls -la
 ```
 
-Dans le profil fourni par le dépôt :
+Changer de dossier :
 
 ```bash
-ll
+cd ~/projects
 ```
 
-est un alias pratique pour une liste détaillée.
-
-### `cd`
-
-Entrer dans un dossier :
-
-```bash
-cd projects
-```
-
-Remonter d'un niveau :
+Remonter :
 
 ```bash
 cd ..
 ```
 
-Retour au HOME :
+Retour HOME :
 
 ```bash
 cd ~
 ```
 
-Retour au dossier précédent :
+Retour dossier précédent :
 
 ```bash
 cd -
 ```
 
-## 10. Fichiers et dossiers
+---
 
-### Créer un dossier
+# 11. Fichiers et dossiers
+
+Créer un dossier :
 
 ```bash
 mkdir demo
-```
-
-Créer plusieurs niveaux :
-
-```bash
 mkdir -p ~/projects/demo/config
 ```
 
-### Créer un fichier vide
+Créer un fichier :
 
 ```bash
 touch test.txt
 ```
 
-### Copier
+Copier :
 
 ```bash
 cp source.txt destination.txt
+cp -r dossier dossier-copie
 ```
 
-Copier un dossier :
-
-```bash
-cp -r dossier-source dossier-copie
-```
-
-### Déplacer ou renommer
+Déplacer / renommer :
 
 ```bash
 mv ancien.txt nouveau.txt
 ```
 
-Déplacer :
-
-```bash
-mv fichier.txt ~/projects/demo/
-```
-
-### Supprimer un fichier
+Supprimer :
 
 ```bash
 rm fichier.txt
-```
-
-### Supprimer un dossier vide
-
-```bash
-rmdir dossier
-```
-
-### Supprimer récursivement
-
-```bash
 rm -r dossier
 ```
 
-**Attention** : Linux ne possède pas de corbeille automatique pour `rm`.
+> `rm` n'utilise pas une corbeille Windows. Une commande `rm -rf` mal ciblée peut détruire beaucoup de données très vite.
 
-Une commande du type :
+---
 
-```bash
-rm -rf ...
-```
+# 12. Lire et éditer du texte
 
-peut détruire très rapidement beaucoup de données. Ne l'utilise jamais en recopiant une commande sans comprendre le chemin ciblé.
-
-## 11. Lire et éditer du texte
-
-Afficher un petit fichier :
+Afficher :
 
 ```bash
 cat fichier.txt
 ```
 
-Lire confortablement un gros fichier :
+Lire un gros fichier :
 
 ```bash
 less fichier.log
 ```
 
-Quitter `less` :
-
-```text
-q
-```
-
 Premières lignes :
-
-```bash
-head fichier.log
-```
-
-20 premières lignes :
 
 ```bash
 head -n 20 fichier.log
@@ -574,10 +428,10 @@ head -n 20 fichier.log
 Dernières lignes :
 
 ```bash
-tail fichier.log
+tail -n 50 fichier.log
 ```
 
-Suivre un log en direct :
+Suivre un log :
 
 ```bash
 tail -f application.log
@@ -589,59 +443,38 @@ tail -f application.log
 nano fichier.txt
 ```
 
-Dans Nano :
-
-```text
-Ctrl+O  enregistrer
-Entrée   confirmer
-Ctrl+X  quitter
-```
-
-Pour les projets, VS Code reste préférable :
+Pour un projet :
 
 ```bash
 code .
 ```
 
-## 12. Rechercher
+---
 
-### `grep`
+# 13. Recherche
 
-Chercher du texte :
+Texte :
 
 ```bash
 grep "error" application.log
-```
-
-Sans respecter majuscules/minuscules :
-
-```bash
 grep -i "error" application.log
-```
-
-Récursivement dans un dossier :
-
-```bash
 grep -R "TODO" .
 ```
 
-### `find`
-
-Trouver des fichiers :
+Fichiers :
 
 ```bash
 find . -name "*.tf"
-```
-
-Trouver des scripts shell :
-
-```bash
 find ~/projects -type f -name "*.sh"
 ```
 
-## 13. Permissions Linux
+Le profil DevOps fournit aussi des outils modernes comme `ripgrep` (`rg`) et `fd` lorsqu'ils sont installés.
 
-Afficher les permissions :
+---
+
+# 14. Permissions
+
+Afficher :
 
 ```bash
 ls -l
@@ -653,13 +486,7 @@ Exemple :
 -rwxr-xr-x
 ```
 
-Les trois groupes représentent :
-
-```text
-user | group | others
-```
-
-et les lettres :
+Signification :
 
 ```text
 r = read
@@ -673,27 +500,17 @@ Rendre un script exécutable :
 chmod +x script.sh
 ```
 
-Puis :
-
-```bash
-./script.sh
-```
-
-Changer le propriétaire :
-
-```bash
-sudo chown utilisateur:utilisateur fichier
-```
-
-Ne fais pas de :
+Ne résous pas un problème de permissions avec :
 
 ```bash
 chmod -R 777 ...
 ```
 
-pour résoudre un problème de permissions sans comprendre la cause.
+sans comprendre la cause.
 
-## 14. Informations système Linux
+---
+
+# 15. Informations système
 
 Distribution :
 
@@ -711,6 +528,7 @@ CPU :
 
 ```bash
 lscpu
+nproc
 ```
 
 Mémoire :
@@ -719,10 +537,17 @@ Mémoire :
 free -h
 ```
 
-Disques / systèmes de fichiers :
+Swap :
+
+```bash
+swapon --show
+```
+
+Filesystems :
 
 ```bash
 df -h
+findmnt -T "$HOME"
 ```
 
 Taille d'un dossier :
@@ -731,15 +556,11 @@ Taille d'un dossier :
 du -sh ~/projects
 ```
 
-Dossiers les plus lourds :
+---
 
-```bash
-du -h --max-depth=1 ~ | sort -h
-```
+# 16. Processus et services
 
-## 15. Processus
-
-Lister les processus :
+Processus :
 
 ```bash
 ps aux
@@ -757,585 +578,39 @@ Vue interactive :
 top
 ```
 
-Trouver un processus par nom :
+Trouver un PID :
 
 ```bash
 pgrep -a dockerd
 ```
 
-Arrêter proprement un processus :
+Arrêter proprement :
 
 ```bash
 kill PID
 ```
 
-Forcer en dernier recours :
+`kill -9` doit rester un dernier recours.
+
+---
+
+# 17. systemd
+
+La distribution utilise systemd.
+
+Vérifier PID 1 :
 
 ```bash
-kill -9 PID
+ps -p 1 -o comm=
 ```
 
-`kill -9` ne doit pas être ton premier réflexe : il empêche le processus de se fermer proprement.
-
-## 16. Réseau Linux
-
-Interfaces et IP :
-
-```bash
-ip addr
-```
-
-Routes :
-
-```bash
-ip route
-```
-
-Tester une résolution DNS :
-
-```bash
-getent hosts github.com
-```
-
-Tester la connectivité :
-
-```bash
-ping -c 4 github.com
-```
-
-Tester HTTP :
-
-```bash
-curl -I https://github.com
-```
-
-Ports en écoute :
-
-```bash
-ss -lntup
-```
-
-## 17. Comprendre les pipes `|`
-
-Le pipe envoie la sortie d'une commande vers une autre.
-
-Exemple :
-
-```bash
-ps aux | grep terraform
-```
-
-Étape 1 :
-
-```bash
-ps aux
-```
-
-produit la liste des processus.
-
-Étape 2 :
-
-```bash
-grep terraform
-```
-
-filtre les lignes contenant `terraform`.
-
-Autre exemple :
-
-```bash
-systemctl list-units --type=service | grep docker
-```
-
-## 18. Redirections `>` et `>>`
-
-Écraser/créer un fichier :
-
-```bash
-echo "bonjour" > test.txt
-```
-
-Ajouter à la fin :
-
-```bash
-echo "deuxieme ligne" >> test.txt
-```
-
-Attention :
+Attendu :
 
 ```text
->  écrase
->> ajoute
+systemd
 ```
 
-## 19. Variables d'environnement
-
-Afficher :
-
-```bash
-echo "$HOME"
-```
-
-Créer temporairement :
-
-```bash
-export DEMO=value
-```
-
-Lire :
-
-```bash
-echo "$DEMO"
-```
-
-Lister l'environnement :
-
-```bash
-env
-```
-
-Ne stocke jamais des secrets AWS, tokens GitHub ou mots de passe directement dans un dépôt Git.
-
-## 20. `PATH`
-
-`PATH` contient les dossiers dans lesquels Linux cherche les commandes.
-
-Afficher :
-
-```bash
-echo "$PATH"
-```
-
-Trouver une commande :
-
-```bash
-command -v terraform
-```
-
-ou :
-
-```bash
-which terraform
-```
-
-Voir le type d'une commande :
-
-```bash
-type kubectl
-```
-
-## 21. Git — débuter dans WSL
-
-Vérifier :
-
-```bash
-git --version
-```
-
-Configurer ton nom :
-
-```bash
-git config --global user.name "Ton Nom"
-```
-
-Configurer ton adresse Git :
-
-```bash
-git config --global user.email "ton-adresse@example.com"
-```
-
-Voir la configuration :
-
-```bash
-git config --global --list
-```
-
-Cloner dans le système Linux :
-
-```bash
-cd ~/projects
-git clone <URL_DU_DEPOT>
-```
-
-Statut :
-
-```bash
-git status
-```
-
-Le profil ajoute :
-
-```bash
-gst
-```
-
-comme alias de statut court.
-
-## 22. Ouvrir un projet avec VS Code
-
-Depuis WSL :
-
-```bash
-cd ~/projects/mon-projet
-code .
-```
-
-VS Code Windows ouvre alors le dossier **dans le contexte WSL**.
-
-C'est le comportement recherché.
-
-Dans VS Code, vérifie en bas à gauche que la fenêtre indique un contexte WSL/Ubuntu.
-
-Les extensions DevOps importantes sont installées dans l'hôte WSL afin qu'elles voient les binaires Linux :
-
-```text
-terraform
-kubectl
-docker
-shellcheck
-```
-
-## 23. Accéder à Linux depuis l'Explorateur Windows
-
-Depuis WSL :
-
-```bash
-explorer.exe .
-```
-
-Cela ouvre le dossier Linux courant dans l'Explorateur.
-
-Tu peux aussi saisir :
-
-```text
-\\wsl$\Ubuntu\home\<user>
-```
-
-ou selon les versions :
-
-```text
-\\wsl.localhost\Ubuntu\home\<user>
-```
-
-Évite de modifier le fichier `ext4.vhdx` directement.
-
-## 24. Accéder aux disques Windows depuis Linux
-
-Windows `C:` apparaît dans :
-
-```text
-/mnt/c
-```
-
-Windows `D:` apparaît dans :
-
-```text
-/mnt/d
-```
-
-Exemple :
-
-```bash
-ls /mnt/d
-```
-
-C'est utile pour échanger des fichiers.
-
-Ce n'est **pas** l'emplacement conseillé pour les dépôts Docker/Terraform utilisés intensivement depuis Linux.
-
-## 25. Exécuter une commande Windows depuis WSL
-
-Windows et Linux sont interopérables.
-
-Depuis Ubuntu :
-
-```bash
-notepad.exe fichier.txt
-```
-
-```bash
-explorer.exe .
-```
-
-```bash
-powershell.exe -Command "Get-Date"
-```
-
-Tu peux aussi appeler :
-
-```bash
-ipconfig.exe
-```
-
-## 26. Exécuter Linux depuis PowerShell
-
-Depuis PowerShell :
-
-```powershell
-wsl ls -la
-```
-
-Commande dans Ubuntu :
-
-```powershell
-wsl -d Ubuntu -- uname -a
-```
-
-Exécuter via Bash :
-
-```powershell
-wsl -d Ubuntu -- bash -lc "cd ~/projects && pwd && ls -la"
-```
-
-Cette technique est très utile pour l'automatisation Windows → Linux.
-
-## 27. Commandes WSL de base — côté PowerShell
-
-### Aide
-
-```powershell
-wsl --help
-```
-
-### Version
-
-```powershell
-wsl --version
-```
-
-### État
-
-```powershell
-wsl --status
-```
-
-### Distributions installées
-
-```powershell
-wsl -l -v
-```
-
-### Distributions disponibles en ligne
-
-```powershell
-wsl --list --online
-```
-
-### Lancer Ubuntu
-
-```powershell
-wsl -d Ubuntu
-```
-
-### Lancer directement dans le HOME
-
-```powershell
-wsl ~
-```
-
-### Définir Ubuntu par défaut
-
-```powershell
-wsl --set-default Ubuntu
-```
-
-### Mettre WSL à jour
-
-```powershell
-wsl --update
-```
-
-## 28. Arrêter WSL correctement
-
-Arrêter **toutes** les distributions et la VM WSL2 :
-
-```powershell
-wsl --shutdown
-```
-
-C'est nécessaire après certaines modifications de `.wslconfig`.
-
-Arrêter uniquement Ubuntu :
-
-```powershell
-wsl --terminate Ubuntu
-```
-
-ou :
-
-```powershell
-wsl -t Ubuntu
-```
-
-Voir ensuite :
-
-```powershell
-wsl -l -v
-```
-
-## 29. `.wslconfig` — configuration globale WSL2
-
-Le fichier Windows :
-
-```text
-%USERPROFILE%\.wslconfig
-```
-
-configure globalement la VM WSL2.
-
-Profil quotidien du dépôt :
-
-```ini
-[wsl2]
-memory=16GB
-processors=6
-swap=8GB
-networkingMode=mirrored
-dnsTunneling=true
-firewall=true
-autoProxy=true
-
-[experimental]
-autoMemoryReclaim=gradual
-sparseVhd=true
-```
-
-### `memory=16GB`
-
-WSL peut utiliser jusqu'à 16 Go de RAM pour le profil quotidien.
-
-Ce n'est pas 16 Go réservés en permanence.
-
-### `processors=6`
-
-WSL voit jusqu'à 6 processeurs logiques pour le profil quotidien.
-
-### `swap=8GB`
-
-Un espace de swap Linux de 8 Go est disponible si la mémoire devient insuffisante.
-
-### `networkingMode=mirrored`
-
-WSL utilise le mode réseau miroir de Windows 11.
-
-Il simplifie notamment `localhost`, IPv6 et certains scénarios VPN.
-
-### `dnsTunneling=true`
-
-Les requêtes DNS WSL passent par le mécanisme de tunneling WSL/Windows.
-
-### `autoMemoryReclaim=gradual`
-
-WSL restitue progressivement à Windows de la mémoire utilisée comme cache Linux.
-
-### `sparseVhd=true`
-
-Les nouveaux VHD WSL sont configurés pour une gestion dynamique/sparse de l'espace.
-
-Après modification :
-
-```powershell
-wsl --shutdown
-```
-
-puis relancer Ubuntu.
-
-## 30. Profils WSL du dépôt
-
-### Standard
-
-```text
-6 CPU
-16 Go RAM
-8 Go swap
-mirrored networking
-```
-
-Usage :
-
-```text
-travail quotidien
-Terraform
-Docker
-petits clusters
-Ansible
-Git
-```
-
-### Lab-heavy
-
-```text
-10 CPU
-24 Go RAM
-12 Go swap
-```
-
-Usage :
-
-```text
-Minikube lourd
-kind multi-node
-plusieurs conteneurs
-labs Kubernetes
-```
-
-### NAT fallback
-
-Ressources proches du profil standard, mais :
-
-```text
-networkingMode=nat
-```
-
-À utiliser uniquement si un VPN ou une contrainte réseau particulière pose problème avec `mirrored`.
-
-Changer de profil :
-
-```powershell
-.\scripts\wsl\switch-profile.ps1 -Profile lab-heavy
-```
-
-Puis :
-
-```powershell
-wsl --shutdown
-```
-
-## 31. `/etc/wsl.conf` — configuration de la distribution
-
-Contrairement à `.wslconfig`, ce fichier se trouve **dans Linux** :
-
-```text
-/etc/wsl.conf
-```
-
-Le dépôt l'utilise notamment pour systemd et l'interop.
-
-Différence :
-
-```text
-.wslconfig
-└── Windows
-    └── réglages globaux de la VM WSL2
-
-/etc/wsl.conf
-└── Ubuntu
-    └── réglages propres à cette distribution
-```
-
-## 32. systemd
-
-`systemd` est le gestionnaire de services Linux moderne.
-
-Avec systemd, tu peux gérer Docker comme sur un serveur Linux classique.
-
-État global :
-
-```bash
-systemctl status
-```
-
-État Docker :
+État d'un service :
 
 ```bash
 systemctl status docker
@@ -1347,1025 +622,828 @@ Démarrer :
 sudo systemctl start docker
 ```
 
-Arrêter :
-
-```bash
-sudo systemctl stop docker
-```
-
 Redémarrer :
 
 ```bash
 sudo systemctl restart docker
 ```
 
-Activer au démarrage :
-
-```bash
-sudo systemctl enable docker
-```
-
-Voir les services :
-
-```bash
-systemctl list-units --type=service
-```
-
-Voir les services installés :
-
-```bash
-systemctl list-unit-files --type=service
-```
-
-## 33. Logs systemd avec `journalctl`
-
-Logs Docker :
-
-```bash
-journalctl -u docker
-```
-
-Dernières lignes :
-
-```bash
-journalctl -u docker -n 100
-```
-
-Suivre en direct :
-
-```bash
-journalctl -u docker -f
-```
-
-Depuis le dernier boot :
-
-```bash
-journalctl -b
-```
-
-Erreurs importantes du boot :
-
-```bash
-journalctl -b -p err
-```
-
-## 34. Docker dans WSL2
-
-Dans cette architecture :
-
-```text
-Docker Desktop = non requis
-Docker Engine  = installé directement dans Ubuntu
-```
-
-Vérifier :
-
-```bash
-docker --version
-```
-
-```bash
-docker compose version
-```
-
-```bash
-systemctl is-active docker
-```
-
-Tester :
-
-```bash
-docker run --rm hello-world
-```
-
-Lister les conteneurs :
-
-```bash
-docker ps
-```
-
-Tous les conteneurs :
-
-```bash
-docker ps -a
-```
-
-Images :
-
-```bash
-docker images
-```
-
-Espace Docker :
-
-```bash
-docker system df
-```
-
-### Nettoyage
-
-Voir d'abord :
-
-```bash
-docker system df
-```
-
-Puis seulement si tu sais ce qui est inutile :
-
-```bash
-docker image prune
-```
-
-Évite de lancer :
-
-```bash
-docker system prune -a
-```
-
-sans avoir vérifié ce qui va être supprimé.
-
-## 35. Kubernetes — premières commandes
-
-Client :
-
-```bash
-kubectl version --client
-```
-
-Contexte courant :
-
-```bash
-kubectl config current-context
-```
-
-Contextes :
-
-```bash
-kubectl config get-contexts
-```
-
-Pods :
-
-```bash
-kubectl get pods -A
-```
-
-Services :
-
-```bash
-kubectl get svc -A
-```
-
-Nœuds :
-
-```bash
-kubectl get nodes
-```
-
-Détails d'une ressource :
-
-```bash
-kubectl describe pod <nom> -n <namespace>
-```
-
 Logs :
 
 ```bash
-kubectl logs <pod> -n <namespace>
+journalctl -u docker -n 100
+journalctl -u docker -f
 ```
 
-## 36. Minikube / kind
+---
 
-Minikube :
+# 18. Réseau Linux
 
-```bash
-minikube status
-```
-
-Démarrer :
-
-```bash
-minikube start
-```
-
-Arrêter :
-
-```bash
-minikube stop
-```
-
-Supprimer un cluster Minikube :
-
-```bash
-minikube delete
-```
-
-`delete` détruit le cluster local : vérifier avant exécution.
-
-kind :
-
-```bash
-kind get clusters
-```
-
-## 37. Terraform — commandes de base
-
-Version :
-
-```bash
-terraform version
-```
-
-Initialiser un projet :
-
-```bash
-terraform init
-```
-
-Formater :
-
-```bash
-terraform fmt -recursive
-```
-
-Valider :
-
-```bash
-terraform validate
-```
-
-Prévisualiser :
-
-```bash
-terraform plan
-```
-
-Appliquer :
-
-```bash
-terraform apply
-```
-
-`terraform apply` peut créer/modifier des ressources cloud payantes. Toujours lire le plan.
-
-Détruire :
-
-```bash
-terraform destroy
-```
-
-`destroy` est destructif : ne jamais le lancer par automatisme.
-
-## 38. Ansible
-
-Version :
-
-```bash
-ansible --version
-```
-
-Tester localhost :
-
-```bash
-ansible localhost -m ping
-```
-
-Lister un inventaire :
-
-```bash
-ansible-inventory -i inventory.ini --list
-```
-
-Vérifier la syntaxe d'un playbook :
-
-```bash
-ansible-playbook playbook.yml --syntax-check
-```
-
-## 39. Outils qualité présents
-
-Vérifier :
-
-```bash
-shellcheck --version
-shfmt --version
-terraform-docs --version
-actionlint --version
-yq --version
-tflint --version
-trivy --version
-```
-
-Utilité :
-
-```text
-ShellCheck       qualité Bash
-shfmt            formatage shell
-terraform-docs   documentation Terraform
-actionlint       validation GitHub Actions
-yq               manipulation YAML
-tflint            lint Terraform
-Trivy            analyse sécurité
-```
-
-## 40. Réseau WSL2 mirrored
-
-La configuration cible utilise :
-
-```ini
-networkingMode=mirrored
-```
-
-Dans ce mode, Windows 11 et WSL coopèrent plus directement sur le réseau.
-
-Cas courant : une application écoute dans WSL sur le port 8080.
-
-Exemple :
-
-```bash
-python3 -m http.server 8080
-```
-
-Depuis Windows, tester :
-
-```text
-http://localhost:8080
-```
-
-### Vérifier les ports Linux
-
-```bash
-ss -lntp
-```
-
-### IP WSL
-
-Depuis PowerShell :
-
-```powershell
-wsl -d Ubuntu hostname -I
-```
-
-### IP / routes depuis Linux
+Interfaces :
 
 ```bash
 ip addr
+```
+
+Routes :
+
+```bash
 ip route
 ```
 
-## 41. DNS
-
-Tester :
+DNS :
 
 ```bash
 getent hosts github.com
 ```
 
-Puis :
+Connectivité :
 
 ```bash
+ping -c 4 github.com
 curl -I https://github.com
 ```
 
-Si DNS échoue :
+Ports :
 
-1. vérifier Internet côté Windows ;
-2. vérifier le VPN ;
-3. `wsl --shutdown` ;
-4. relancer ;
-5. comparer `mirrored` avec le profil `nat-fallback` si nécessaire.
+```bash
+ss -lntup
+```
 
-Ne commence pas par modifier `/etc/resolv.conf` au hasard.
+---
 
-## 42. Sauvegarder WSL — règle essentielle
+# 19. Pipes et redirections
 
-Le fichier VHDX sur D: n'est pas une vraie sauvegarde s'il reste sur le même SSD.
+Pipe :
 
-Deux niveaux :
+```bash
+ps aux | grep terraform
+```
+
+Écraser/créer un fichier :
+
+```bash
+echo "bonjour" > test.txt
+```
+
+Ajouter :
+
+```bash
+echo "ligne" >> test.txt
+```
+
+À retenir :
 
 ```text
-VHDX de travail  -> D:\WSL\...
-backup/export    -> autre disque / stockage externe / autre machine
+>  écrase
+>> ajoute
 ```
 
-### Export TAR
+---
 
-Dans PowerShell :
+# 20. Variables d'environnement
 
-```powershell
-wsl --shutdown
-wsl --export Ubuntu D:\Backups\Ubuntu-DevOps.tar
-```
-
-### Export VHD
-
-WSL2 permet aussi un export VHD/VHDX selon la version :
-
-```powershell
-wsl --export Ubuntu D:\Backups\Ubuntu-DevOps.vhdx --vhd
-```
-
-Sur les versions récentes, la syntaxe de format peut également être exposée par `wsl --help`. Toujours vérifier l'aide locale avant un workflow de restauration critique.
-
-### Vérifier le fichier
-
-```powershell
-Get-Item D:\Backups\Ubuntu-DevOps.tar
-```
-
-Ne supprime jamais une distribution tant que l'export n'est pas présent et vérifié.
-
-## 43. Restaurer / importer
-
-Importer un TAR :
-
-```powershell
-wsl --import Ubuntu-Restore D:\WSL\Ubuntu-Restore D:\Backups\Ubuntu-DevOps.tar --version 2
-```
-
-Lister :
-
-```powershell
-wsl -l -v
-```
-
-Tester la nouvelle distribution **avant** de supprimer l'ancienne.
-
-## 44. `wsl --unregister` — commande dangereuse
-
-```powershell
-wsl --unregister Ubuntu
-```
-
-Cette commande supprime l'enregistrement de la distribution et ses données associées.
-
-Considère-la comme destructive.
-
-Avant toute utilisation :
-
-```text
-1. wsl --shutdown
-2. export vérifié
-3. copie de sauvegarde hors du SSD de travail
-4. seulement ensuite unregister si réellement nécessaire
-```
-
-## 45. Espace disque WSL2
-
-Dans Ubuntu :
+Afficher :
 
 ```bash
-df -h /
+echo "$HOME"
 ```
 
-Taille des dossiers :
+Variable temporaire :
 
 ```bash
-sudo du -xhd1 / | sort -h
+export DEMO=value
 ```
 
-HOME :
+Afficher l'environnement :
 
 ```bash
-du -h --max-depth=1 ~ | sort -h
+env
 ```
 
-Docker :
+Ne mets jamais de secret AWS, token GitHub ou clé API dans un dépôt Git.
+
+---
+
+# 21. PATH
+
+Afficher :
 
 ```bash
-docker system df
+echo "$PATH"
 ```
 
-APT cache :
+Trouver une commande :
 
 ```bash
-du -sh /var/cache/apt
+command -v terraform
+command -v kubectl
 ```
 
-Nettoyage APT raisonnable :
+Voir son type :
 
 ```bash
-sudo apt clean
+type terraform
 ```
 
-Ne supprime jamais manuellement des fichiers dans `/var/lib/docker`.
+---
 
-## 46. Comprendre la croissance du VHDX
+# 22. Git dans WSL
 
-Quand Linux écrit des données :
-
-```text
-ext4.vhdx grossit
-```
-
-Supprimer des fichiers dans Linux libère de l'espace **dans ext4**, mais le fichier VHDX Windows ne rétrécit pas forcément immédiatement de la même quantité.
-
-Le profil utilise :
-
-```ini
-sparseVhd=true
-```
-
-pour améliorer la gestion dynamique sur les VHD compatibles.
-
-Avant toute opération avancée de compaction/réparation, faire un export de sauvegarde.
-
-## 47. Vérifier WSL après un problème
-
-PowerShell :
-
-```powershell
-wsl --status
-wsl --version
-wsl -l -v
-```
-
-Puis :
-
-```powershell
-wsl --shutdown
-```
-
-Relancer Ubuntu.
-
-Dans Linux :
+Configurer :
 
 ```bash
-uname -a
-free -h
-df -h
-systemctl --failed
-journalctl -b -p err
+git config --global user.name "Ton Nom"
+git config --global user.email "ton-adresse@example.com"
 ```
 
-## 48. Docker ne démarre pas
-
-```bash
-systemctl status docker
-```
-
-Puis :
-
-```bash
-journalctl -u docker -n 100 --no-pager
-```
-
-Essayer :
-
-```bash
-sudo systemctl restart docker
-```
-
-Vérifier :
-
-```bash
-docker info
-```
-
-Si `docker` fonctionne seulement avec `sudo`, vérifier les groupes :
-
-```bash
-groups
-```
-
-Après ajout au groupe docker, il peut être nécessaire de fermer WSL :
-
-```powershell
-wsl --shutdown
-```
-
-## 49. `code` n'est pas trouvé dans WSL
-
-Vérifier :
-
-```bash
-command -v code
-```
-
-Puis :
-
-1. vérifier VS Code côté Windows ;
-2. vérifier l'extension WSL ;
-3. fermer/réouvrir WezTerm ;
-4. au besoin `wsl --shutdown`.
-
-Le script de qualification DevOps vérifie aussi les extensions côté hôte WSL.
-
-## 50. Problèmes de droits dans un projet
-
-Voir :
-
-```bash
-ls -la
-```
-
-Voir le propriétaire :
-
-```bash
-stat fichier
-```
-
-Évite de faire :
-
-```bash
-sudo git ...
-sudo code ...
-sudo docker ...
-```
-
-pour contourner les permissions.
-
-Les fichiers de `~/projects` doivent normalement appartenir à ton utilisateur Linux.
-
-## 51. Différence entre `sudo` et PowerShell administrateur
-
-Ce sont **deux niveaux différents**.
-
-```text
-PowerShell Administrateur
-└── privilèges Windows
-
-sudo
-└── privilèges Linux dans Ubuntu
-```
-
-Être administrateur Windows ne signifie pas être root Linux.
-
-Être root Linux ne signifie pas être administrateur Windows.
-
-## 52. Commandes WSL avancées utiles
-
-### Lancer avec un utilisateur précis
-
-```powershell
-wsl -d Ubuntu --user root
-```
-
-À utiliser uniquement pour maintenance ciblée.
-
-### Exécuter une commande root sans session interactive
-
-```powershell
-wsl -d Ubuntu --user root -- cat /etc/wsl.conf
-```
-
-### Exécuter plusieurs commandes
-
-```powershell
-wsl -d Ubuntu -- bash -lc "cd ~/projects && git status"
-```
-
-### Arrêter une seule distribution
-
-```powershell
-wsl -t Ubuntu
-```
-
-### Définir la version par défaut pour les nouvelles distributions
-
-```powershell
-wsl --set-default-version 2
-```
-
-### Convertir une distribution existante
-
-```powershell
-wsl --set-version Ubuntu 2
-```
-
-Dans ce projet Ubuntu doit déjà être en WSL2 ; cette commande sert surtout au diagnostic/migration.
-
-## 53. Interop et chemins avec `wslpath`
-
-Convertir un chemin Windows vers Linux :
-
-```bash
-wslpath 'D:\DATA\demo.txt'
-```
-
-Résultat typique :
-
-```text
-/mnt/d/DATA/demo.txt
-```
-
-Convertir un chemin Linux vers Windows :
-
-```bash
-wslpath -w ~/projects
-```
-
-Très utile dans les scripts hybrides.
-
-## 54. Routine quotidienne recommandée
-
-Démarrage :
+Cloner **dans Linux** :
 
 ```bash
 cd ~/projects
+git clone <URL_DU_DEPOT>
 ```
 
-Vérifications rapides :
+Puis :
 
 ```bash
-git --version
-docker info >/dev/null && echo "Docker OK"
-kubectl version --client
-terraform version
+cd mon-projet
+git status
 ```
 
-Entrer dans un projet :
+Le dépôt Windows lui-même reste naturellement côté Windows ; les projets Linux opérationnels vont sous `/home`.
+
+---
+
+# 23. VS Code + WSL
+
+Depuis un projet Linux :
 
 ```bash
 cd ~/projects/mon-projet
-```
-
-Ouvrir VS Code :
-
-```bash
 code .
 ```
 
-En fin de journée, inutile de faire `wsl --shutdown` systématiquement. WSL gère son cycle de vie. Utilise `--shutdown` après une modification de configuration, pour libérer immédiatement la VM, ou pour un diagnostic.
+VS Code Windows ouvre alors une fenêtre connectée à Ubuntu.
 
-## 55. Routine de maintenance
-
-Périodiquement :
-
-Windows :
-
-```powershell
-wsl --update
-```
-
-Ubuntu :
-
-```bash
-sudo apt update
-sudo apt upgrade
-```
-
-Docker :
-
-```bash
-docker system df
-```
-
-Disque Linux :
-
-```bash
-df -h /
-```
-
-Logs système en erreur :
-
-```bash
-systemctl --failed
-```
-
-## 56. Ce qu'il ne faut pas faire
-
-Évite :
+Le résultat recherché :
 
 ```text
-- travailler quotidiennement en root ;
-- placer les projets Docker lourds sous /mnt/c ou /mnt/d ;
-- modifier ext4.vhdx à la main ;
-- lancer wsl --unregister sans export ;
-- exécuter rm -rf sans vérifier le chemin ;
-- faire chmod -R 777 pour "réparer" des permissions ;
-- stocker des tokens dans Git ;
-- nettoyer /var/lib/docker manuellement ;
-- modifier DNS, kernel ou réseau avant d'avoir diagnostiqué le problème ;
-- copier des commandes sudo inconnues depuis Internet ;
-- installer Docker Desktop en plus du Docker Engine WSL sans raison précise.
+VS Code UI        Windows
+projet            Linux ext4
+terminal intégré  Bash WSL
+Terraform         Linux
+Docker            Linux
+Git               Linux
 ```
 
-## 57. Exercices pour prendre en main WSL2
+Cela évite les incohérences d'environnement.
 
-### Exercice 1 — navigation
+---
 
-```bash
-cd ~
-mkdir -p labs/wsl-debutant
-cd labs/wsl-debutant
-pwd
-ls -la
-```
+# 24. Explorer les fichiers Linux depuis Windows
 
-### Exercice 2 — fichier
-
-```bash
-echo "Bonjour WSL2" > hello.txt
-cat hello.txt
-```
-
-### Exercice 3 — recherche
-
-```bash
-echo "Terraform" >> hello.txt
-grep -i terraform hello.txt
-```
-
-### Exercice 4 — script Bash
-
-```bash
-cat > hello.sh <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "Utilisateur: $(whoami)"
-echo "Dossier: $(pwd)"
-echo "Kernel: $(uname -r)"
-EOF
-
-chmod +x hello.sh
-./hello.sh
-```
-
-### Exercice 5 — interop Windows
+Depuis WSL :
 
 ```bash
 explorer.exe .
 ```
 
-Puis :
+Ou via :
 
-```bash
-notepad.exe hello.txt
+```text
+\\wsl$\Ubuntu\home\<user>
 ```
 
-### Exercice 6 — VS Code
+selon le contexte Windows.
 
-```bash
-code .
+Ne manipule jamais directement le fichier VHDX comme un fichier ordinaire pendant que WSL l'utilise.
+
+---
+
+# 25. Accéder aux disques Windows depuis Ubuntu
+
+```text
+C: -> /mnt/c
+D: -> /mnt/d
 ```
 
-### Exercice 7 — systemd
+Exemple :
 
 ```bash
-systemctl status docker --no-pager
+ls /mnt/d
 ```
 
-### Exercice 8 — Docker
+Utilise ces chemins pour des échanges ponctuels, pas comme racine de projet Linux intensif.
+
+---
+
+# 26. Interop Windows / Linux
+
+Depuis Ubuntu :
 
 ```bash
+explorer.exe .
+powershell.exe -Command "Get-Date"
+ipconfig.exe
+```
+
+Depuis PowerShell :
+
+```powershell
+wsl -d Ubuntu -- uname -a
+wsl -d Ubuntu -- bash -lc "cd ~/projects && pwd && ls -la"
+```
+
+Cette interop est utile pour l'orchestration Windows → Linux.
+
+---
+
+# 27. Commandes WSL côté PowerShell
+
+Aide :
+
+```powershell
+wsl --help
+```
+
+Version :
+
+```powershell
+wsl --version
+```
+
+État :
+
+```powershell
+wsl --status
+```
+
+Distributions :
+
+```powershell
+wsl -l -v
+```
+
+Lancer Ubuntu :
+
+```powershell
+wsl -d Ubuntu
+```
+
+Arrêter toutes les distributions :
+
+```powershell
+wsl --shutdown
+```
+
+Arrêter Ubuntu uniquement :
+
+```powershell
+wsl --terminate Ubuntu
+```
+
+Mettre le runtime WSL à jour :
+
+```powershell
+wsl --update
+```
+
+---
+
+# 28. `.wslconfig` — configuration globale
+
+Le fichier :
+
+```text
+%USERPROFILE%\.wslconfig
+```
+
+définit les ressources globales de la VM WSL2.
+
+## Profil quotidien actuel
+
+```ini
+[wsl2]
+memory=20GB
+processors=8
+swap=8GB
+swapFile=D:\\WSL\\swap\\wsl-swap.vhdx
+networkingMode=mirrored
+dnsTunneling=true
+firewall=true
+autoProxy=true
+nestedVirtualization=false
+maxCrashDumpCount=3
+
+[experimental]
+autoMemoryReclaim=gradual
+sparseVhd=true
+bestEffortDnsParsing=true
+hostAddressLoopback=true
+```
+
+### `memory=20GB`
+
+WSL peut utiliser jusqu'à environ 20 Go pour le profil quotidien.
+
+Ce n'est pas 20 Go réservés en permanence.
+
+### `processors=8`
+
+Ubuntu voit 8 threads sur les 16 threads logiques du Ryzen 7 7700.
+
+### `swap=8GB`
+
+Le swap absorbe les pics mémoire au lieu de provoquer immédiatement un OOM.
+
+### `networkingMode=mirrored`
+
+Le mode mirrored facilite l'intégration réseau avec Windows moderne.
+
+### `dnsTunneling=true`
+
+Le DNS passe par le mécanisme WSL/Windows prévu.
+
+### `firewall=true`
+
+La sécurité réseau WSL/Hyper-V reste active.
+
+### `autoMemoryReclaim=gradual`
+
+WSL restitue progressivement de la mémoire de cache à Windows.
+
+### `sparseVhd=true`
+
+Le VHDX peut gérer plus efficacement l'allocation physique de l'espace.
+
+Après modification :
+
+```powershell
+wsl --shutdown
+```
+
+---
+
+# 29. Profils de ressources
+
+## Standard
+
+```text
+8 threads
+20 Go RAM
+8 Go swap
+mirrored networking
+```
+
+Usage : quotidien DevOps.
+
+## Lab-heavy
+
+```text
+12 threads
+28 Go RAM
+12 Go swap
+mirrored networking
+```
+
+Usage : clusters locaux, builds lourds, labs Kubernetes.
+
+## NAT fallback
+
+Même philosophie de ressources que le profil standard, avec réseau NAT pour les cas de compatibilité VPN/réseau.
+
+Changer de profil avec le mécanisme du dépôt puis exécuter :
+
+```powershell
+wsl --shutdown
+```
+
+Le profil lourd doit rester **temporaire**.
+
+---
+
+# 30. Pourquoi ne pas donner 48 Go et 16 threads à WSL ?
+
+Parce que la workstation doit rester équilibrée.
+
+Windows utilise aussi :
+
+- VS Code ;
+- navigateurs ;
+- applications desktop ;
+- Defender ;
+- gaming ;
+- cache système ;
+- pilotes GPU ;
+- outils d'administration.
+
+Le bon objectif n'est pas :
+
+```text
+WSL le plus gros possible
+```
+
+mais :
+
+```text
+WSL assez puissant
++
+Windows toujours réactif
+```
+
+---
+
+# 31. `/etc/wsl.conf`
+
+Ce fichier vit **dans Ubuntu** :
+
+```text
+/etc/wsl.conf
+```
+
+Contrat courant :
+
+```ini
+[boot]
+systemd=true
+
+[automount]
+enabled=true
+mountFsTab=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
+
+[network]
+generateHosts=true
+generateResolvConf=true
+```
+
+Différence :
+
+```text
+.wslconfig     -> Windows -> VM WSL2 globale
+/etc/wsl.conf  -> Ubuntu  -> distribution Linux
+```
+
+---
+
+# 32. Docker Engine sans Docker Desktop
+
+Docker fonctionne directement dans Ubuntu.
+
+Vérifier :
+
+```bash
+systemctl status docker
+docker info
 docker run --rm hello-world
 ```
 
-Après ces exercices, supprimer uniquement le lab :
-
-```bash
-cd ~
-rm -r ~/labs/wsl-debutant
-```
-
-Vérifie le chemin avant `rm`.
-
-## 58. Mini antisèche Linux
-
-| Besoin | Commande |
-|---|---|
-| Où suis-je ? | `pwd` |
-| Lister | `ls -la` |
-| Changer de dossier | `cd dossier` |
-| HOME | `cd ~` |
-| Créer dossier | `mkdir -p dossier` |
-| Copier | `cp` |
-| Déplacer/renommer | `mv` |
-| Supprimer fichier | `rm fichier` |
-| Lire | `cat`, `less` |
-| Chercher texte | `grep` |
-| Chercher fichier | `find` |
-| Espace disque | `df -h` |
-| Taille dossier | `du -sh dossier` |
-| RAM | `free -h` |
-| Processus | `ps aux`, `top` |
-| Réseau | `ip addr`, `ip route` |
-| Ports | `ss -lntup` |
-| Paquets | `apt` |
-| Service | `systemctl` |
-| Logs service | `journalctl` |
-| Utilisateur | `whoami`, `id` |
-| Rendre exécutable | `chmod +x` |
-
-## 59. Mini antisèche WSL — PowerShell
-
-| Besoin | Commande |
-|---|---|
-| Version WSL | `wsl --version` |
-| État | `wsl --status` |
-| Distros | `wsl -l -v` |
-| Lancer Ubuntu | `wsl -d Ubuntu` |
-| HOME Linux | `wsl ~` |
-| Mise à jour WSL | `wsl --update` |
-| Arrêter Ubuntu | `wsl -t Ubuntu` |
-| Arrêter tout WSL | `wsl --shutdown` |
-| Distro par défaut | `wsl --set-default Ubuntu` |
-| Commande Linux | `wsl -d Ubuntu -- <commande>` |
-| Export | `wsl --export Ubuntu <fichier>` |
-| Import | `wsl --import ...` |
-| Aide | `wsl --help` |
-
-## 60. Ordre d'apprentissage conseillé
-
-Ne cherche pas à tout retenir immédiatement.
-
-### Niveau 1
-
-Maîtriser :
-
-```text
-pwd
-ls
-cd
-mkdir
-cp
-mv
-rm
-cat
-nano
-sudo
-apt
-```
-
-### Niveau 2
-
-Ajouter :
-
-```text
-grep
-find
-chmod
-ps
-kill
-free
-df
-du
-ip
-ss
-curl
-```
-
-### Niveau 3
-
-Ajouter :
-
-```text
-systemctl
-journalctl
-pipes
-redirections
-variables PATH
-Git
-Docker
-```
-
-### Niveau 4 DevOps
-
-Puis :
-
-```text
-Terraform
-Ansible
-kubectl
-Helm
-Minikube/kind
-CI/CD
-observabilité
-sécurité
-```
-
-Le but n'est pas de mémoriser chaque option. Le but est de comprendre **où tu te trouves, quel système exécute la commande, quels fichiers elle touche et si elle est destructive**.
-
-## 61. Qualification du dépôt
-
-Après installation complète :
+Après ajout de l'utilisateur au groupe `docker`, exécute :
 
 ```powershell
-.\install.ps1 -Mode Verify -ValidateDevOps
+wsl --shutdown
 ```
 
-Verdicts attendus :
+puis relance Ubuntu.
+
+L'accès Docker sans sudo est pratique mais donne un niveau de privilège important dans la distribution : il faut le considérer comme tel.
+
+---
+
+# 33. Docker et stockage WSL
+
+Les images, layers et volumes Docker sont stockés dans le filesystem Linux du VHDX.
+
+Surveiller :
+
+```bash
+docker system df
+```
+
+Ne lance pas automatiquement :
+
+```bash
+docker system prune -a
+```
+
+sur une machine de travail sans vérifier ce qui serait supprimé.
+
+Le daemon utilise une politique de logs bornée pour limiter la croissance silencieuse du VHDX.
+
+---
+
+# 34. Kubernetes local
+
+Deux usages principaux :
 
 ```text
-VERDICT: V3 WINDOWS READY
-VERDICT: V3 DEVOPS READY
-VERDICT: V4 WINDOWS OPTIMIZATION READY
+Minikube -> cluster local simple
+kind     -> clusters Kubernetes dans Docker
 ```
 
-La V5 matériel ajoute sa propre qualification séparée.
+Exemple :
 
-## 62. Références officielles utilisées
+```bash
+minikube start --driver=docker
+```
 
-Ce guide est aligné sur la documentation Microsoft WSL actuelle, notamment :
+Avant un lab lourd, le profil `lab-heavy` peut être utile.
 
-- installation de WSL ;
-- commandes WSL de base ;
-- bonnes pratiques d'environnement de développement ;
-- travail entre systèmes de fichiers Windows/Linux ;
-- configuration `.wslconfig` / `wsl.conf` ;
-- systemd sous WSL ;
-- réseau WSL et mode mirrored ;
-- gestion de l'espace disque WSL ;
-- import/export et sauvegarde des distributions.
+Après le lab, reviens au profil quotidien.
+
+---
+
+# 35. Terraform
+
+Vérifier :
+
+```bash
+terraform version
+```
+
+Workflow classique :
+
+```bash
+terraform fmt
+terraform init
+terraform validate
+terraform plan
+```
+
+N'applique jamais un plan Terraform sur un compte Cloud sans avoir vérifié le contexte, les credentials et les ressources qui seront créées.
+
+---
+
+# 36. Ansible
+
+Vérifier :
+
+```bash
+ansible-playbook --version
+```
+
+Ansible s'exécute côté Linux, ce qui évite de transformer Windows en environnement Ansible natif non standard.
+
+---
+
+# 37. AWS CLI et secrets
+
+Vérifier :
+
+```bash
+aws --version
+```
+
+Ne commit jamais :
+
+- Access Key ;
+- Secret Key ;
+- session token ;
+- fichiers `.env` contenant des secrets ;
+- credentials OpenRouter ;
+- tokens GitHub.
+
+Le fait qu'un projet vive dans WSL ne change pas les règles de sécurité Git.
+
+---
+
+# 38. SSH
+
+Générer une clé si nécessaire :
+
+```bash
+ssh-keygen -t ed25519
+```
+
+Les clés privées restent locales et protégées.
+
+Le poste dispose également du client OpenSSH côté Windows pour VS Code Remote - SSH et l'administration Windows.
+
+---
+
+# 39. Sauvegarder WSL2
+
+La stratégie de la workstation inclut un export de la distribution avec vérification d'intégrité.
+
+Utilise les mécanismes documentés dans :
+
+[`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
+
+Ne considère pas `~/backups` comme la sauvegarde complète de la distribution : une panne du SSD interne détruirait aussi ce dossier.
+
+---
+
+# 40. Restaurer WSL sans détruire l'actuel
+
+Une restauration doit d'abord être importée sous un nom distinct, par exemple :
+
+```text
+Ubuntu-Restore
+```
+
+Puis valider :
+
+```text
+boot
+utilisateur
+projets
+Docker
+DevOps
+permissions
+```
+
+Avant toute décision de remplacement.
+
+Évite :
+
+```powershell
+wsl --unregister Ubuntu
+```
+
+sans sauvegarde et sans validation de la copie de restauration.
+
+---
+
+# 41. Dépannage : WSL ne démarre pas
+
+Depuis PowerShell :
+
+```powershell
+wsl --status
+wsl -l -v
+wsl --shutdown
+wsl --update
+```
+
+Puis relance :
+
+```powershell
+wsl -d Ubuntu
+```
+
+Si le problème suit une modification de profil, reviens à la configuration standard avant d'envisager une réinstallation.
+
+---
+
+# 42. Dépannage : Docker ne fonctionne pas
+
+Dans Ubuntu :
+
+```bash
+systemctl status docker
+journalctl -u docker -n 100
+id
+```
+
+Vérifie :
+
+- service actif ;
+- utilisateur membre du groupe attendu ;
+- disque non plein ;
+- filesystem HOME correct.
+
+Ne réinstalle pas Docker avant d'avoir compris le symptôme.
+
+---
+
+# 43. Dépannage : réseau / DNS
+
+Contrôles :
+
+```bash
+ip addr
+ip route
+getent hosts github.com
+curl -I https://github.com
+```
+
+Si le réseau mirrored pose un problème avec un VPN ou un réseau particulier, le profil NAT fallback existe pour ce cas.
+
+Ne désactive pas le firewall globalement pour contourner un problème de DNS.
+
+---
+
+# 44. Dépannage : WSL consomme trop de RAM
+
+Vérifie d'abord :
+
+```bash
+free -h
+ps aux --sort=-%mem | head
+```
+
+Côté Windows, si la session Linux n'est plus nécessaire :
+
+```powershell
+wsl --shutdown
+```
+
+Le profil standard et `autoMemoryReclaim=gradual` sont justement conçus pour éviter une consommation incontrôlée en usage quotidien.
+
+---
+
+# 45. Dépannage : disque WSL grossit
+
+Chercher les gros consommateurs :
+
+```bash
+du -h --max-depth=1 ~ | sort -h
+docker system df
+```
+
+Contrôle aussi :
+
+- images Docker obsolètes ;
+- caches de builds ;
+- dépendances locales ;
+- logs applicatifs ;
+- gros artefacts de labs.
+
+Ne supprime pas aveuglément les données Docker ou les projets.
+
+---
+
+# 46. Validation complète WSL2
+
+Depuis PowerShell :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateWsl
+```
+
+Pour inclure l'environnement DevOps :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
+```
+
+La validation doit contrôler l'état réel :
+
+```text
+Ubuntu 26.04
+WSL 2
+D:\WSL\Ubuntu-DevOps
+HOME ext4
+systemd
+ressources du profil
+Docker
+outils DevOps
+racines de travail
+```
+
+Guide de validation : [`11_VALIDATION.md`](11_VALIDATION.md).
+
+---
+
+# 47. Routine quotidienne recommandée
+
+Ouvrir WezTerm ou VS Code WSL.
+
+Dans Ubuntu :
+
+```bash
+cd ~/projects
+```
+
+Avant un lab :
+
+```bash
+docker info
+```
+
+Pour un lab lourd, passer temporairement au profil adapté.
+
+Après la session :
+
+- arrêter les clusters locaux inutiles ;
+- ne pas laisser des conteneurs consommer des ressources sans raison ;
+- revenir au profil standard si tu avais utilisé un profil lourd.
+
+Avant une session gaming sans besoin Linux :
+
+```powershell
+wsl --shutdown
+```
+
+---
+
+# 48. Ce qu'il faut retenir
+
+Si tu ne retiens que dix règles :
+
+1. Windows reste l'hôte ; Ubuntu est le backend DevOps.
+2. Le second SSD reste NTFS.
+3. Le filesystem Linux est dans un VHDX ext4.
+4. Les projets Linux actifs vivent dans `/home/<user>/...`.
+5. `/mnt/c` et `/mnt/d` servent surtout aux échanges.
+6. Le profil quotidien est 20 Go RAM / 8 threads / 8 Go swap.
+7. `wsl --shutdown` recharge complètement la configuration.
+8. Docker tourne directement dans Ubuntu avec systemd.
+9. Les secrets ne vont jamais dans Git.
+10. Une restauration WSL se valide d'abord en parallèle avant toute suppression.
+
+WSL2 est alors moins une « couche magique » qu'un **serveur Linux personnel intégré à la workstation Windows**, avec des frontières claires et des ressources maîtrisées.
