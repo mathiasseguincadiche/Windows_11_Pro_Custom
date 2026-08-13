@@ -145,8 +145,8 @@ jobs:
           grep -Fq 'FullInstall' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'InstallOpenClawAI' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fqi 'idempotence' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq '$InstallOpenClawAI = $true' install.ps1
-          grep -Fq '$ValidateOpenClawAI = $true' install.ps1
+          grep -Fq "\$InstallOpenClawAI = \$true" install.ps1
+          grep -Fq "\$ValidateOpenClawAI = \$true" install.ps1
           grep -Fq 'OpenClaw inclus' docs/20_RUNBOOK_OPERATIONNEL.md
 
       - name: Vérifier la référence des paramètres publics
