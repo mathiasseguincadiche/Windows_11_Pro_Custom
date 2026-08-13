@@ -120,7 +120,7 @@ if [[ "$mode" == apply ]]; then
     echo '[DÉJÀ OK] Hook .bashrc déjà conforme.'
   fi
 
-  "$0" verify
+  bash "$0" verify
   printf '[FAIT] Profil terminal V10 convergé (%d changement(s)).\n' "$changes"
   exit 0
 fi
