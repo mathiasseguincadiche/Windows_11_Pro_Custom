@@ -88,7 +88,7 @@ $components = @(
 
 Write-WpcBanner -Context $context -Title 'WINDOWS 11 CUSTOM - SYSTEM UPDATE MANAGER V11'
 Write-WpcStatus -Status 'INFO' -Message "Mode: $Mode" -Detail "Drivers=$([bool]$IncludeDrivers) Optional=$([bool]$IncludeOptionalUpdates) WinGetUnknown=$([bool]$IncludeUnknownPackages)" -Context $context
-Write-WpcStatus -Status 'INFO' -Message 'Politique de sécurité' -Detail 'Pas de BIOS/firmware, pas de dist-upgrade Ubuntu, pas d’autoremove, pins WinGet respectés, versions DevOps pilotées par le dépôt.' -Context $context
+Write-WpcStatus -Status 'INFO' -Message 'Politique de sécurité' -Detail 'Pas de BIOS/firmware, pas de dist-upgrade Ubuntu, pas dʼautoremove, pins WinGet respectés, versions DevOps pilotées par le dépôt.' -Context $context
 
 $failures = New-Object System.Collections.Generic.List[string]
 $results = New-Object System.Collections.Generic.List[object]
@@ -117,7 +117,7 @@ if ($Mode -eq 'Audit') {
     foreach ($component in $components) {
         if ($component.AlwaysConverge) {
             [void](Invoke-WpcManagedScript -Context $context -Path $component.Path -Arguments (New-Args -ComponentMode 'Audit' -Kind $component.Kind) -DisplayName $component.Name -Phase 'Update-Plan' -Purpose 'Probe' -AllowFailure -Quiet)
-            Write-WpcStatus -Status 'A_FAIRE' -Message $component.Name -Detail 'Convergence sûre exécutée à chaque Apply; la commande sous-jacente est no-op si rien n’est obsolète.' -Context $context
+            Write-WpcStatus -Status 'A_FAIRE' -Message $component.Name -Detail 'Convergence sûre exécutée à chaque Apply; la commande sous-jacente est no-op si rien nʼest obsolète.' -Context $context
             $plan.Add([pscustomobject]@{ Component=$component; NeedsApply=$true; Reason='Convergence' })
             continue
         }
@@ -217,11 +217,11 @@ Write-Host ('=' * 78) -ForegroundColor DarkCyan
 if ($Mode -eq 'Apply' -and $success -and $rebootRequired -and -not $NonInteractive -and -not $NoRestartPrompt) {
     $answer = (Read-Host 'Redémarrer Windows maintenant ? [O/N]').Trim().ToLowerInvariant()
     if ($answer -in @('o','oui','y','yes')) {
-        Write-Host '[ACTION REQUISE] Redémarrage demandé par l’utilisateur.' -ForegroundColor Magenta
+        Write-Host '[ACTION REQUISE] Redémarrage demandé par lʼutilisateur.' -ForegroundColor Magenta
         Restart-Computer
         return
     }
-    Write-Host '[INFO] Redémarrage différé par l’utilisateur.' -ForegroundColor Cyan
+    Write-Host '[INFO] Redémarrage différé par lʼutilisateur.' -ForegroundColor Cyan
 }
 
 if (-not $success) { throw ($failures -join '; ') }
