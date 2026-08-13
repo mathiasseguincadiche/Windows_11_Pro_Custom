@@ -1,26 +1,65 @@
 # Validation — prouver que la workstation est réellement prête
 
-La validation du projet ne se résume pas à « le script n'a pas affiché d'erreur ».
+La validation est l'étape qui transforme une installation en **résultat démontré**.
 
-Le principe est :
+Le projet ne considère jamais qu'une machine est conforme uniquement parce qu'une commande s'est terminée sans erreur visible. La conformité doit être prouvée par l'état réel observé, les contrats versionnés, les validateurs et les preuves générées.
+
+Le modèle est :
 
 ```text
-état désiré
-+
-état réel
-↓
-contrôles explicites
-↓
-preuve exploitable
-↓
-verdict
+contrat attendu
+      +
+état réel observé
+      +
+preuve disponible
+      ↓
+Verify réussi
+      ↓
+critère d'acceptation rempli
 ```
 
-Ce document décrit **les validations du `main` actuel**, sans demander au lecteur de connaître l'ordre historique dans lequel elles ont été ajoutées.
+Le Runbook de réalisation est [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md). La checklist de sortie est [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
 
 ---
 
-## Validation de base Windows / workstation
+## 1. Audit, Apply et Verify ne veulent pas dire la même chose
+
+### Audit
+
+```powershell
+.\install.ps1 -Mode Audit
+```
+
+L'audit observe et décrit. Il peut révéler un écart sans interrompre toute l'exécution.
+
+### Apply
+
+```powershell
+.\install.ps1 -Mode Apply
+```
+
+`Apply` cherche à faire converger les composants demandés vers leur état attendu. Il s'appuie sur un `Verify` préalable pour ne modifier que les écarts.
+
+### Verify
+
+```powershell
+.\install.ps1 -Mode Verify
+```
+
+`Verify` exige la conformité des composants qu'il contrôle. C'est le mode qui sert à décider si un état peut être considéré prêt.
+
+La séquence correcte est donc :
+
+```text
+Audit -> comprendre
+Plan  -> prévoir
+Apply -> corriger
+Verify -> prouver
+```
+
+---
+
+## 2. Validation de base
 
 Commande :
 
@@ -28,310 +67,119 @@ Commande :
 .\install.ps1 -Mode Verify
 ```
 
-Elle vérifie notamment les composants inclus dans la portée normale de l'orchestrateur :
+Elle vérifie les composants de base prévus par l'orchestrateur : applications, réglages Windows, WSL2 selon le périmètre courant, workstation et contrats Windows associés.
 
-- applications gérées ;
-- réglages Windows ;
-- réactivité ;
-- WSL2 ;
-- utilisateur WSL ;
-- VS Code / WezTerm / OpenSSH ;
-- exclusions Defender approuvées ;
-- Defender actif ;
-- cohérence générale de la workstation.
-
-La base Windows doit notamment confirmer :
-
-- Windows 11 ;
-- `C:` en NTFS ;
-- `D:` en NTFS ;
-- Defender actif ;
-- protection temps réel active ;
-- absence d'exclusion racine dangereuse `C:\` / `D:\` ;
-- WSL disponible ;
-- distribution Ubuntu présente ;
-- stockage WSL attendu ;
-- workstation VS Code/WezTerm cohérente.
+Pour une qualification de projet complète, ajouter les validateurs spécialisés.
 
 ---
 
-## Validation matérielle
+## 3. Qualification matérielle
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateHardware
 ```
 
-Elle combine :
+La qualification matérielle combine deux types de preuve.
 
-### Faits automatiques
+### Preuves observables automatiquement
+
+Le projet peut vérifier notamment :
 
 - CPU ;
-- cœurs / threads ;
-- RAM visible ;
+- quantité de mémoire ;
 - carte mère ;
-- GPU / driver ;
-- SSD / filesystems ;
+- GPU ;
+- présence et état des SSD ;
 - GPT ;
 - Secure Boot ;
 - TPM ;
 - virtualisation firmware ;
-- affichage ;
-- plan d'alimentation ;
-- autres informations observables sans mutation dangereuse.
+- éléments réseau et stockage observables.
 
-### Faits manuels
+### Preuves manuelles
 
-- CSM ;
+Certaines informations ne peuvent pas être déduites honnêtement depuis Windows :
+
+- état UEFI/CSM ;
 - Above 4G ;
-- ReBAR ;
-- emplacement physique des SSD ;
-- refroidissement/airflow ;
+- Resizable BAR ;
+- placement physique des SSD ;
+- refroidissement ;
 - stabilité mémoire ;
-- revue BIOS ;
+- revue du BIOS ;
 - revue des pilotes constructeur.
 
-Saisie guidée :
-
-```powershell
-.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive
-```
-
-Le projet refuse de fabriquer ces preuves à partir d'une supposition.
+Le projet signale alors `ACTION REQUISE` au lieu d'inventer un succès.
 
 Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-## Validation WSL2
+## 4. Qualification WSL2
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateWsl
 ```
 
-Le contrat courant exige notamment :
+Le contrat WSL2 courant exige notamment :
 
 ```text
-Ubuntu 26.04
-D:\WSL\Ubuntu-DevOps
-HOME ext4
-ressources conformes au profil choisi
-systemd actif
-racines de travail Linux conformes
+Distribution : Ubuntu
+Release      : 26.04 / resolute
+Mode         : WSL2
+Emplacement  : D:\WSL\Ubuntu-DevOps
+HOME         : filesystem Linux ext4
 ```
 
-Le validateur compare l'état réel aux configurations courantes sous `config/wsl/`.
+Le validateur doit également confirmer les éléments runtime prévus par le projet : ressources du profil, systemd, stockage et workspaces Linux.
+
+Une distribution qui existe mais se trouve au mauvais emplacement n'est pas considérée conforme simplement parce qu'elle démarre.
 
 Guide : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-## Validation DevOps
+## 5. Qualification DevOps
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateDevOps
 ```
 
-Le validateur Linux contrôle notamment :
+Cette validation ne se limite pas à Docker.
 
-- Git ;
-- Docker Engine ;
-- Docker Compose ;
-- Buildx ;
-- kubectl ;
-- Helm ;
-- Minikube ;
-- kind ;
-- Terraform ;
-- AWS CLI v2 ;
-- Ansible Core ;
-- GitHub CLI ;
-- Trivy ;
-- ShellCheck ;
-- shfmt ;
-- terraform-docs ;
-- actionlint ;
-- yq ;
-- TFLint ;
-- service Docker ;
-- politique de logs Docker ;
-- HOME hors de `/mnt/c` et `/mnt/d` ;
-- racines Linux ;
-- profil shell ;
-- smoke tests IaC.
+Elle contrôle la stack prévue par le projet : Docker/Compose/Buildx, Kubernetes CLI, Helm, Minikube/kind, Terraform, Ansible, AWS CLI, GitHub CLI, outils qualité et versions explicitement épinglées.
 
-Les versions critiques doivent correspondre à `config/devops/tool-versions.env` plutôt qu'à une version `latest` arbitraire.
+Les cibles reproductibles sont définies dans :
+
+```text
+config/devops/tool-versions.env
+```
+
+Une commande individuelle réussie ne remplace pas la qualification globale du composant.
 
 Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-## Validation des optimisations Windows
+## 6. Qualification OpenClaw/OpenRouter
 
-Les réglages Windows gérés sont vérifiés après application.
-
-Les mesures avant/après permettent d'éviter une validation basée uniquement sur le ressenti.
-
-Les rapports vivent sous :
-
-```text
-reports/windows/
-```
-
-La validation doit également confirmer que les garde-fous restent intacts :
-
-- Defender actif ;
-- Windows Update disponible ;
-- firewall actif ;
-- WSL/Hyper-V fonctionnels ;
-- pagefile et compression mémoire conservés selon la politique ;
-- stockage et TRIM non cassés.
-
-Guide : [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md).
-
----
-
-## Validation de la sauvegarde
-
-Une sauvegarde ne peut pas être validée par la CI seule : il faut une vraie cible physique et de vrais artefacts.
-
-Créer :
-
-```powershell
-.\install.ps1 -BackupAction Create -BackupTargetDrive E:
-```
-
-Vérifier :
-
-```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
-```
-
-Le validateur contrôle notamment :
-
-- image Windows ;
-- version récupérable ;
-- WinRE ;
-- manifest ;
-- export VHDX Ubuntu ;
-- SHA-256 ;
-- absence de restauration destructive automatique.
-
-Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
-
----
-
-## Validation de l'orchestration
-
-L'orchestration doit prouver le **processus de convergence** :
-
-```text
-faits machine
-↓
-Verify
-↓
-plan
-↓
-Apply delta seulement
-↓
-re-Verify
-↓
-logs / summary
-```
-
-Une deuxième exécution conforme doit éviter les mutations inutiles.
-
-Journaux :
-
-```text
-logs/
-logs/runs/<RunId>/events.ndjson
-logs/runs/<RunId>/summary.json
-```
-
-Guide : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
-
----
-
-## Validation du terminal et de VS Code
-
-Le contrat terminal vérifie notamment :
-
-- WezTerm configuré ;
-- Ubuntu/Bash comme environnement Linux principal ;
-- PowerShell 7 disponible ;
-- VS Code WSL ;
-- profil Bash géré ;
-- outils CLI prévus ;
-- absence de duplication du bloc `.bashrc` ;
-- comportement idempotent ;
-- rollback du profil lorsque prévu.
-
-Le rendu physique d'une police ou d'un écran ne peut pas être prouvé par une CI headless.
-
----
-
-## Validation des mises à jour
-
-```powershell
-.\update.ps1 -Mode Verify
-```
-
-Le gestionnaire recontrôle les catégories qu'il gère :
-
-```text
-Windows Update
-WinGet
-WSL
-Ubuntu/APT
-DevOps épinglé
-VS Code extensions
-```
-
-Un reboot requis n'est pas masqué : il reste une action à effectuer.
-
-Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
-
----
-
-## Validation du centre de contrôle
-
-La CI teste le routage de `menu.ps1` en mode non destructif.
-
-Exemple :
-
-```powershell
-.\menu.ps1 -Choice 1 -DryRun -NoPause -NoClear
-```
-
-Sur la vraie machine, il faut également confirmer :
-
-- affichage correct ;
-- choix lisibles ;
-- élévation UAC uniquement lorsqu'elle est nécessaire ;
-- routage correct vers les orchestrateurs ;
-- accès aux logs/rapports.
-
-Guide : [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
-
----
-
-## OpenClaw / OpenRouter
-
-Si l'intégration est utilisée :
+Uniquement si l'intégration IA fait partie de la workstation :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateOpenClawAI
 ```
 
-Le contrôle doit notamment vérifier l'intégration attendue sans exposer de clé API dans Git ou dans les logs.
+Le validateur vérifie le control-plane approuvé, l'installation Windows et le backend WSL2 DevOps attendu par l'intégration.
+
+La qualification OpenClaw reste séparée de la qualification générale afin que la workstation Windows/DevOps ne dépende pas obligatoirement de cette extension.
 
 Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
-## Validation complète recommandée
+## 7. Commande de qualification principale
 
-Après une installation ou reconstruction :
+Pour la workstation DevOps/Ops complète :
 
 ```powershell
 .\install.ps1 `
@@ -341,78 +189,149 @@ Après une installation ou reconstruction :
   -ValidateDevOps
 ```
 
-Si OpenClaw est utilisé :
+Si OpenClaw est utilisé, exécuter également sa qualification dédiée.
 
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
+Le résultat attendu est l'absence d'écart critique non traité et la présence des preuves manuelles nécessaires.
+
+---
+
+## 8. Les statuts doivent être interprétés correctement
+
+| Statut | Interprétation |
+| --- | --- |
+| `DÉJÀ OK` | aucune modification nécessaire |
+| `FAIT` | une modification a été appliquée |
+| `OK` | vérification réussie |
+| `À FAIRE` | un écart existe |
+| `ACTION REQUISE` | une décision ou une preuve humaine manque |
+| `AVERTISSEMENT` | situation non bloquante à comprendre |
+| `IGNORE` | hors périmètre de l'opération |
+| `ERREUR` | la conformité ne peut pas être déclarée |
+
+Un `FAIT` n'est pas équivalent à `OK` : après une modification, la re-vérification doit confirmer que la cible est réellement conforme.
+
+---
+
+## 9. Logs et rapports de preuve
+
+Le moteur conserve des preuves persistantes :
+
+```text
+logs\install.log
+logs\<catégorie>\<script>.log
+logs\runs\<RunId>\events.ndjson
+logs\runs\<RunId>\summary.json
+reports\orchestration\latest-run.json
+reports\orchestration\machine-state.json
 ```
 
-Puis :
+D'autres composants génèrent leurs propres rapports sous `reports\`.
+
+Le `RunId` permet de relier les étapes d'une même exécution et d'éviter de mélanger des preuves produites à des moments différents.
+
+---
+
+## 10. Un ancien rapport n'est pas une preuve actuelle
+
+Exemple : un rapport indiquant hier que WSL2 était conforme ne prouve rien après une modification de `.wslconfig`, une mise à jour du runtime ou une migration de fichiers.
+
+La conformité est toujours recalculée à partir de l'état actuel.
+
+Cette règle est détaillée dans [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
+
+---
+
+## 11. Idempotence comme preuve supplémentaire
+
+Après une convergence réussie, recalculer le plan :
 
 ```powershell
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Le résultat doit tendre vers `DÉJÀ OK`.
+
+Si le même composant revient systématiquement en `À FAIRE`, il existe une incohérence entre détection, état attendu et Apply. Cette boucle doit être corrigée avant de considérer le composant stable.
+
+L'idempotence est donc un critère d'acceptation du projet, pas seulement une propriété théorique du code.
+
+---
+
+## 12. Validation après mise à jour
+
+Le gestionnaire de maintenance possède ses propres modes :
+
+```powershell
+.\update.ps1 -Mode Audit
+.\update.ps1 -Mode Apply
 .\update.ps1 -Mode Verify
 ```
 
-Et après création d'une vraie sauvegarde :
+Après une maintenance structurante, il est pertinent de requalifier les domaines concernés avec `install.ps1 -Mode Verify`.
 
-```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
-```
+Exemples :
 
----
+- changement du runtime WSL -> revalider WSL2 ;
+- modification d'un outil épinglé -> revalider DevOps ;
+- mise à jour importante de pilotes -> revalider le matériel et le système.
 
-## Ce que la CI vérifie
-
-Les workflows couvrent notamment :
-
-- parsing PowerShell ;
-- PSScriptAnalyzer ;
-- Bash / ShellCheck ;
-- actionlint ;
-- JSON / configurations structurées ;
-- WezTerm ;
-- garde-fous destructifs ;
-- contrats matériels ;
-- runtime WSL ;
-- sécurité backup ;
-- orchestration/idempotence ;
-- versions DevOps épinglées ;
-- terminal ;
-- mises à jour ;
-- centre de contrôle ;
-- cohérence documentaire.
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-## Ce que la CI ne peut pas prouver
+## 13. Validation et sauvegarde
 
-La CI ne peut pas affirmer qu'une vraie machine possède :
+La dernière étape du projet n'est pas uniquement la conformité runtime. La stratégie de reprise doit elle aussi être exploitable.
 
-- le BIOS voulu ;
-- ReBAR réellement actif ;
-- DDR5 réellement stable ;
-- les SSD physiquement aux bons slots ;
-- les températures correctes ;
-- un vrai backup USB ;
-- un rendu graphique parfait ;
-- un Windows Update réellement finalisé après reboot.
+Une fois la machine stabilisée :
 
-Ces points nécessitent une validation runtime réelle.
+1. créer ou actualiser la sauvegarde de référence selon la politique ;
+2. vérifier cette sauvegarde ;
+3. confirmer qu'un plan de reprise peut être préparé.
+
+Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-## Règle de sortie
+## 14. Ce que la validation ne doit jamais masquer
 
-Un composant est qualifié seulement si :
+Un verdict positif ne doit pas être obtenu en :
+
+- ignorant un composant demandé ;
+- remplaçant une preuve matérielle par une supposition ;
+- modifiant le contrat uniquement pour faire passer l'état actuel ;
+- considérant une CI verte comme preuve du matériel réel ;
+- utilisant un ancien fichier `state/` comme preuve de conformité ;
+- désactivant une protection système pour faire disparaître un échec.
+
+Le validateur doit représenter la vérité du projet, pas produire un résultat vert à tout prix.
+
+---
+
+# Critères d'acceptation finaux
+
+La validation technique est complète lorsque :
 
 ```text
-son contrat est clair
+Verify de base réussi
 +
-sa preuve est disponible
+qualification matérielle réussie
 +
-son Verify passe
+WSL2 conforme
 +
-les actions humaines pertinentes sont traitées
+stack DevOps conforme
++
+actions humaines closes
++
+idempotence cohérente
++
+preuves disponibles
++
+sauvegarde vérifiée
 ```
 
-Un `KO` ou une preuve manquante ne doit jamais être renommé en succès simplement pour terminer plus vite.
+OpenClaw s'ajoute uniquement lorsqu'il fait partie du périmètre réel de la workstation.
+
+La checklist détaillée et réutilisable est [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
+
+Le projet peut alors être considéré non seulement **installé**, mais **validé**.
