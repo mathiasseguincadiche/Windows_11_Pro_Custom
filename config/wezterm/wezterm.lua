@@ -3,16 +3,56 @@ local act = wezterm.action
 
 local config = wezterm.config_builder()
 
+local ubuntu_devops = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~', '--exec', 'bash', '-l' }
+local powershell7 = { 'pwsh.exe', '-NoLogo' }
+local openclaw_cli = {
+  'pwsh.exe',
+  '-NoLogo',
+  '-NoExit',
+  '-Command',
+  [[
+$root = 'D:\AI\OpenClaw'
+if (Test-Path -LiteralPath $root) {
+  Set-Location -LiteralPath $root
+}
+$openclaw = Get-Command openclaw -ErrorAction SilentlyContinue
+$clawops = Get-Command clawops -ErrorAction SilentlyContinue
+Write-Host ''
+Write-Host '=== OpenClaw / clawops ===' -ForegroundColor Cyan
+Write-Host "Racine : $root"
+if ($openclaw) {
+  Write-Host "[OK] openclaw : $($openclaw.Source)" -ForegroundColor Green
+} else {
+  Write-Host '[À FAIRE] openclaw introuvable. Installe/valide OpenClaw puis relance WezTerm.' -ForegroundColor Yellow
+}
+if ($clawops) {
+  Write-Host "[OK] clawops  : $($clawops.Source)" -ForegroundColor Green
+} else {
+  Write-Host '[À FAIRE] clawops introuvable. Installe/valide OpenClaw puis relance WezTerm.' -ForegroundColor Yellow
+}
+if ($openclaw -and $clawops) {
+  Write-Host '[PRÊT] Session CLI Windows-native prête.' -ForegroundColor Green
+  Write-Host 'Exemples : openclaw --version | clawops version | clawops platform check'
+}
+Write-Host ''
+  ]],
+}
+
 -- Windows 11 host -> Ubuntu WSL2 -> Bash DevOps.
-config.default_prog = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~', '--exec', 'bash', '-l' }
+-- Ubuntu reste le profil quotidien par défaut ; OpenClaw/clawops restent Windows-native.
+config.default_prog = ubuntu_devops
 config.launch_menu = {
   {
     label = 'Ubuntu DevOps (WSL2)',
-    args = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~', '--exec', 'bash', '-l' },
+    args = ubuntu_devops,
   },
   {
     label = 'PowerShell 7',
-    args = { 'pwsh.exe', '-NoLogo' },
+    args = powershell7,
+  },
+  {
+    label = 'OpenClaw / clawops (Windows)',
+    args = openclaw_cli,
   },
 }
 
