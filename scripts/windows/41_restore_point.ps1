@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Description = 'Windows_11_Pro_Custom V4 before optimization'
+    [string]$Description = 'Windows_11_Pro_Custom before optimization'
 )
 
 Set-StrictMode -Version Latest
@@ -23,8 +23,8 @@ try {
         Enable-ComputerRestore -Drive $systemDrive -ErrorAction SilentlyContinue
     }
     Checkpoint-Computer -Description $Description -RestorePointType MODIFY_SETTINGS
-    Write-Host '[OK] Windows restore point created before V4 optimization.' -ForegroundColor Green
+    Write-Host '[OK] Windows restore point created before optimization.' -ForegroundColor Green
 } catch {
     Write-Warning "Restore point creation failed: $($_.Exception.Message)"
-    Write-Warning 'V4 will still preserve per-profile Registry and service state for rollback.'
+    Write-Warning 'The optimization engine will still preserve per-profile Registry and service state for rollback.'
 }
