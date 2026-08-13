@@ -60,6 +60,7 @@ jobs:
 
   shell:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Parse Bash files
