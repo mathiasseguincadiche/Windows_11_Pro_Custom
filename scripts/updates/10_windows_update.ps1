@@ -149,7 +149,7 @@ for ($i = 0; $i -lt $collection.Count; $i++) {
 }
 
 if ($installResult.RebootRequired) {
-    Write-Host '[ACTION REQUISE] Windows signale qu’un redémarrage est requis. Aucun redémarrage automatique ne sera lancé.' -ForegroundColor Magenta
+    Write-Host '[ACTION REQUISE] Windows signale quʼun redémarrage est requis. Aucun redémarrage automatique ne sera lancé.' -ForegroundColor Magenta
 }
 
 if ($failed.Count -gt 0) {
