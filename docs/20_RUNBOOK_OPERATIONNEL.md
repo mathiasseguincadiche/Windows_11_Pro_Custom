@@ -19,6 +19,7 @@ Windows 11 Pro stable et qualifié
 + projets Linux sur ext4
 + stack DevOps qualifiée
 + terminal / VS Code cohérents
++ OpenClaw CLI via WezTerm si l'intégration est utilisée
 + logs et rapports exploitables
 + idempotence démontrée
 + sauvegarde de référence vérifiée
@@ -214,7 +215,7 @@ Voir [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-# Étape 8 — OpenClaw/OpenRouter
+# Étape 8 — OpenClaw/OpenRouter et accès CLI
 
 Si l'intégration n'a pas été demandée dans le parcours core, elle peut être ajoutée explicitement :
 
@@ -229,6 +230,22 @@ Puis validée :
 ```
 
 Si `-FullInstall` a été utilisé, ces deux intentions ont déjà été activées par le raccourci.
+
+Une fois l'installation validée :
+
+1. fermer une ancienne instance WezTerm si elle était ouverte avant l'installation ;
+2. relancer WezTerm ;
+3. choisir le profil `OpenClaw / clawops (Windows)` ;
+4. confirmer que le profil indique les deux CLI disponibles ;
+5. effectuer un smoke test non mutatif.
+
+```powershell
+openclaw --version
+clawops version
+clawops platform check
+```
+
+Ce smoke test ergonomique ne remplace pas `-ValidateOpenClawAI`. Il démontre que l'utilisateur peut réellement exploiter les CLI depuis le terminal prévu par le projet.
 
 Les secrets restent hors de Git.
 
@@ -327,6 +344,7 @@ Le projet peut être déclaré prêt lorsque :
 - WSL2 respecte son contrat ;
 - la stack DevOps est qualifiée ;
 - OpenClaw est qualifié si le périmètre l'inclut ;
+- le profil WezTerm OpenClaw est exploitable si OpenClaw est utilisé ;
 - les frontières Windows/Linux sont respectées ;
 - les logs et rapports expliquent le verdict ;
 - le second plan démontre l'idempotence ;
