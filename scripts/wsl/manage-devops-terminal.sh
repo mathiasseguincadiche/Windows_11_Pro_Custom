@@ -21,6 +21,8 @@ packages=(starship fzf zoxide eza ripgrep fd-find bat tree)
 [[ -x "$profile_script" || -r "$profile_script" ]] || { echo "[ERREUR] Gestionnaire de profil absent: $profile_script" >&2; exit 1; }
 
 package_installed() {
+  # ${Status} doit rester littéral: c'est le format demandé à dpkg-query.
+  # shellcheck disable=SC2016
   dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -Fq 'install ok installed'
 }
 
@@ -123,7 +125,7 @@ if [[ ! -e "$state_file" ]]; then
 fi
 
 bash "$profile_script" rollback
-mapfile -t installed_by_v10 < <(grep -Ev '^\s*$' "$state_file" || true)
+mapfile -t installed_by_v10 < <(grep -Ev '^[[:space:]]*$' "$state_file" || true)
 if ((${#installed_by_v10[@]} > 0)); then
   printf '[EN COURS] Retrait des paquets ajoutés par V10: %s\n' "${installed_by_v10[*]}"
   sudo apt-get remove -y "${installed_by_v10[@]}"
