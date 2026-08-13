@@ -1,14 +1,14 @@
-# BIOS et pilotes
+# BIOS, UEFI et pilotes
 
-## Politique V5
+## Politique
 
-La configuration stable vise les performances attendues du matériel **sans appliquer d'overclocking automatique**.
+La workstation vise les performances attendues du matériel **sans appliquer d'overclocking ou de modification firmware automatique**.
 
-Guide détaillé :
+Le dépôt peut observer et qualifier une partie de l'état matériel, mais les réglages UEFI restent des décisions humaines.
 
-```text
-docs/15_HARDWARE_QUALIFICATION_V5.md
-```
+Guide matériel : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
+
+---
 
 ## Réglages UEFI à contrôler
 
@@ -23,83 +23,141 @@ Resizable BAR             Enabled
 Mémoire                    6000 MT/s uniquement si stable
 ```
 
-Intel demande Resizable BAR actif pour les performances optimales des GPU Arc B-Series. La V5 exige donc une confirmation manuelle ReBAR après installation du pilote Intel, car un script PowerShell générique ne constitue pas une preuve fiable du réglage UEFI.
+Resizable BAR et Above 4G doivent être vérifiés manuellement : un script PowerShell générique ne constitue pas une preuve fiable de tous les réglages UEFI.
 
-## CPU
+---
 
-Ryzen 7 7700 :
+## CPU — Ryzen 7 7700
 
-- configuration stock ;
+Politique actuelle :
+
+- fonctionnement stock ;
 - Precision Boost 2 conservé ;
 - pas de PBO Advanced automatique ;
 - pas de Curve Optimizer automatique ;
-- pas de tension CPU manuelle.
+- pas de tension CPU manuelle appliquée par le dépôt.
+
+L'objectif est une workstation fiable, pas un profil d'overclocking.
+
+---
 
 ## Mémoire
 
-La cible quotidienne est 6000 MT/s si le kit est réellement stable.
+La cible quotidienne peut être 6000 MT/s si le kit est réellement stable.
 
-Vérifier sous Windows :
+Vérification Windows :
 
 ```powershell
 Get-CimInstance Win32_PhysicalMemory |
     Select-Object Manufacturer,PartNumber,Capacity,Speed,ConfiguredClockSpeed
 ```
 
-La V5 ne considère pas 6000 comme valide tant qu'un test de stabilité mémoire n'a pas été réalisé et enregistré dans la checklist manuelle.
+Une fréquence affichée ne prouve pas la stabilité. Le résultat complet doit être associé à un test mémoire et à la checklist manuelle lorsque nécessaire.
+
+En cas de crashs inexpliqués ou après un changement BIOS important, revenir temporairement à des paramètres mémoire plus conservateurs est préférable à masquer une instabilité.
+
+---
 
 ## SSD
 
-Avec Ryzen 7000 sur la MAG B850M Mortar WiFi :
+Pour les deux Crucial T705 :
 
 ```text
-M2_1 -> PCIe 5.0 x4 -> Crucial T705
-M2_2 -> PCIe 5.0 x4 -> Crucial T705
-M2_3 -> PCIe 4.0 x2 -> ne pas utiliser pour un T705 principal
+M2_1 -> emplacement prioritaire PCIe 5.0 x4
+M2_2 -> second emplacement prévu pour le T705
 ```
 
-Les deux T705 doivent disposer d'un dissipateur adapté et d'un flux d'air correct.
+Le montage physique, les capacités exactes des slots et le refroidissement doivent être vérifiés par rapport à la carte mère et au manuel MSI.
 
-## Pilotes
+Le dépôt ne déplace évidemment aucun SSD et ne flashe pas de firmware stockage.
 
-Ordre conseillé après Windows Update :
+---
+
+## Intel Arc B580
+
+La plateforme cible prévoit :
+
+- Above 4G Decoding actif ;
+- Resizable BAR actif ;
+- pilote Intel Arc stable ;
+- aucun OC/undervolt automatique ;
+- affichage correctement détecté.
+
+Les réglages UEFI liés au GPU restent des preuves manuelles.
+
+---
+
+## Ordre conseillé des pilotes
+
+Après un premier Windows Update stable :
 
 1. AMD Chipset depuis AMD ;
 2. Intel Arc Graphics depuis Intel ;
 3. LAN / Wi-Fi / Bluetooth MSI si nécessaire ;
-4. audio MSI/Realtek ;
-5. périphériques spécifiques uniquement si requis.
+4. audio MSI/Realtek si nécessaire ;
+5. périphériques spécifiques uniquement lorsqu'un besoin réel existe.
 
-Éviter les outils tiers de type « driver updater » générique.
+Évite les logiciels génériques de type « driver updater ».
 
-Le dépôt ne fige pas de numéro de version de pilote, car ces versions évoluent. Il inventorie la version réellement installée dans :
+Le dépôt ne fige pas les numéros des pilotes Windows dans la documentation : ils évoluent rapidement. Il qualifie la version réellement installée et laisse la vérification du package courant aux sources officielles AMD, Intel, MSI ou Microsoft.
 
-```text
-reports/hardware/hardware-inventory-v5.json
-```
+---
 
-## Commandes V5
-
-Inventaire :
+## Inventaire
 
 ```powershell
 .\scripts\windows\50_hardware_inventory.ps1
 ```
 
-Checklist manuelle :
+Les rapports matériels sont écrits sous :
+
+```text
+reports/hardware/
+```
+
+---
+
+## Checklist manuelle
+
+Afficher les contrôles :
 
 ```powershell
 .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Show
 ```
 
-Qualification automatique :
+Enregistrer les confirmations sur la vraie machine :
 
 ```powershell
-.\scripts\bootstrap\13_validate_hardware_v5.ps1
+.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive
 ```
 
-Qualification finale avec preuves UEFI / placement / stabilité :
+---
+
+## Qualification finale
+
+La voie utilisateur recommandée est :
 
 ```powershell
-.\scripts\bootstrap\13_validate_hardware_v5.ps1 -RequireManualChecks
+.\install.ps1 -Mode Verify -ValidateHardware
 ```
+
+Elle agrège les informations observables et les preuves manuelles disponibles.
+
+Le nom de certains scripts ou fichiers internes peut encore contenir un suffixe historique ; cela fait partie de l'implémentation. Pour l'utilisateur, le contrat actuel est simplement **la qualification matérielle de la workstation**.
+
+---
+
+## Frontières de sécurité
+
+Le dépôt ne doit jamais automatiquement :
+
+- flasher le BIOS ;
+- modifier PBO / Curve Optimizer ;
+- appliquer des timings mémoire ;
+- forcer une fréquence DDR5 ;
+- activer ou désactiver ReBAR à l'aveugle ;
+- installer tous les drivers facultatifs ;
+- flasher le firmware SSD ;
+- masquer une instabilité matérielle pour obtenir un verdict vert.
+
+Une preuve manquante doit rester une **action requise**, pas devenir un faux succès.
