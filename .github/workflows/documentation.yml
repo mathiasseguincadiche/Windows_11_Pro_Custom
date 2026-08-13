@@ -133,6 +133,33 @@ jobs:
           grep -Fq 'vue consolidée' docs/18_GUIDE_MAITRE.md
           grep -Fq '20_RUNBOOK_OPERATIONNEL.md' docs/18_GUIDE_MAITRE.md
 
+      - name: Vérifier la cohérence WezTerm et OpenClaw
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in README.md docs/00_ARCHITECTURE.md docs/07_DEVOPS_STACK.md docs/18_GUIDE_MAITRE.md docs/19_OPENCLAW_OPENROUTER_WINDOWS.md docs/20_RUNBOOK_OPERATIONNEL.md docs/22_TROUBLESHOOTING.md docs/24_CRITERES_ACCEPTATION.md; do
+            grep -Fq 'Ubuntu DevOps (WSL2)' "$file" || { echo "$file: profil Ubuntu absent" >&2; exit 1; }
+            grep -Fq 'PowerShell 7' "$file" || { echo "$file: profil PowerShell absent" >&2; exit 1; }
+            grep -Fq 'OpenClaw / clawops' "$file" || { echo "$file: profil OpenClaw absent" >&2; exit 1; }
+          done
+          grep -Fq 'config/wezterm/wezterm.lua' docs/00_ARCHITECTURE.md
+          grep -Fq 'config/wezterm/wezterm.lua' docs/07_DEVOPS_STACK.md
+          grep -Fq 'config/wezterm/wezterm.lua' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+          grep -Fq 'config/wezterm/wezterm.lua' docs/23_SOURCES_DE_VERITE.md
+          grep -Fq 'scripts/windows/31_wezterm.ps1' docs/00_ARCHITECTURE.md
+          grep -Fq 'scripts/windows/31_wezterm.ps1' docs/07_DEVOPS_STACK.md
+          grep -Fq 'openclaw --version' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+          grep -Fq 'clawops platform check' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'ValidateOpenClawAI' docs/24_CRITERES_ACCEPTATION.md
+          if grep -Fq 'fermer une ancienne instance WezTerm' docs/20_RUNBOOK_OPERATIONNEL.md; then
+            echo 'Le Runbook contient encore l’ancienne procédure de relance WezTerm.' >&2
+            exit 1
+          fi
+          if grep -Fq 'openclaw onboard --auth-choice' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md || grep -Fq 'openclaw gateway install' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md; then
+            echo 'Le guide Windows ne doit pas recopier la documentation fonctionnelle OpenClaw.' >&2
+            exit 1
+          fi
+
       - name: Vérifier le parcours opérationnel réel
         shell: bash
         run: |
