@@ -56,7 +56,7 @@ jobs:
           fi
           grep -Fq -- '--upgrade-available' scripts/updates/20_winget_update.ps1
           grep -Fq "@('upgrade','--all'" scripts/updates/20_winget_update.ps1
-          if grep -Eq '\$args.*(--include-pinned|--force)' scripts/updates/20_winget_update.ps1; then
+          if grep -Eq "\$args.*(--include-pinned|--force)" scripts/updates/20_winget_update.ps1; then
             echo 'Les arguments WinGet ne doivent contourner aucun pin.' >&2
             exit 1
           fi
