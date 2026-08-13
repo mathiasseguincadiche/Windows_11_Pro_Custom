@@ -107,9 +107,9 @@ WezTerm
 
 Le profil Ubuntu reste le défaut pour Docker, Kubernetes, Terraform, Ansible, AWS et les projets Linux. Le profil PowerShell 7 reste destiné à Windows.
 
-Le profil OpenClaw ouvre lui aussi PowerShell 7 sous Windows. Il se place sous `D:\AI\OpenClaw` lorsque cette racine existe, vérifie simplement si `openclaw` et `clawops` sont visibles dans la session, puis laisse le terminal interactif à l'utilisateur. Il ne déclenche aucune opération OpenClaw automatiquement.
+Le profil OpenClaw ouvre lui aussi PowerShell 7 sous Windows. Il recharge dans **cette session uniquement** les variables utilisateur OpenClaw, complète le `PATH` de session avec `D:\AI\OpenClaw\npm-global` et `D:\AI\OpenClaw\venv\Scripts` lorsqu'ils existent, utilise explicitement les launchers Windows `openclaw.cmd` et `clawops.exe`, puis se place sous `D:\AI\OpenClaw`.
 
-Après une première installation OpenClaw, relancer WezTerm est recommandé afin que le nouveau processus hérite du `PATH` utilisateur mis à jour par l'installateur.
+Il affiche ensuite si `openclaw` et `clawops` sont disponibles et laisse le terminal interactif à l'utilisateur. Il ne déclenche aucune opération OpenClaw automatiquement et ne réécrit pas l'environnement utilisateur persistant.
 
 Cette organisation évite les ambiguïtés suivantes :
 
