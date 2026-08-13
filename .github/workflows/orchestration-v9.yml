@@ -12,7 +12,7 @@ on:
       - 'scripts/wsl/**'
       - 'config/orchestration/**'
       - 'logs/README.md'
-      - 'docs/14_ORCHESTRATION_IDEMPOTENCE.md'
+      - 'docs/14_ORCHESTRATION.md'
       - '.gitignore'
       - 'CHANGELOG.md'
   push:
@@ -27,7 +27,7 @@ on:
       - 'scripts/wsl/**'
       - 'config/orchestration/**'
       - 'logs/README.md'
-      - 'docs/14_ORCHESTRATION_IDEMPOTENCE.md'
+      - 'docs/14_ORCHESTRATION.md'
       - '.gitignore'
       - 'CHANGELOG.md'
 
@@ -60,7 +60,7 @@ jobs:
           test -f scripts/bootstrap/01_machine_state.ps1
           test -f scripts/bootstrap/07_wsl_user.ps1
           test -f logs/README.md
-          test -f docs/14_ORCHESTRATION_IDEMPOTENCE.md
+          test -f docs/14_ORCHESTRATION.md
 
           grep -Fq 'logs/*' .gitignore
           grep -Fq '!logs/README.md' .gitignore
