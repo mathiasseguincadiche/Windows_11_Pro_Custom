@@ -61,7 +61,7 @@ jobs:
             exit 1
           fi
           if grep -Fq 'wsl --export Ubuntu D:\BACKUPS\Ubuntu-DevOps.tar' docs/13_RUNBOOK_REINSTALLATION.md; then
-            echo 'Le Runbook ne doit pas revenir à l’ancien backup WSL manuel comme stratégie principale.' >&2
+            echo 'Le Runbook ne doit pas revenir au backup WSL manuel historique comme stratégie principale.' >&2
             exit 1
           fi
 
