@@ -2,61 +2,71 @@
 
 Ce document est le **parcours officiel de mise en œuvre** de `Windows_11_Pro_Custom`.
 
-Il explique dans quel ordre réaliser le projet sur la machine cible, comment distinguer observation, planification, convergence et validation, et surtout comment savoir que la workstation est réellement prête.
+Il décrit l'ordre des opérations, la différence entre observation, convergence et validation, et les critères permettant de déclarer la workstation prête.
 
-Il ne remplace pas le guide d'installation de Windows ni le Runbook de reprise après incident :
+Il ne remplace pas :
 
-- [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) — installer Windows depuis zéro ;
-- [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) — reconstruire la machine après panne ou réinstallation ;
-- [`11_VALIDATION.md`](11_VALIDATION.md) — comprendre les preuves et les critères de validation.
+- [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) — installation de Windows depuis zéro ;
+- [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) — reprise après incident ;
+- [`11_VALIDATION.md`](11_VALIDATION.md) — mécanismes de preuve et de validation.
 
----
-
-## Résultat final attendu
-
-Le projet est terminé lorsque l'état réel de la machine correspond aux contrats versionnés du dépôt :
+## Résultat attendu
 
 ```text
-matériel qualifié
-+ Windows 11 Pro stable et sécurisé
+Windows 11 Pro stable et qualifié
 + applications et réglages attendus
-+ WSL2 Ubuntu 26.04 sur D:\WSL\Ubuntu-DevOps
++ WSL2 Ubuntu 26.04 sous D:\WSL\Ubuntu-DevOps
 + projets Linux sur ext4
-+ stack DevOps validée
-+ VS Code / WezTerm / PowerShell cohérents
++ stack DevOps qualifiée
++ terminal / VS Code cohérents
 + logs et rapports exploitables
++ idempotence démontrée
 + sauvegarde de référence vérifiée
 ```
 
-OpenClaw/OpenRouter est une intégration optionnelle et se valide séparément lorsqu'elle est utilisée.
+OpenClaw/OpenRouter est une intégration distincte dans l'architecture. **Attention : le raccourci `-FullInstall` l'inclut actuellement automatiquement.**
 
 ---
 
-## Séquence de référence
+## Deux parcours d'installation
 
-```text
-comprendre
-   ↓
-auditer
-   ↓
-calculer le plan
-   ↓
-appliquer uniquement les écarts
-   ↓
-re-vérifier
-   ↓
-valider
-   ↓
-prouver l'idempotence
-   ↓
-sauvegarder
+### Workstation core, sans OpenClaw
+
+C'est le parcours recommandé lorsque l'intégration IA n'est pas souhaitée :
+
+```powershell
+.\install.ps1 `
+  -Mode Apply `
+  -InstallDevOps `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateHardware
 ```
 
-Cette séquence est plus importante que le nombre de scripts exécutés. Le projet vise une **convergence vers un état attendu**, pas une installation aveugle.
+### Workstation complète, OpenClaw inclus
+
+Le code actuel de `install.ps1` définit `-FullInstall` comme un raccourci qui active :
+
+```text
+InstallDevOps
+ValidateDevOps
+ValidateWsl
+ValidateHardware
+InstallOpenClawAI
+ValidateOpenClawAI
+```
+
+Utiliser :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall
+```
+
+uniquement lorsque ce périmètre complet est voulu.
 
 ---
 
-# Étape 1 — comprendre avant d'agir
+# Étape 1 — comprendre le périmètre
 
 Lire au minimum :
 
@@ -65,11 +75,9 @@ Lire au minimum :
 3. ce Runbook ;
 4. [`11_VALIDATION.md`](11_VALIDATION.md).
 
-La machine cible doit disposer d'une base Windows 11 Pro exploitable avec UEFI, Secure Boot, TPM, virtualisation firmware, réseau, pilotes essentiels et les volumes `C:` / `D:` correctement identifiés.
+La base Windows doit être exploitable avec les volumes `C:` et `D:` correctement identifiés, les pilotes essentiels présents et les prérequis firmware nécessaires à Windows 11 / WSL2 disponibles.
 
-Le projet ne modifie pas automatiquement le BIOS, PBO, Curve Optimizer, la fréquence mémoire, ReBAR, le placement physique des SSD ou les firmwares.
-
-Guides : [`02_BIOS_DRIVERS.md`](02_BIOS_DRIVERS.md), [`03_STOCKAGE.md`](03_STOCKAGE.md), [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
+Les éléments qui nécessitent une preuve matérielle ou firmware sont traités dans [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
@@ -81,66 +89,88 @@ Depuis la racine du dépôt :
 .\install.ps1 -Mode Audit
 ```
 
-L'audit observe la machine avant toute décision. Il collecte l'état du système, du matériel, du stockage, des applications, des réglages Windows, de WSL2, de la workstation, de Defender et des intégrations connues.
+L'audit observe la machine avant toute convergence. Il produit les faits nécessaires au diagnostic et alimente `logs\` / `reports\`.
 
-Les preuves sont conservées sous `logs\` et `reports\`. Un `RunId` permet de relier les sous-scripts d'une même exécution.
-
-Si une anomalie apparaît, commence par le journal correspondant avant de relancer plusieurs opérations différentes.
+Ne corrige pas plusieurs composants à l'aveugle lorsqu'un audit signale un écart : identifie d'abord le contrat concerné et le journal associé.
 
 ---
 
 # Étape 3 — calculer le plan sans modifier
 
+## Core sans OpenClaw
+
+```powershell
+.\install.ps1 `
+  -Mode Apply `
+  -InstallDevOps `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateHardware `
+  -PlanOnly
+```
+
+## Périmètre complet avec OpenClaw
+
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-`-PlanOnly` calcule le plan complet puis s'arrête avant l'application des changements.
+`-PlanOnly` calcule le plan depuis l'état réel puis s'arrête avant l'application.
 
-Les états importants sont :
+Les statuts essentiels sont :
 
 | État | Signification |
 | --- | --- |
-| `DÉJÀ OK` | le composant est conforme selon son validateur |
-| `À FAIRE` | un écart a été détecté |
-| `ACTION REQUISE` | une décision ou une preuve humaine est nécessaire |
-| `IGNORE` | le composant n'est pas demandé dans cette opération |
-| `ERREUR` | la conformité ne peut pas être déclarée |
+| `DÉJÀ OK` | composant conforme |
+| `À FAIRE` | écart détecté |
+| `ACTION REQUISE` | décision ou preuve humaine nécessaire |
+| `IGNORE` | composant hors du périmètre demandé |
+| `ERREUR` | conformité non démontrée |
 
-Une machine partiellement prête doit produire un plan partiel. Si tout est déjà conforme, le projet doit éviter les réinstallations inutiles.
+Une machine déjà partiellement conforme doit produire un plan partiel, pas une réinstallation générale.
 
 ---
 
 # Étape 4 — faire converger la workstation
 
-Après lecture du plan :
+Pour le périmètre core :
+
+```powershell
+.\install.ps1 `
+  -Mode Apply `
+  -InstallDevOps `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateHardware
+```
+
+Pour le périmètre complet avec OpenClaw :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-Le moteur vérifie chaque composant avant action, applique seulement les écarts puis re-vérifie le résultat.
+Le moteur vérifie chaque composant, applique uniquement le delta puis re-vérifie les éléments demandés.
 
-Si une étape demande un redémarrage, une élévation ou une action utilisateur, traite cette action puis relance la même intention. Les composants déjà conformes doivent rester sans modification inutile.
+Lorsqu'une action humaine est demandée, la traiter puis relancer la même intention : les composants déjà conformes doivent rester idempotents.
 
-Le détail du moteur est dans [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
+Voir [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
 
 ---
 
 # Étape 5 — vérifier WSL2
 
-Le contrat courant impose :
+Contrat courant :
 
 ```text
 Distribution : Ubuntu
 Release      : 26.04 / resolute
 Emplacement  : D:\WSL\Ubuntu-DevOps
 Filesystem   : ext4 dans le VHDX WSL2
+Profil       : standard = 20 Go RAM / 8 threads / 8 Go swap
 ```
 
-Les projets DevOps Linux doivent vivre sous `~/projects`, `~/labs` ou `~/repositories`, pas sous `/mnt/c` ou `/mnt/d` comme racine quotidienne.
-
-Le profil standard réserve **20 Go RAM**, **8 threads** et **8 Go de swap** à WSL2.
+Les projets DevOps Linux doivent vivre sous `~/projects`, `~/labs` ou `~/repositories`.
 
 Validation ciblée :
 
@@ -148,7 +178,7 @@ Validation ciblée :
 .\install.ps1 -Mode Verify -ValidateWsl
 ```
 
-Guide : [`06_WSL2.md`](06_WSL2.md).
+Voir [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
@@ -157,20 +187,18 @@ Guide : [`06_WSL2.md`](06_WSL2.md).
 Installation/réparation ciblée :
 
 ```powershell
-.\install.ps1 -Mode Apply -InstallDevOps -ValidateWsl -ValidateDevOps
+.\install.ps1 -Mode Apply -InstallDevOps
 ```
 
-La stack comprend notamment Docker, Compose, Buildx, kubectl, Helm, Minikube, kind, Terraform, Ansible, AWS CLI, GitHub CLI, Trivy et les outils qualité gérés par le dépôt.
-
-Les versions sensibles à la reproductibilité sont définies dans `config/devops/tool-versions.env`.
-
-Validation ciblée :
+Validation :
 
 ```powershell
-.\install.ps1 -Mode Verify -ValidateDevOps
+.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
 ```
 
-Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
+Les versions reproductibles sont définies dans `config/devops/tool-versions.env`.
+
+Voir [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
@@ -180,33 +208,37 @@ Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 .\install.ps1 -Mode Verify -ValidateHardware
 ```
 
-Certaines informations ne peuvent pas être déduites honnêtement par Windows. Le projet peut donc demander des preuves manuelles concernant UEFI/CSM, Above 4G, ReBAR, placement/refroidissement des SSD, stabilité mémoire, BIOS ou pilotes.
+Certaines preuves restent manuelles lorsque Windows ne peut pas les déterminer honnêtement. Le projet doit alors produire `ACTION_REQUISE` plutôt qu'un verdict positif inventé.
 
-Le projet préfère `ACTION REQUISE` à un faux succès.
-
-Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
+Voir [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-# Étape 8 — intégrer OpenClaw seulement si nécessaire
+# Étape 8 — OpenClaw/OpenRouter
 
-L'intégration optionnelle reste sous `D:\AI\OpenClaw` et consomme le control-plane référencé par `config/openclaw/control-plane.json`.
-
-Commande ciblée :
+Si l'intégration n'a pas été demandée dans le parcours core, elle peut être ajoutée explicitement :
 
 ```powershell
-.\install.ps1 -Mode Apply -InstallOpenClawAI -ValidateOpenClawAI
+.\install.ps1 -Mode Apply -InstallOpenClawAI
 ```
+
+Puis validée :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateOpenClawAI
+```
+
+Si `-FullInstall` a été utilisé, ces deux intentions ont déjà été activées par le raccourci.
 
 Les secrets restent hors de Git.
 
-Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
 # Étape 9 — validation finale
 
-Commande principale :
+Core :
 
 ```powershell
 .\install.ps1 `
@@ -216,49 +248,70 @@ Commande principale :
   -ValidateDevOps
 ```
 
-Ajouter la qualification OpenClaw uniquement si cette intégration est utilisée.
+Avec OpenClaw :
 
-Un `Apply` terminé n'est pas une preuve suffisante. Le projet est prêt lorsque l'état réellement observé passe les validateurs demandés.
+```powershell
+.\install.ps1 `
+  -Mode Verify `
+  -ValidateHardware `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateOpenClawAI
+```
 
-Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
+Un `Apply` terminé n'est pas une preuve suffisante. La validation repose sur l'état réellement observé.
+
+Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ---
 
 # Étape 10 — prouver l'idempotence
 
-Recalculer le plan :
+Rejouer le même périmètre en `PlanOnly`.
+
+Core :
+
+```powershell
+.\install.ps1 `
+  -Mode Apply `
+  -InstallDevOps `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateHardware `
+  -PlanOnly
+```
+
+Avec OpenClaw :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-Une workstation conforme doit tendre vers `DÉJÀ OK` pour la majorité des composants.
-
-Si le même composant revient systématiquement en `À FAIRE`, il faut corriger la cause avant de considérer le projet terminé.
+Une workstation conforme doit tendre vers `DÉJÀ OK`. Un composant qui revient systématiquement en `À FAIRE` indique une dérive ou une vérification non stabilisée.
 
 ---
 
 # Étape 11 — maintenance
 
-Auditer d'abord :
+Toujours commencer par :
 
 ```powershell
 .\update.ps1 -Mode Audit
 ```
 
-La maintenance couvre séparément Windows Update, WinGet, le runtime WSL, Ubuntu/APT, les outils DevOps épinglés et les extensions VS Code.
+Puis utiliser `PlanOnly`, `Apply` et `Verify` selon le besoin. Les catégories facultatives de mise à jour restent opt-in.
 
-Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
+Voir [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
 # Étape 12 — sauvegarde de référence
 
-Une workstation bien configurée mais non récupérable n'est pas considérée comme totalement terminée.
+Une workstation validée doit être récupérable.
 
-Le projet prévoit une sauvegarde sur un support distinct des deux SSD internes, puis une vérification de cette sauvegarde et la génération d'un plan de reprise non automatique.
+Créer puis vérifier la sauvegarde sur le support prévu par la politique du dépôt. La génération d'un plan de reprise complète la validation du dispositif de recovery.
 
-Les commandes exactes et les préconditions se trouvent dans [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) et [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md).
+Voir [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) et [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md).
 
 ---
 
@@ -267,29 +320,24 @@ Les commandes exactes et les préconditions se trouvent dans [`10_BACKUP_RESTORE
 Le projet peut être déclaré prêt lorsque :
 
 - l'audit initial est compris ;
-- le plan complet est cohérent ;
-- les écarts demandés ont convergé ;
-- la validation Windows réussit ;
-- la qualification matérielle est complète ;
-- WSL2 respecte son contrat de distribution, release, stockage et filesystem ;
+- le périmètre choisi, core ou complet, est explicite ;
+- le plan est cohérent ;
+- les écarts ont convergé ;
+- Windows et le matériel sont qualifiés ;
+- WSL2 respecte son contrat ;
 - la stack DevOps est qualifiée ;
+- OpenClaw est qualifié si le périmètre l'inclut ;
 - les frontières Windows/Linux sont respectées ;
-- Defender, le firewall et Windows Update restent dans les garde-fous ;
-- les logs et rapports permettent d'expliquer le résultat ;
-- une nouvelle planification est essentiellement idempotente ;
-- la sauvegarde de référence est vérifiée ;
-- OpenClaw est qualifié s'il est utilisé.
+- les logs et rapports expliquent le verdict ;
+- le second plan démontre l'idempotence ;
+- la sauvegarde de référence est vérifiée.
 
-Checklist : [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
-
----
+Checklist complète : [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
 
 ## En cas d'échec
 
-Ne contourne pas le validateur. Identifie le composant, lis son log, compare l'état observé au contrat versionné, corrige la cause puis relance le même `Verify` ou l'`Apply` ciblé.
+Ne contourne pas un validateur. Lis le log, identifie la source de vérité, corrige la cause puis relance le même `Verify` ou l'`Apply` ciblé.
 
-Guide : [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md).
+Voir [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md) et [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
 
-Pour savoir quel fichier fait autorité sur chaque sujet, voir [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
-
-Le résultat final n'est pas « le script a tourné ». Le résultat final est une **workstation DevOps/Ops reproductible, vérifiée, explicable et récupérable**.
+Le résultat final n'est pas « le script a tourné » : c'est une **workstation DevOps/Ops reproductible, vérifiée, explicable et récupérable**.
