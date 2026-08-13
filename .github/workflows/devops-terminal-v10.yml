@@ -1,4 +1,4 @@
-name: DevOps terminal V10
+name: DevOps terminal
 
 on:
   push:
@@ -64,7 +64,7 @@ jobs:
       - name: Parse WezTerm Lua
         run: luac -p config/wezterm/wezterm.lua
 
-      - name: Validate JSON and V10 contract
+      - name: Validate JSON and terminal contract
         run: |
           python3 -m json.tool config/vscode/settings.json >/dev/null
           python3 -m json.tool manifests/windows-apps.json >/dev/null
@@ -96,8 +96,8 @@ jobs:
 
       - name: Prove component idempotence and rollback as normal user
         run: |
-          useradd --create-home --shell /bin/bash v10test
-          runuser --user v10test -- env HOME=/home/v10test bash -Eeuo pipefail <<'BASH'
+          useradd --create-home --shell /bin/bash terminaltest
+          runuser --user terminaltest -- env HOME=/home/terminaltest bash -Eeuo pipefail <<'BASH'
           printf '# user bashrc\n' > "$HOME/.bashrc"
           cp "$HOME/.bashrc" "$HOME/original.bashrc"
 
@@ -112,7 +112,7 @@ jobs:
           second_hash="$(sha256sum "$HOME/.bashrc" | awk '{print $1}')"
 
           test "$first_hash" = "$second_hash"
-          grep -Fq '[DÉJÀ OK] Terminal DevOps V10 déjà conforme' <<<"$second_output"
+          grep -Fq '[DÉJÀ OK] Terminal DevOps déjà conforme' <<<"$second_output"
           test "$(grep -Fc '# BEGIN windows11-pro-custom' "$HOME/.bashrc")" -eq 1
           test "$(grep -Fc '# END windows11-pro-custom' "$HOME/.bashrc")" -eq 1
 
