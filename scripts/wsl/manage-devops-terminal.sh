@@ -131,4 +131,4 @@ if ((${#installed_by_v10[@]} > 0)); then
   sudo apt-get remove -y "${installed_by_v10[@]}"
 fi
 rm -f "$state_file"
-echo '[FAIT] Terminal DevOps V10 restauré à l’état initial enregistré.'
+echo "[FAIT] Terminal DevOps V10 restauré à l'état initial enregistré."
