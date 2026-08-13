@@ -8,13 +8,21 @@ on:
       - README.md
       - CHANGELOG.md
       - docs/**
-      - .github/workflows/documentation.yml
+      - menu.ps1
+      - install.ps1
+      - update.ps1
+      - scripts/**
+      - .github/workflows/**
   pull_request:
     paths:
       - README.md
       - CHANGELOG.md
       - docs/**
-      - .github/workflows/documentation.yml
+      - menu.ps1
+      - install.ps1
+      - update.ps1
+      - scripts/**
+      - .github/workflows/**
 
 permissions:
   contents: read
@@ -84,6 +92,48 @@ jobs:
             echo 'Conserver cet historique uniquement dans CHANGELOG.md et Git.' >&2
             exit 1
           fi
+
+      - name: Refuser les anciennes versions dans les surfaces utilisateur
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          legacy = re.compile(r'\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I)
+          violations = []
+
+          # Les schémas/chemins internes peuvent garder leur numéro historique.
+          # Ce contrôle vise uniquement les chaînes réellement affichées à l'utilisateur.
+          ui_patterns = (
+              re.compile(r'VERDICT:\s*V\d+', re.I),
+              re.compile(r'Write-Host[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
+              re.compile(r'Write-Wpc(?:Banner|Status)[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
+              re.compile(r'(?:echo|printf)[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
+          )
+
+          files = [Path('menu.ps1'), Path('install.ps1'), Path('update.ps1')]
+          files += sorted(Path('scripts').rglob('*.ps1'))
+          files += sorted(Path('scripts').rglob('*.psm1'))
+          files += sorted(Path('scripts').rglob('*.sh'))
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              for line_no, line in enumerate(text.splitlines(), 1):
+                  if any(pattern.search(line) for pattern in ui_patterns):
+                      violations.append(f'{path}:{line_no}: {line.strip()}')
+
+          for workflow in sorted(Path('.github/workflows').glob('*.yml')):
+              for line_no, line in enumerate(workflow.read_text(encoding='utf-8').splitlines(), 1):
+                  if line.startswith('name:'):
+                      if legacy.search(line):
+                          violations.append(f'{workflow}:{line_no}: {line.strip()}')
+                      break
+
+          if violations:
+              raise SystemExit(
+                  'Ancien numéro de version exposé dans une surface utilisateur:\n' +
+                  '\n'.join(violations)
+              )
+          print('Surfaces utilisateur sans anciens labels de version: OK')
 
       - name: Vérifier l'identité actuelle du projet
         shell: bash
