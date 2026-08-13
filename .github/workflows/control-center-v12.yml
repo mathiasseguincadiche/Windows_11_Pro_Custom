@@ -1,0 +1,114 @@
+name: Interactive Control Center V12
+
+on:
+  push:
+    branches:
+      - main
+      - feat/interactive-control-center-v12
+    paths:
+      - menu.ps1
+      - START_MENU.cmd
+      - docs/23_INTERACTIVE_CONTROL_CENTER_V12.md
+      - .github/workflows/control-center-v12.yml
+  pull_request:
+    paths:
+      - menu.ps1
+      - START_MENU.cmd
+      - docs/23_INTERACTIVE_CONTROL_CENTER_V12.md
+      - .github/workflows/control-center-v12.yml
+
+permissions:
+  contents: read
+
+jobs:
+  powershell-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse menu PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'menu.ps1'), [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -gt 0) {
+            $errors | ForEach-Object { Write-Host "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber): $($_.Message)" }
+            throw 'menu.ps1 parse failed.'
+          }
+
+      - name: Validate menu routing contract
+        shell: pwsh
+        run: |
+          $menu = Get-Content -Raw menu.ps1
+          foreach ($needle in @(
+            "FullInstall=[switch]::Present",
+            "03_apps.ps1",
+            "UpdateScript",
+            "BackupAction='Create'",
+            "BackupAction='Verify'",
+            "BackupAction='RestorePlan'",
+            "Mode='Rollback'",
+            "Mode='Audit'",
+            "Mode='Verify'",
+            "InstallDevOps=[switch]::Present",
+            "InstallOpenClawAI=[switch]::Present",
+            "ValidateHardware=[switch]::Present",
+            "DryRun",
+            "Start-Process -FilePath `$exe -Verb RunAs"
+          )) {
+            if (-not $menu.Contains($needle)) { throw "Contrat V12 absent: $needle" }
+          }
+          if ($menu -match 'Remove-Item\s+-Recurse|Format-Volume|Clear-Disk') {
+            throw 'Le menu V12 ne doit contenir aucune restauration destructive propre.'
+          }
+
+      - name: Prove all critical routes with DryRun
+        shell: pwsh
+        run: |
+          $choices = @('1','2','3','4.1','4.2','5.1','5.2','6','7','8.1','8.2','8.3','9.1','9.2','10')
+          foreach ($choice in $choices) {
+            Write-Host "--- Choice $choice ---"
+            $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) { throw "DryRun choice $choice failed." }
+            if ($choice -ne '10' -and $output -notmatch '\[DRY-RUN\]') {
+              throw "Choice $choice did not prove DryRun routing."
+            }
+          }
+
+      - name: Assert exact primary routes
+        shell: pwsh
+        run: |
+          $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          if ($full -notmatch 'install\.ps1.*-FullInstall') { throw 'Full install route incorrect.' }
+
+          $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          if ($apps -notmatch '03_apps\.ps1.*-Mode.*Apply') { throw 'Apps-only route incorrect.' }
+
+          $updates = & ./menu.ps1 -Choice 3 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          if ($updates -notmatch 'update\.ps1.*-Mode.*Apply') { throw 'Update route incorrect.' }
+
+          $restore = & ./menu.ps1 -Choice 5.1 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          if ($restore -notmatch 'RestorePlan') { throw 'Restore plan route incorrect.' }
+          if ($restore -notmatch 'ne restaure rien automatiquement') { throw 'Restore safety message missing.' }
+
+  launcher-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate launcher and safety wording
+        run: |
+          grep -Fq 'pwsh.exe' START_MENU.cmd
+          grep -Fq 'powershell.exe' START_MENU.cmd
+          grep -Fq 'menu.ps1' START_MENU.cmd
+          grep -Fq 'Installation complete' menu.ps1
+          grep -Fq 'Installation / reparation des logiciels' menu.ps1
+          grep -Fq 'Mises a jour completes' menu.ps1
+          grep -Fq 'Sauvegarde' menu.ps1
+          grep -Fq 'Restauration / rollback' menu.ps1
+          grep -Fq 'Audit et diagnostic complet' menu.ps1
+          grep -Fq 'Verification de conformite' menu.ps1
+          grep -Fq 'Composants specifiques' menu.ps1
+          grep -Fq 'Journaux et rapports' menu.ps1
+          grep -Fq 'La restauration complete destructive reste volontairement non automatique.' menu.ps1
