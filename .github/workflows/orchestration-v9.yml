@@ -1,4 +1,4 @@
-name: Orchestration V9
+name: Orchestration and idempotence
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ on:
       - 'scripts/wsl/**'
       - 'config/orchestration/**'
       - 'logs/README.md'
-      - 'docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md'
+      - 'docs/14_ORCHESTRATION_IDEMPOTENCE.md'
       - '.gitignore'
       - 'CHANGELOG.md'
   push:
@@ -27,7 +27,7 @@ on:
       - 'scripts/wsl/**'
       - 'config/orchestration/**'
       - 'logs/README.md'
-      - 'docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md'
+      - 'docs/14_ORCHESTRATION_IDEMPOTENCE.md'
       - '.gitignore'
       - 'CHANGELOG.md'
 
@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate V9 machine-first contract
+      - name: Validate machine-first orchestration contract
         shell: bash
         run: |
           set -euo pipefail
@@ -60,7 +60,7 @@ jobs:
           test -f scripts/bootstrap/01_machine_state.ps1
           test -f scripts/bootstrap/07_wsl_user.ps1
           test -f logs/README.md
-          test -f docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md
+          test -f docs/14_ORCHESTRATION_IDEMPOTENCE.md
 
           grep -Fq 'logs/*' .gitignore
           grep -Fq '!logs/README.md' .gitignore
@@ -86,7 +86,7 @@ jobs:
             exit 1
           fi
 
-      - name: Enforce factual/idempotent component contracts
+      - name: Enforce factual and idempotent component contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -111,13 +111,13 @@ jobs:
           grep -Fq 'Get-OneDriveState' scripts/windows/33_onedrive.ps1
           grep -Fq "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')" scripts/defender/03_apply_approved_exclusions.ps1
 
-      - name: Enforce no credential persistence in executable V9 code
+      - name: Enforce no credential persistence in executable code
         shell: bash
         run: |
           set -euo pipefail
           if grep -RInEi '(Set-Content|Add-Content|Out-File).*(password|passwd|secret|token|api.?key)' \
               scripts/core scripts/bootstrap/07_wsl_user.ps1 install.ps1; then
-            echo 'Potential credential persistence detected in V9 executable code.' >&2
+            echo 'Potential credential persistence detected in orchestration code.' >&2
             exit 1
           fi
           if grep -RInEi '(password|passwd)[[:space:]]*=' scripts/bootstrap/07_wsl_user.ps1; then
@@ -147,7 +147,7 @@ jobs:
           }
           if ($failed) { throw 'PowerShell parse errors detected.' }
 
-      - name: V9 runtime idempotence and redaction self-test
+      - name: Runtime idempotence and redaction self-test
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -187,11 +187,11 @@ jobs:
           $log = Get-WpcLogPath -Context $context -Identity $fixture
           if (-not (Test-Path $log)) { throw "Dedicated fixture log missing: $log" }
           $logText = Get-Content -Raw $log
-          if ($logText -match 'supersecret-value') { throw 'Sensitive argument leaked into V9 log.' }
+          if ($logText -match 'supersecret-value') { throw 'Sensitive argument leaked into runtime log.' }
           if ($logText -notmatch '<REDACTED>') { throw 'Sensitive argument redaction marker missing.' }
           $summary = Get-Content -Raw (Join-Path $context.RunDir 'summary.json') | ConvertFrom-Json
           if ($summary.Counts.FailedScripts -ne 0) { throw 'Expected probe failures polluted the final failure count.' }
-          if ($summary.Counts.Changed -lt 1 -or $summary.Counts.AlreadyOk -lt 1) { throw 'V9 component summary does not prove change then idempotent rerun.' }
+          if ($summary.Counts.Changed -lt 1 -or $summary.Counts.AlreadyOk -lt 1) { throw 'Component summary does not prove change then idempotent rerun.' }
 
       - name: Execute safe factual machine-state discovery
         shell: pwsh
@@ -199,6 +199,6 @@ jobs:
           $ErrorActionPreference = 'Stop'
           .\scripts\bootstrap\01_machine_state.ps1
           $report = Get-Content -Raw .\reports\orchestration\machine-state.json | ConvertFrom-Json
-          if ($report.Version -ne 'V9') { throw 'Unexpected machine-state version.' }
+          if ($report.Version -ne 'V9') { throw 'Unexpected internal machine-state schema version.' }
           if ($report.EvidencePolicy -notmatch 're-read') { throw 'Machine-first evidence policy missing.' }
           if ($null -eq $report.Windows.Build) { throw 'Windows build fact missing.' }
