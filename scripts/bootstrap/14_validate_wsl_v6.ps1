@@ -129,6 +129,6 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
     ConfigHash = $targetHash
 } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $reportPath
 
-Write-Host "[OK] WSL2 V6 runtime validé: $WslProfile" -ForegroundColor Green
+Write-Host "[OK] WSL2 runtime validé: $WslProfile" -ForegroundColor Green
 Write-Host "[OK] Ubuntu $versionId ($codename) | $processors threads | $memoryGB Go RAM | $swapGB Go swap | $homeFs | PowerShell $pwshVersion" -ForegroundColor Green
-Write-Host 'VERDICT: V6 WSL2 PLATFORM READY' -ForegroundColor Green
+Write-Host 'VERDICT: WSL2 PLATFORM READY' -ForegroundColor Green
