@@ -272,7 +272,7 @@ if ($Mode -eq 'Apply') {
     }
 
     Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$policy.ui.minimizeRestoreAnimation) -ClientAreaAnimations ([bool]$policy.ui.clientAreaAnimations)
-    Write-Host '[INFO] Les applications de démarrage sont uniquement inventoriées; aucune n’est désactivée automatiquement.'
+    Write-Host "[INFO] Les applications de démarrage sont uniquement inventoriées; aucune n’est désactivée automatiquement."
 }
 elseif ($Mode -eq 'Rollback') {
     Assert-Administrator
