@@ -1,37 +1,191 @@
-# Applications Windows
+# Applications Windows — socle géré
 
-Le socle demandé est conservé dans `manifests/winget/apps-core.json`.
+La source de vérité applicative est :
 
-L'installation automatisée vérifie d'abord qu'un identifiant WinGet exact existe avant de lancer le package. Un identifiant non résolu est ignoré avec un avertissement au lieu d'installer un résultat approximatif.
+```text
+manifests/winget/apps-core.json
+```
 
-## Automatisées si disponibles
+Le bootstrap ne cherche jamais une application « au nom approximatif » : pour les applications automatiques, il exige un identifiant WinGet exact, vérifie qu'il est résolu, détecte si l'application est déjà présente et revalide l'installation après exécution.
 
-VS Code, VLC, Notion, Firefox, Brave, FileZilla, WezTerm, LibreOffice, Steam, Notepad++ et draw.io.
+---
 
-## Conservées manuelles dans cette étape
+## Applications automatiques actuelles
 
-- MarkText ;
-- Microsoft Office ;
-- PDFgear ;
-- Files.
+| Application | ID WinGet |
+|---|---|
+| Visual Studio Code | `Microsoft.VisualStudioCode` |
+| PowerShell 7 | `Microsoft.PowerShell` |
+| JetBrainsMono Nerd Font | `DEVCOM.JetBrainsMonoNerdFont` |
+| VLC | `VideoLAN.VLC` |
+| Notion | `Notion.Notion` |
+| Firefox | `Mozilla.Firefox` |
+| Brave | `Brave.Brave` |
+| FileZilla | `TimKosse.FileZilla.Client` |
+| WezTerm | `wez.wezterm` |
+| LibreOffice | `TheDocumentFoundation.LibreOffice` |
+| Steam | `Valve.Steam` |
+| Notepad++ | `Notepad++.Notepad++` |
+| draw.io | `JGraph.Draw` |
+| Bitwarden | `Bitwarden.Bitwarden` |
 
-Ces quatre entrées restent dans le manifeste et seront automatisées uniquement après validation de leur canal d'installation exact.
+---
+
+## Applications volontairement manuelles
+
+```text
+MarkText
+Microsoft Office
+PDFgear
+Files
+```
+
+Elles restent déclarées dans le manifeste, mais `autoInstall=false`.
+
+Pourquoi ?
+
+- le canal d'installation exact peut être ambigu ou dépendre d'un compte/licence ;
+- une automatisation fragile est pire qu'une action manuelle explicite ;
+- le dépôt préfère afficher `ACTION REQUISE` plutôt que prétendre avoir installé le mauvais package.
+
+Microsoft Office, en particulier, peut nécessiter une licence et une authentification ; aucune installation silencieuse n'est supposée.
+
+---
+
+## Installer / réparer uniquement les logiciels
+
+Via le menu V12 :
+
+```text
+2. Installation / réparation des logiciels
+```
+
+ou directement :
+
+```powershell
+.\scripts\bootstrap\03_apps.ps1 -Mode Apply
+```
+
+### Audit
+
+```powershell
+.\scripts\bootstrap\03_apps.ps1 -Mode Audit
+```
+
+### Vérification
+
+```powershell
+.\scripts\bootstrap\03_apps.ps1 -Mode Verify
+```
+
+---
+
+## Comportement idempotent
+
+Pour chaque package automatique :
+
+```text
+winget show ID exact
+        ↓
+package valide ?
+        ↓
+winget list ID exact
+        ↓
+présent ?
+├── oui -> DEJA_OK
+└── non -> install
+             ↓
+          winget list
+             ↓
+          preuve réelle
+```
+
+Une relance ne doit donc pas réinstaller les logiciels déjà détectés.
+
+---
+
+## Pourquoi PowerShell 7 est dans le socle
+
+Le projet utilise PowerShell pour son orchestration. Windows PowerShell 5.1 reste disponible pour compatibilité système, mais PowerShell 7 est le shell moderne recommandé pour l'utilisation quotidienne et est également accessible dans WezTerm/VS Code.
+
+---
+
+## Pourquoi la Nerd Font est dans le socle
+
+JetBrainsMono Nerd Font fournit les glyphes utilisés par Starship et le terminal DevOps V10 dans :
+
+- WezTerm ;
+- le terminal intégré VS Code.
+
+Elle est donc un composant fonctionnel de l'expérience terminal, pas seulement un choix esthétique.
+
+---
+
+## WSL2 n'est pas une application WinGet du socle
+
+WSL2 appartient au socle système et est provisionné par :
+
+```text
+scripts/bootstrap/06_wsl.ps1
+```
+
+Cela évite de confondre :
+
+```text
+application Windows
+vs
+capacité/runtime système
+```
+
+OpenSSH Client suit également une gestion système dédiée.
+
+---
 
 ## OneDrive : volontairement absent
 
 La workstation cible un état **sans Microsoft OneDrive**.
 
-Le contrat est défini dans `config/windows/onedrive.json` et appliqué par `scripts/windows/33_onedrive.ps1` dans les modes `Audit`, `Apply`, `Verify` et `Rollback` du poste de travail.
+Le contrat est :
+
+```text
+config/windows/onedrive.json
+```
+
+et le composant :
+
+```text
+scripts/windows/33_onedrive.ps1
+```
 
 En `Apply`, le dépôt :
 
-- enregistre d'abord l'état antérieur de OneDrive et des stratégies concernées ;
-- arrête le processus OneDrive s'il est actif ;
-- désinstalle uniquement le package `Microsoft.OneDrive`, avec fallback vers `OneDriveSetup.exe /uninstall` si nécessaire ;
-- active la stratégie Windows `DisableFileSyncNGSC=1` ;
-- active `PreventNetworkTrafficPreUserSignIn=1` ;
-- vérifie que OneDrive n'est plus installé, qu'aucun `OneDrive.exe` n'est actif et que les deux stratégies sont présentes.
+- enregistre l'état antérieur ;
+- arrête OneDrive s'il tourne ;
+- désinstalle uniquement le package OneDrive avec fallback contrôlé ;
+- applique les stratégies prévues ;
+- revalide l'absence du package/processus et la présence des stratégies.
 
-Le script ne supprime jamais les dossiers OneDrive ni les fichiers utilisateur. Si OneDrive a déjà été utilisé pour synchroniser ou rediriger Documents/Bureau/Images, les données doivent être sécurisées localement avant d'appliquer cette suppression.
+### Protection des données
 
-Le mode `Rollback` restaure les valeurs de stratégie antérieures et ne réinstalle OneDrive que s'il était présent avant l'application du dépôt.
+Le script ne supprime jamais les dossiers OneDrive ni les fichiers utilisateur.
+
+Si Documents/Bureau/Images ont déjà été redirigés/synchronisés par OneDrive, sécurise d'abord les données locales avant de supprimer le client.
+
+### Rollback
+
+Le rollback restaure les stratégies antérieures et ne réinstalle OneDrive que s'il était réellement présent avant l'Apply du dépôt.
+
+---
+
+## Mises à jour applicatives
+
+L'installation initiale et les mises à jour sont deux responsabilités différentes :
+
+```text
+Installation / réparation -> scripts/bootstrap/03_apps.ps1
+Mises à jour régulières   -> update.ps1 / V11
+```
+
+V11 respecte les pins WinGet et ne force pas les packages volontairement bloqués.
+
+Voir [`22_SYSTEM_UPDATE_MANAGER_V11.md`](22_SYSTEM_UPDATE_MANAGER_V11.md).

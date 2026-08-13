@@ -1,6 +1,46 @@
 # Changelog
 
-## Unreleased — V9 Orchestration, Logs & Idempotence
+## V13 — Documentation consolidée
+
+- refonte du `README.md` pour refléter l'état réel V12 du projet ;
+- ajout de `docs/README.md` comme hub documentaire et parcours de lecture débutant ;
+- refonte complète de `docs/01_INSTALLATION_WINDOWS.md`, depuis la préparation du média Windows jusqu'à la validation et au Golden Backup ;
+- refonte de `docs/13_RUNBOOK_REINSTALLATION.md` en véritable procédure de reconstruction/disaster recovery ;
+- ajout de `docs/24_GUIDE_MAITRE_V13.md`, documentation consolidée de l'architecture, des versions V1→V12 et de l'exploitation ;
+- alignement des guides architecture, stockage, applications, backup et validation avec V7/V9/V10/V11/V12 ;
+- suppression des références documentaires obsolètes au faux chemin `docs/12_RUNBOOK_REINSTALLATION.md` ;
+- ajout de contrôles CI documentaires pour empêcher la réapparition de liens cassés et d'informations structurelles obsolètes.
+
+## V12 — Interactive Control Center
+
+- ajout de `menu.ps1` comme point d'entrée humain principal ;
+- ajout de `START_MENU.cmd` pour lancement par double-clic ;
+- routage vers installation complète, logiciels, mises à jour, sauvegarde, restauration/rollback, audit, vérification et composants spécifiques ;
+- élévation UAC limitée aux actions qui en ont besoin ;
+- mode `DryRun` pour prouver le routage sans mutation ;
+- CI V12 dédiée et documentation `docs/23_INTERACTIVE_CONTROL_CENTER_V12.md`.
+
+## V11 — System Update Manager
+
+- ajout de `update.ps1` ;
+- gestion coordonnée de Windows Update, WinGet, WSL, Ubuntu/APT, versions DevOps épinglées et extensions VS Code ;
+- drivers et mises à jour Windows facultatives exclus par défaut ;
+- pins WinGet respectés ;
+- aucun `dist-upgrade`, `autoremove` agressif, flash BIOS/firmware ou reboot forcé ;
+- rapport V11 et revalidation après mise à jour ;
+- documentation `docs/22_SYSTEM_UPDATE_MANAGER_V11.md`.
+
+## V10 — DevOps Terminal
+
+- WezTerm devient le terminal Windows principal avec Ubuntu WSL/Bash par défaut et PowerShell 7 en secondaire ;
+- VS Code utilise le même Bash WSL ;
+- ajout de Starship, fzf, zoxide, eza, bat, fd, ripgrep et des alias/complétions DevOps ;
+- ajout de JetBrainsMono Nerd Font ;
+- gestion idempotente et rollbackable du profil Bash ;
+- CI V10 prouvant le second Apply no-op et l'absence de duplication `.bashrc` ;
+- documentation `docs/21_DEVOPS_TERMINAL_V10.md`.
+
+## V9 — Orchestration, Logs & Idempotence
 
 - `install.ps1` devient l'orchestrateur unique : découverte machine, plan factuel, confirmation, Apply ciblé, re-Verify et synthèse ;
 - ajout du moteur commun `scripts/core/runtime.psm1` ;
@@ -14,11 +54,11 @@
 - ajout d'une préparation guidée de l'utilisateur WSL non-root avec mot de passe saisi directement par Linux et jamais journalisé ;
 - les scripts Bash DevOps et validation DevOps disposent de journaux séparés ;
 - ajout de `-PlanOnly`, `-NonInteractive`, `-Yes`, `-WslUser` et `-FullInstall` ;
-- les contrôles physiques/BIOS impossibles à automatiser sont explicitement marqués `ACTION REQUISE` et peuvent être saisis avec `51_hardware_manual_checks.ps1 -Mode Record -Interactive` ;
+- les contrôles physiques/BIOS impossibles à automatiser sont explicitement marqués `ACTION_REQUISE` et peuvent être saisis avec `51_hardware_manual_checks.ps1 -Mode Record -Interactive` ;
 - masquage automatique des arguments sensibles dans les journaux ;
 - documentation `docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md` et `logs/README.md`.
 
-## V8 Windows Responsiveness
+## V8 — Windows Responsiveness
 
 - ajout de `config/windows/v8/responsiveness.json` pour figer la politique de réactivité Windows ;
 - Memory Compression, Application Launch Prefetching et Application PreLaunch attendus actifs ;
@@ -33,7 +73,7 @@
 - workflow CI `Windows responsiveness V8` avec audit Windows réel et garde-fous anti-régression ;
 - documentation `docs/20_WINDOWS_RESPONSIVENESS_V8.md`.
 
-## V7 / OpenClaw + OpenRouter
+## V7 — Backup / Disaster Recovery / OpenClaw
 
 - ajout d'un bootstrap optionnel OpenClaw + OpenRouter natif Windows ;
 - séparation stricte entre `D:\WSL` pour les workloads Linux DevOps et `D:\AI\OpenClaw` pour la pile IA ;

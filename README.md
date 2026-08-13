@@ -1,304 +1,258 @@
 # Windows 11 Pro Custom
 
-Configuration reproductible d'un poste **Windows 11 Pro** sur mesure, orienté **DevOps/Ops**, WSL2, gaming, optimisation Windows réversible et reprise après incident.
+Workstation **Windows 11 Pro** reproductible, orientée **DevOps/Ops**, conçue pour être installée, auditée, mise à jour, sauvegardée, restaurée et revalidée sans dépendre de réglages « magiques » faits à la main.
 
-## Architecture validée
+Le dépôt cible une machine précise : Ryzen 7 7700, MSI MAG B850M Mortar WiFi, 48 Go DDR5, Intel Arc B580 et deux SSD Crucial T705. Il reste toutefois structuré comme un vrai projet d'infrastructure : état observé, configurations versionnées, scripts idempotents, journaux, preuves et rollback lorsque cela est sûr.
 
-- SSD système Crucial T705 : `C:` en **NTFS**.
-- SSD DATA Crucial T705 : `D:` en **NTFS**.
-- **Aucune partition EXT4 physique** et aucun dual boot.
-- Ubuntu WSL2 est stocké sous `D:\WSL\Ubuntu-DevOps\` ; son VHDX contient le filesystem Linux interne.
-- Le swap WSL est stocké séparément sous `D:\WSL\swap\wsl-swap.vhdx`.
-- Les dépôts DevOps utilisés par Linux restent dans `/home/<user>/projects`, pas dans `/mnt/c` ou `/mnt/d`.
-- WSL2 quotidien V6 : **8 threads, 20 Go RAM, 8 Go swap**, réseau `mirrored`, DNS tunneling et firewall WSL/Hyper-V.
-- WSL2 lab-heavy V6 : **12 threads, 28 Go RAM, 12 Go swap**.
-- Docker Engine tourne directement dans Ubuntu WSL2 ; Docker Desktop n'est pas requis.
-- Microsoft Defender reste actif et toute exclusion est **deny-by-default** puis justifiée par mesure.
-- PowerShell 7 stable est installé dans le socle Windows via `Microsoft.PowerShell` ; Windows PowerShell 5.1 reste présent pour compatibilité.
-- Le client OpenSSH Windows est installé et géré par le dépôt pour VS Code Remote - SSH ; le serveur OpenSSH Windows n'est pas installé.
-- VS Code couvre WSL, Remote - SSH et SFTP/FTP.
-- Les tweaks Windows, VS Code, WezTerm et les profils V4 possèdent Audit, Apply, Verify et Rollback.
-- La V5 matériel est **observationnelle** : elle qualifie mais ne modifie jamais automatiquement BIOS, PBO, RAM, GPU ou stockage.
-- La V7 protège l'état réel du poste avec une image Windows `C:` + `D:` + volumes critiques et un export WSL2 VHDX indépendant sur un disque de sauvegarde séparé.
-- La restauration V7 est **guidée mais jamais destructive automatiquement**.
+> **Tu débutes ?** Commence par [`docs/README.md`](docs/README.md), puis suis [`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md). Pour une reconstruction complète après panne ou réinstallation, utilise [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md).
+
+---
+
+## Objectif du projet
+
+Le résultat attendu est une workstation où les rôles sont clairement séparés :
+
+```text
+Windows 11 Pro
+├── interface graphique / gaming / applications
+├── PowerShell 7
+├── VS Code
+├── WezTerm
+├── Windows Update / WinGet
+├── sauvegarde Windows
+└── WSL2
+    └── Ubuntu 26.04
+        ├── Bash DevOps
+        ├── Docker Engine
+        ├── Kubernetes / Helm
+        ├── Terraform / Ansible
+        ├── AWS CLI / GitHub CLI
+        ├── outils qualité
+        └── projets Linux dans /home/<user>/...
+```
+
+Le dépôt ne cherche pas à transformer Windows en distribution Linux. Windows reste l'hôte ; Linux DevOps vit dans WSL2.
+
+---
+
+## Point d'entrée recommandé
+
+### Le plus simple : le menu interactif V12
+
+Sous Windows :
+
+```text
+START_MENU.cmd
+```
+
+ou depuis PowerShell / WezTerm :
+
+```powershell
+.\menu.ps1
+```
+
+Le centre de contrôle affiche :
+
+```text
+1. Installation complète
+2. Installation / réparation des logiciels
+3. Mises à jour complètes
+4. Sauvegarde
+5. Restauration / rollback
+6. Audit et diagnostic complet
+7. Vérification de conformité
+8. Composants spécifiques
+9. Journaux et rapports
+10. Aide
+0. Quitter
+```
+
+Le menu ne duplique aucune logique : il appelle les orchestrateurs existants et gère l'élévation UAC quand elle est réellement nécessaire.
+
+Guide : [`docs/23_INTERACTIVE_CONTROL_CENTER_V12.md`](docs/23_INTERACTIVE_CONTROL_CENTER_V12.md).
+
+---
+
+## Architecture de stockage
+
+```text
+Crucial T705 #1
+└── C: NTFS
+    ├── Windows 11 Pro
+    ├── applications Windows
+    └── profil utilisateur
+
+Crucial T705 #2
+└── D: NTFS
+    ├── données
+    ├── D:\WSL\Ubuntu-DevOps
+    ├── D:\WSL\swap\wsl-swap.vhdx
+    ├── D:\AI\OpenClaw
+    ├── ISO
+    └── exports temporaires
+
+Disque USB NTFS séparé
+└── Golden Backup V7
+```
+
+Il n'existe **aucune partition EXT4 physique** prévue par le projet. Le filesystem Linux est contenu dans le VHDX de WSL2 stocké sur `D:`.
+
+Pour les outils Linux, les projets actifs restent dans le filesystem Linux :
+
+```text
+/home/<user>/projects
+/home/<user>/labs
+/home/<user>/repositories
+```
+
+`/mnt/c` et `/mnt/d` ne sont pas les emplacements de travail DevOps recommandés.
+
+Architecture détaillée : [`docs/00_ARCHITECTURE.md`](docs/00_ARCHITECTURE.md).
+
+---
 
 ## Matériel cible
 
-- AMD Ryzen 7 7700 — 8 cœurs / 16 threads
-- MSI MAG B850M Mortar WiFi
-- 48 Go DDR5 6000 MT/s CL30
-- Intel Arc B580 12 Go
-- 2× Crucial T705 PCIe 5.0
-- DeepCool LD240WH
-- Corsair RM650e 650 W
-- ASUS Prime AP201
-- ROG Strix OLED XG27AQDMES 1440p 240 Hz
-- Logitech Brio 100
+| Composant | Cible |
+|---|---|
+| CPU | AMD Ryzen 7 7700 — 8 cœurs / 16 threads |
+| Carte mère | MSI MAG B850M Mortar WiFi |
+| RAM | 48 Go DDR5 — cible 6000 MT/s uniquement si stable |
+| GPU | Intel Arc B580 12 Go |
+| SSD système | Crucial T705 PCIe 5.0 |
+| SSD DATA/WSL | Crucial T705 PCIe 5.0 |
+| AIO | DeepCool LD240WH |
+| Alimentation | Corsair RM650e 650 W |
+| Boîtier | ASUS Prime AP201 |
+| Écran cible | 2560×1440, ~240 Hz |
 
-## Hardware Qualification V5
-
-Politique stable :
-
-```text
-Ryzen 7 7700       stock / Precision Boost 2
-DDR5               6000 seulement si stable
-Arc B580            ReBAR + Above 4G vérifiés
-T705 #1             M2_1 PCIe 5.0 x4
-T705 #2             M2_2 PCIe 5.0 x4
-Écran               2560×1440 à ~240 Hz
-Plan alimentation   Balanced
-```
-
-La V5 contrôle automatiquement CPU, RAM, carte mère, GPU, pilotes, SSD, GPT, Secure Boot, TPM, SVM, TRIM et affichage. Les éléments non prouvables proprement via une API Windows générique (ReBAR UEFI, Above 4G, emplacement physique M.2, refroidissement et test de stabilité mémoire) sont enregistrés dans une checklist manuelle explicite.
-
-Inventaire :
-
-```powershell
-.\scripts\windows\50_hardware_inventory.ps1
-```
-
-Checklist :
-
-```powershell
-.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Show
-```
-
-Qualification finale :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateHardware
-```
-
-Verdict attendu :
+La politique V5 reste prudente :
 
 ```text
-VERDICT: V5 HARDWARE READY
+Ryzen 7 7700       -> stock / Precision Boost 2
+DDR5               -> 6000 seulement si stabilité démontrée
+Arc B580            -> ReBAR / Above 4G contrôlés manuellement
+T705                -> santé / GPT / filesystem validés
+Plan alimentation   -> Balanced
 ```
 
-Guide complet :
+Le dépôt ne flashe jamais le BIOS et ne modifie jamais automatiquement PBO, fréquences mémoire, ReBAR ou paramètres M.2.
+
+Guide : [`docs/15_HARDWARE_QUALIFICATION_V5.md`](docs/15_HARDWARE_QUALIFICATION_V5.md).
+
+---
+
+## WSL2 cible
+
+Contrat actuel :
 
 ```text
-docs/15_HARDWARE_QUALIFICATION_V5.md
+Distribution : Ubuntu
+Version      : 26.04
+Codename     : resolute
+Emplacement  : D:\WSL\Ubuntu-DevOps
+HOME Linux   : ext4 dans le VHDX WSL
 ```
 
-## WSL2 V6 — profil matériel
-
-Le profil quotidien est dimensionné pour le Ryzen 7 7700 et les 48 Go de RAM :
+### Profil standard
 
 ```text
-standard
-├── 20 Go RAM
-├── 8 threads
-├── 8 Go swap sur D:\WSL\swap\wsl-swap.vhdx
-├── mirrored networking
-├── DNS tunneling
-├── firewall actif
-├── autoMemoryReclaim=gradual
-├── sparseVhd=true
-└── nestedVirtualization=false
+20 Go RAM
+8 threads
+8 Go swap
+networkingMode=mirrored
+DNS tunneling actif
+firewall WSL/Hyper-V actif
+autoMemoryReclaim=gradual
+sparseVhd=true
+nestedVirtualization=false
 ```
 
-Le profil lourd est réservé aux labs :
+### Profil lab-heavy
 
 ```text
-lab-heavy
-├── 28 Go RAM
-├── 12 threads
-└── 12 Go swap
+28 Go RAM
+12 threads
+12 Go swap
 ```
 
-Le profil `nat-fallback` garde le budget `standard` mais bascule temporairement le réseau en NAT.
+### Profil nat-fallback
 
-Guide de tuning V6 :
+Même budget que `standard`, mais réseau NAT pour dépannage.
 
-```text
-docs/17_WSL2_TUNING_V6.md
-```
+Apprentissage WSL2 : [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md).
 
-Qualification runtime :
+Tuning spécifique : [`docs/17_WSL2_TUNING_V6.md`](docs/17_WSL2_TUNING_V6.md).
 
-```powershell
-.\install.ps1 -Mode Verify -ValidateWsl
-```
+---
 
-Verdict attendu :
+## Stack DevOps Linux
 
-```text
-VERDICT: V6 WSL2 PLATFORM READY
-```
+La stack WSL couvre notamment :
 
-Le validateur compare le profil versionné avec `%UserProfile%\.wslconfig` puis mesure depuis Ubuntu les CPU, RAM, swap, PID 1, filesystem HOME et présence de `~/projects`. Il vérifie également la présence de PowerShell 7 côté Windows.
-
-## Backup & Disaster Recovery V7
-
-La V7 ajoute quatre protections complémentaires :
-
-```text
-System Restore
-      ↓
-régression Windows légère
-
-WindowsImageBackup
-      ↓
-C: + D: + volumes critiques
-      ↓
-récupération bare-metal depuis WinRE
-
-WSL VHDX + SHA-256
-      ↓
-restauration Ubuntu indépendante
-
-GitHub V1 → V7
-      ↓
-reconstruction reproductible si nécessaire
-```
-
-Politique :
-
-```text
-config/backup/v7-policy.json
-```
-
-Création du Golden Backup sur un disque USB NTFS séparé, exemple `E:` :
-
-```powershell
-.\install.ps1 -BackupAction Create -BackupTargetDrive E:
-```
-
-La création :
-
-- refuse une cible située sur le même disque physique que `C:` ou `D:` ;
-- exige NTFS ;
-- exige 100 Go libres minimum ;
-- exige une cible USB par défaut ;
-- vérifie WinRE ;
-- tente un point de restauration ;
-- arrête WSL ;
-- crée l'image Windows avec `wbadmin` ;
-- vérifie qu'une version récupérable est énumérée ;
-- exporte Ubuntu en VHDX ;
-- calcule et enregistre le SHA-256 ;
-- écrit un manifest JSON.
-
-Verdict de création :
-
-```text
-VERDICT: V7 GOLDEN BACKUP CREATED
-```
-
-Validation indépendante :
-
-```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
-```
-
-Verdict attendu après une **vraie sauvegarde sur le PC** :
-
-```text
-VERDICT: V7 BACKUP READY
-```
-
-Génération d'un plan de restauration sans exécuter la restauration :
-
-```powershell
-.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
-```
-
-La V7 ne lance jamais automatiquement `wbadmin start sysrecovery`, ne reformate aucun disque et ne fait jamais `wsl --unregister` sur la distribution active. Une restauration WSL est d'abord importée sous `Ubuntu-Restore-V7` à côté de l'Ubuntu existant.
-
-Guide complet :
-
-```text
-docs/18_BACKUP_DISASTER_RECOVERY_V7.md
-```
-
-## Stack DevOps WSL2
-
-- Docker Engine + Compose + Buildx
-- kubectl
-- Helm
-- Minikube
-- kind
-- Terraform
-- AWS CLI v2
-- Ansible Core
-- GitHub CLI
-- Trivy
-- ShellCheck
-- shfmt
-- terraform-docs `v0.24.0`
-- actionlint `v1.7.12`
-- yq `v4.53.3`
-- TFLint `v0.64.0`
-
-Docker utilise le driver de logs `local` avec rotation afin d'éviter des journaux de conteneurs non bornés dans le VHDX.
-
-## Guide WSL2 débutant → avancé
-
-Le guide pédagogique principal est :
-
-```text
-docs/16_WSL2_GUIDE_COMPLET.md
-```
-
-Il part de zéro et couvre le modèle mental Windows/Linux, le premier lancement Ubuntu, les commandes Linux de base, les permissions, `sudo`, APT, Git, VS Code, les commandes WSL PowerShell, `.wslconfig`, `/etc/wsl.conf`, systemd, réseau, Docker, Kubernetes, Terraform, Ansible, sauvegardes, import/export, VHDX, dépannage, exercices et antisèches.
-
-**Les valeurs de ressources WSL2 de référence sont celles de la V6 dans `docs/17_WSL2_TUNING_V6.md` et `config/wsl/*.wslconfig`.**
-
-Règle centrale :
-
-```text
-outils Linux -> fichiers de projet Linux
-               /home/<user>/projects
-```
-
-## Workstation DevOps
-
-Windows héberge VS Code, WezTerm et PowerShell 7.
-
-VS Code est préparé pour :
-
-- WSL — `ms-vscode-remote.remote-wsl` ;
-- Remote - SSH — `ms-vscode-remote.remote-ssh` ;
-- SFTP / FTP — `Natizyskunk.sftp` ;
+- Docker Engine, Compose et Buildx ;
+- kubectl ;
+- Helm ;
+- Minikube ;
+- kind ;
 - Terraform ;
-- Kubernetes ;
-- Container Tools ;
-- YAML ;
-- GitHub Actions ;
+- AWS CLI v2 ;
+- Ansible Core ;
+- GitHub CLI ;
+- Trivy ;
 - ShellCheck ;
-- shell-format.
+- shfmt ;
+- terraform-docs ;
+- actionlint ;
+- yq ;
+- TFLint.
 
-Le client Windows requis pour Remote - SSH est géré comme capacité système :
-
-```text
-OpenSSH.Client~~~~0.0.1.0
-```
-
-Exemples :
+Les outils sensibles à la reproductibilité utilisent la matrice versionnée :
 
 ```text
-config/vscode/ssh-config.example
-config/vscode/sftp.example.json
+config/devops/tool-versions.env
 ```
 
-`.vscode/sftp.json` est ignoré par Git pour éviter la publication accidentelle de secrets. SFTP avec clé SSH est préféré à FTP avec mot de passe.
+Le gestionnaire de mises à jour V11 ne remplace pas ces versions par `latest` de manière aveugle.
 
-WezTerm ouvre par défaut :
+---
+
+## Terminal DevOps V10
+
+WezTerm est le terminal Windows principal :
 
 ```text
-wsl.exe -d Ubuntu --cd ~
+WezTerm
+├── Ubuntu DevOps / Bash  <- défaut
+└── PowerShell 7          <- secondaire
 ```
 
-Le profil shell Linux fournit les alias et complétions DevOps depuis `~/.config/windows11-pro-custom/devops.sh`.
+VS Code utilise le même Bash WSL afin d'obtenir une expérience cohérente.
 
-## Socle applicatif Windows
+Le profil fournit :
 
-Installation automatique WinGet quand un ID fiable est disponible :
+- Starship ;
+- fzf ;
+- zoxide ;
+- eza ;
+- bat ;
+- fd ;
+- ripgrep ;
+- alias Git/Docker/Kubernetes/Helm/Terraform/Ansible/AWS ;
+- complétions DevOps.
+
+Guide : [`docs/21_DEVOPS_TERMINAL_V10.md`](docs/21_DEVOPS_TERMINAL_V10.md).
+
+---
+
+## Applications Windows
+
+Applications automatisables par WinGet :
 
 ```text
 Visual Studio Code
-PowerShell 7 stable
+PowerShell 7
+JetBrainsMono Nerd Font
 VLC
 Notion
 Firefox
@@ -312,7 +266,7 @@ draw.io
 Bitwarden
 ```
 
-Installation conservée manuelle/contrôlée :
+Applications volontairement manuelles car aucune automatisation WinGet n'est considérée assez fiable dans le manifeste actuel :
 
 ```text
 MarkText
@@ -321,189 +275,309 @@ PDFgear
 Files
 ```
 
-WSL2 fait partie du socle système mais est provisionné par le bootstrap WSL, pas comme une application WinGet. OpenSSH Client est également provisionné comme capacité Windows et non comme package WinGet.
-
-## Windows Optimization V4
-
-WinUtil est utilisé comme **référence upstream** et non comme script distant exécuté automatiquement.
-
-La V4 comprend quatre profils :
-
-- `standard` — appliqué par défaut ;
-- `privacy` — opt-in ;
-- `gaming` — opt-in ;
-- `optional` — tuning services limité et opt-in.
-
-Le profil `standard` complète la base existante avec Activity History désactivé, WPBT bloqué, Delivery Optimization sans peer-to-peer et `End Task` dans la barre des tâches.
-
-Le mapping WinUtil est versionné dans :
+Source de vérité :
 
 ```text
-config/winutil/mathias-winutil.json
+manifests/winget/apps-core.json
 ```
 
-### Audit
+---
+
+## Orchestration V9 : machine-first et idempotence
+
+`install.ps1` ne suppose pas qu'une étape est à faire parce qu'elle figure dans une liste.
+
+Le principe est :
+
+```text
+Découvrir l'état réel
+        ↓
+Verify
+        ↓
+DEJA_OK ou A_FAIRE
+        ↓
+Apply seulement si nécessaire
+        ↓
+Re-Verify
+        ↓
+preuve / log / verdict
+```
+
+Modes :
 
 ```powershell
 .\install.ps1 -Mode Audit
+.\install.ps1 -Mode Apply
+.\install.ps1 -Mode Verify
+.\install.ps1 -Mode Rollback
 ```
 
-### Apply — profil standard
+Installation complète :
 
 ```powershell
-.\install.ps1 -Mode Apply
+.\install.ps1 -Mode Apply -FullInstall
 ```
 
-### Apply — standard + privacy + gaming
+`-FullInstall` inclut WSL/DevOps, validations matérielles/WSL/DevOps et OpenClaw selon le contrat du dépôt.
+
+Prévisualisation sans mutation après la découverte :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Documentation : [`docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md`](docs/21_ORCHESTRATION_IDEMPOTENCE_V9.md).
+
+---
+
+## Windows Optimization V4 + Responsiveness V8
+
+Le dépôt applique uniquement des changements versionnés, réversibles et vérifiés.
+
+Profils V4 :
+
+```text
+standard  <- défaut
+privacy   <- opt-in
+gaming    <- opt-in
+optional  <- opt-in
+```
+
+Exemple :
 
 ```powershell
 .\install.ps1 -Mode Apply -OptimizationProfiles standard,privacy,gaming
 ```
 
-Avant les modifications V4, le dépôt tente de créer un point de restauration Windows, capture un benchmark léger puis sauvegarde l'état Registry/services de chaque profil.
+Avant une mutation réelle, l'orchestrateur tente de créer un point de restauration et capture des mesures avant/après.
 
-Rapports :
+V8 ajoute les réglages de réactivité Windows dans la même philosophie réversible.
+
+Guides :
+
+- [`docs/14_WINDOWS_OPTIMIZATION_V4.md`](docs/14_WINDOWS_OPTIMIZATION_V4.md) ;
+- [`docs/20_WINDOWS_RESPONSIVENESS_V8.md`](docs/20_WINDOWS_RESPONSIVENESS_V8.md).
+
+---
+
+## Microsoft Defender
+
+Defender reste actif.
+
+Le projet suit une politique **deny-by-default** pour les exclusions :
 
 ```text
-reports/windows/v4-benchmark-before.json
-reports/windows/v4-benchmark-after.json
-reports/windows/v4-benchmark-comparison.json
-reports/validation-v4.json
+config/defender/exclusions.approved.json
 ```
 
-## Organisation
+est vide par défaut.
+
+Une exclusion ne doit être ajoutée qu'après mesure d'un hotspot réel.
+
+Guide : [`docs/05_DEFENDER_PERFORMANCE.md`](docs/05_DEFENDER_PERFORMANCE.md).
+
+---
+
+## Sauvegarde et reprise V7
+
+La protection repose sur plusieurs niveaux :
 
 ```text
-Windows_11_Pro_Custom/
-├── config/
-│   ├── backup/
-│   ├── defender/
-│   ├── hardware/
-│   ├── vscode/
-│   ├── wezterm/
-│   ├── winutil/
-│   ├── windows/v4/
-│   └── wsl/
-├── docs/
-├── manifests/
-├── scripts/
-│   ├── backup/
-│   ├── bootstrap/
-│   ├── defender/
-│   ├── windows/
-│   └── wsl/
-└── .github/workflows/
+Point de restauration
+        ↓
+rollback léger Windows
+
+WindowsImageBackup
+        ↓
+C: + D: + volumes critiques
+
+Export WSL VHDX + SHA-256
+        ↓
+restauration Ubuntu indépendante
+
+GitHub
+        ↓
+reconstruction du socle automatisé
 ```
 
-## Installation principale
+La cible de Golden Backup doit être un **disque USB NTFS séparé**, avec au moins 100 Go libres selon la politique actuelle.
 
-PowerShell administrateur :
+Création :
+
+```powershell
+.\install.ps1 -BackupAction Create -BackupTargetDrive E:
+```
+
+Vérification :
+
+```powershell
+.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
+```
+
+Plan de restauration :
+
+```powershell
+.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
+```
+
+Aucune restauration bare-metal destructive n'est lancée automatiquement.
+
+Guide : [`docs/18_BACKUP_DISASTER_RECOVERY_V7.md`](docs/18_BACKUP_DISASTER_RECOVERY_V7.md).
+
+---
+
+## System Update Manager V11
+
+Point d'entrée :
+
+```powershell
+.\update.ps1 -Mode Audit
+.\update.ps1 -Mode Apply
+.\update.ps1 -Mode Verify
+```
+
+V11 couvre :
+
+- Windows Update ;
+- applications WinGet ;
+- runtime WSL ;
+- Ubuntu/APT ;
+- outils DevOps épinglés ;
+- extensions VS Code.
+
+Par défaut :
+
+- les drivers Windows Update sont exclus ;
+- les mises à jour facultatives Windows sont exclues ;
+- les pins WinGet sont respectés ;
+- aucun `dist-upgrade` Ubuntu ;
+- aucun `autoremove` agressif ;
+- aucun flash BIOS/firmware ;
+- aucun redémarrage forcé.
+
+Guide : [`docs/22_SYSTEM_UPDATE_MANAGER_V11.md`](docs/22_SYSTEM_UPDATE_MANAGER_V11.md).
+
+---
+
+## OpenClaw / OpenRouter
+
+L'intégration OpenClaw est isolée sous :
+
+```text
+D:\AI\OpenClaw
+```
+
+Le dépôt Windows utilise un contrôle-plane versionné et ne supprime pas automatiquement les données ou identifiants lors d'un rollback global.
+
+Guide : [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md).
+
+---
+
+## Installation depuis un Windows propre
+
+Le tutoriel détaillé est :
+
+[`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md)
+
+Le Runbook de reconstruction complet est :
+
+[`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md)
+
+Après récupération du dépôt, la séquence la plus simple est :
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
+.\menu.ps1
+```
+
+Puis choisir **1 — Installation complète**.
+
+Pour un opérateur qui préfère les commandes :
+
+```powershell
 .\install.ps1 -Mode Audit
-.\install.ps1 -Mode Apply
+.\install.ps1 -Mode Apply -FullInstall
+.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps -ValidateOpenClawAI
 ```
 
-PowerShell 7 est ensuite disponible via :
+Certaines validations matérielles exigent des preuves manuelles, car Windows ne peut pas prouver de façon fiable le réglage UEFI ReBAR/Above 4G, l'emplacement physique exact des SSD ou la stabilité mémoire.
 
-```powershell
-pwsh
-```
+---
 
-Après le premier lancement Ubuntu :
+## Journaux et rapports
 
-```powershell
-.\install.ps1 -Mode Apply -InstallDevOps
-wsl --shutdown
-.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
-```
-
-Après vérification UEFI / ReBAR / M.2 / refroidissement / stabilité mémoire :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
-```
-
-Verdicts plateforme attendus :
+Les exécutions V9 conservent notamment :
 
 ```text
-VERDICT: V3 WINDOWS READY
-VERDICT: V3 DEVOPS READY
-VERDICT: V4 WINDOWS OPTIMIZATION READY
-VERDICT: V5 HARDWARE READY
-VERDICT: V6 WSL2 PLATFORM READY
+logs/<script>.log
+logs/runs/<RunId>/events.ndjson
+logs/runs/<RunId>/summary.json
+reports/
 ```
 
-Puis, après création réelle du Golden Backup :
+Le menu V12 permet d'ouvrir directement `logs\` et `reports\`.
 
-```text
-VERDICT: V7 BACKUP READY
-```
+Une réussite n'est pas déclarée uniquement parce qu'une commande s'est lancée : les composants cherchent une preuve machine exploitable puis revalident leur état.
 
-## Rollback et restauration
+---
 
-Rollback des réglages gérés par le dépôt :
+## Sécurité : limites volontaires
 
-```powershell
-.\install.ps1 -Mode Rollback
-```
+Le dépôt ne doit jamais :
 
-La V5 matériel n'a pas de rollback matériel car elle ne modifie aucun réglage matériel.
+- formater automatiquement un SSD ;
+- flasher automatiquement l'UEFI/BIOS ;
+- activer un overclocking/PBO agressif ;
+- forcer la DDR5 6000 si elle n'est pas stable ;
+- désactiver Defender globalement ;
+- ajouter des exclusions Defender non approuvées ;
+- déplacer les projets Linux vers `/mnt/c` ou `/mnt/d` ;
+- contourner les versions DevOps épinglées ;
+- forcer un redémarrage sans décision utilisateur ;
+- exécuter automatiquement une restauration bare-metal destructive.
 
-Le client OpenSSH Windows possède un rollback à état initial : il n'est retiré que si le dépôt l'avait ajouté sur une machine où il était absent au départ.
-
-La V7 est différente d'un rollback : elle crée et vérifie des sauvegardes, puis génère un plan de reprise. Les opérations de restauration potentiellement destructives restent manuelles.
-
-## Defender performance
-
-```powershell
-.\scripts\defender\01_record.ps1 -Seconds 60
-.\scripts\defender\02_report.ps1
-.\scripts\defender\03_apply_approved_exclusions.ps1 -Mode Audit
-```
-
-`config/defender/exclusions.approved.json` est vide par défaut.
-
-## Stockage
-
-Audit TRIM :
-
-```powershell
-.\scripts\windows\21_storage_trim.ps1 -Mode Audit
-```
-
-ReTrim manuel si nécessaire :
-
-```powershell
-.\scripts\windows\21_storage_trim.ps1 -Mode Apply
-```
-
-La planification Windows d'optimisation des SSD n'est jamais désactivée par le dépôt.
+---
 
 ## Documentation
 
-- `docs/00_ARCHITECTURE.md` — architecture globale ;
-- `docs/02_BIOS_DRIVERS.md` — BIOS et stratégie pilotes ;
-- `docs/04_OPTIMISATION_WINDOWS.md` — stratégie Windows ;
-- `docs/05_DEFENDER_PERFORMANCE.md` — Defender et I/O ;
-- `docs/06_WSL2.md` — configuration WSL2 de référence ;
-- `docs/07_DEVOPS_STACK.md` — stack Linux ;
-- `docs/11_VALIDATION.md` — critères workstation/DevOps ;
-- `docs/12_RUNBOOK_REINSTALLATION.md` — réinstallation ;
-- `docs/13_WORKSTATION_V3.md` — VS Code, Remote SSH/SFTP, OpenSSH, WezTerm et PowerShell ;
-- `docs/14_WINDOWS_OPTIMIZATION_V4.md` — profils V4 et mapping WinUtil ;
-- `docs/15_HARDWARE_QUALIFICATION_V5.md` — tuning matériel stable et qualification ;
-- `docs/16_WSL2_GUIDE_COMPLET.md` — guide pédagogique WSL2 débutant à avancé ;
-- `docs/17_WSL2_TUNING_V6.md` — tuning WSL2 matériel et exploitation V6 ;
-- `docs/18_BACKUP_DISASTER_RECOVERY_V7.md` — Golden Backup, contrôle d'intégrité et reprise après incident.
+Point d'entrée documentaire :
 
-## Statut
+[`docs/README.md`](docs/README.md)
 
-- V1 : architecture Windows 11 Pro / NTFS / WSL2 / Defender — intégrée.
-- V2 : tuning Windows réversible, Defender mesuré et stack DevOps — intégrée.
-- V3 : workstation DevOps, qualité IaC et qualification stricte — intégrée.
-- V4 : optimisation Windows 11 inspirée de WinUtil, profils réversibles et benchmarks — intégrée.
-- V5 : qualification hardware ciblée + guide WSL2 complet — intégrée.
-- V6 : tuning WSL2 matériel, PowerShell 7, OpenSSH Client et accès distant VS Code — intégrée.
-- V7 : Golden Backup Windows + export WSL2 + SHA-256 + plan de reprise non destructif — périmètre complet et qualifié par CI ; première sauvegarde réelle requise avant le verdict runtime `V7 BACKUP READY`.
+Guide maître consolidé :
+
+[`docs/24_GUIDE_MAITRE_V13.md`](docs/24_GUIDE_MAITRE_V13.md)
+
+Documents essentiels :
+
+- [`docs/00_ARCHITECTURE.md`](docs/00_ARCHITECTURE.md) — architecture globale ;
+- [`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md) — installation Windows 11 depuis zéro ;
+- [`docs/02_BIOS_DRIVERS.md`](docs/02_BIOS_DRIVERS.md) — UEFI/BIOS et pilotes ;
+- [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md) — reconstruction opérationnelle ;
+- [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) — WSL2 débutant à avancé ;
+- [`docs/18_BACKUP_DISASTER_RECOVERY_V7.md`](docs/18_BACKUP_DISASTER_RECOVERY_V7.md) — sauvegarde/reprise ;
+- [`docs/21_DEVOPS_TERMINAL_V10.md`](docs/21_DEVOPS_TERMINAL_V10.md) — terminal DevOps ;
+- [`docs/22_SYSTEM_UPDATE_MANAGER_V11.md`](docs/22_SYSTEM_UPDATE_MANAGER_V11.md) — mises à jour ;
+- [`docs/23_INTERACTIVE_CONTROL_CENTER_V12.md`](docs/23_INTERACTIVE_CONTROL_CENTER_V12.md) — menu V12.
+
+---
+
+## État du projet
+
+| Version | État | Fonction |
+|---|---|---|
+| V1 | intégrée | architecture Windows/NTFS/WSL/Defender |
+| V2 | intégrée | tuning Windows et stack DevOps |
+| V3 | intégrée | workstation VS Code/WezTerm/OpenSSH |
+| V4 | intégrée | optimisation Windows réversible |
+| V5 | intégrée | qualification matérielle |
+| V6 | intégrée | tuning WSL2 adapté au matériel |
+| V7 | intégrée | sauvegarde et disaster recovery |
+| V8 | intégrée | réactivité Windows |
+| V9 | intégrée | orchestration machine-first/idempotence/logs |
+| V10 | intégrée | terminal Bash DevOps WezTerm + VS Code |
+| V11 | intégrée | gestionnaire global de mises à jour |
+| V12 | intégrée | centre de contrôle interactif |
+| V13 documentation | documentation | consolidation README/Runbook/guide maître |
+
+La CI valide les contrats techniques ; la validation finale d'une installation complète reste une opération à exécuter sur la vraie machine Windows, car un runner GitHub ne peut pas reproduire le firmware, les SSD, le GPU, les pilotes et les redémarrages réels du PC.
