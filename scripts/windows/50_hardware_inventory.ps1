@@ -109,7 +109,7 @@ $report = [ordered]@{
 $path = Join-Path $reportDir 'hardware-inventory-v5.json'
 $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $path
 
-Write-Host "[OK] V5 hardware inventory: $path" -ForegroundColor Green
+Write-Host "[OK] Inventaire matériel: $path" -ForegroundColor Green
 Write-Host $powerScheme
 $cpu | Format-Table -AutoSize
 $memory | Format-Table -AutoSize
