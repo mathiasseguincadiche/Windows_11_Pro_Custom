@@ -1,6 +1,6 @@
-# Orchestration — état réel, convergence et idempotence
+# Orchestration — état réel, plan, convergence et idempotence
 
-L'orchestration est le mécanisme qui permet au dépôt de gérer une workstation réelle **sans réinstaller ou modifier aveuglément ce qui est déjà correct**.
+L'orchestration est le cœur opérationnel du projet. Elle permet de gérer une workstation réelle **sans supposer qu'elle est vide, sans réappliquer aveuglément les mêmes actions et sans utiliser un ancien fichier d'état comme vérité actuelle**.
 
 Le point d'entrée technique principal est :
 
@@ -8,65 +8,146 @@ Le point d'entrée technique principal est :
 .\install.ps1
 ```
 
-Le menu interactif appelle cet orchestrateur ; il ne duplique pas sa logique.
+Le centre de contrôle `menu.ps1` appelle cet orchestrateur ; il ne duplique pas sa logique.
 
-## Modèle de fonctionnement
+Le Runbook de réalisation de bout en bout est [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
+
+---
+
+## 1. Modèle mental
 
 ```text
-Découvrir l'état réel
+état attendu versionné
+        +
+état réel de la machine
         ↓
-Vérifier chaque composant
+Probe / Verify
         ↓
-Construire un plan complet
+plan factuel
         ↓
-Aucun écart ? ── oui ──► ne rien modifier
+aucun écart ? ── oui ──► DÉJÀ OK
         │
         non
         ↓
-Confirmer les actions utiles
+confirmation / protection
         ↓
-Appliquer uniquement le delta
+Apply ciblé
         ↓
-Re-vérifier
+re-Verify
         ↓
-Journaliser + produire un verdict
+logs + rapport + verdict
 ```
 
-L'objectif n'est pas « exécuter tous les scripts ». L'objectif est **faire converger la machine vers l'état attendu**.
+L'objectif n'est pas « exécuter tous les scripts ». L'objectif est **faire converger uniquement les composants qui en ont besoin**.
 
-## Les quatre modes principaux
+---
 
-### Audit
+# 2. Le moteur partagé
 
-Observe et collecte les faits sans chercher à modifier la machine.
+`install.ps1` s'appuie sur :
+
+```text
+scripts/core/runtime.psm1
+```
+
+Ce module fournit notamment :
+
+- le contexte d'exécution ;
+- le `RunId` ;
+- la gestion des journaux ;
+- la redaction des arguments sensibles ;
+- l'exécution contrôlée des sous-scripts ;
+- les probes de conformité ;
+- les statuts utilisateur ;
+- les événements structurés ;
+- la synthèse de fin d'exécution.
+
+Le moteur permet aux composants spécialisés de conserver une expérience cohérente sans réimplémenter la logique de logs et de planification.
+
+---
+
+# 3. Source de vérité
+
+Le projet distingue quatre catégories d'information :
+
+```text
+faits machine
+configurations / manifests
+états de rollback
+logs / rapports
+```
+
+Les fichiers `state/` servent uniquement aux retours arrière qui ont besoin d'un état initial enregistré.
+
+Ils ne sont **pas** utilisés pour dire qu'un composant est conforme aujourd'hui.
+
+La conformité doit être recalculée depuis la machine réelle.
+
+Guide : [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
+
+---
+
+# 4. Les quatre modes principaux
+
+## Audit
 
 ```powershell
 .\install.ps1 -Mode Audit
 ```
 
-À utiliser pour comprendre la situation avant une installation, après une mise à jour importante ou pendant un diagnostic.
+### But
 
-### Apply
+Observer, inventorier et rendre l'état lisible.
 
-Calcule le plan puis applique les changements nécessaires.
+### Comportement
+
+L'orchestrateur exécute la découverte et plusieurs audits spécialisés sans essayer de faire converger l'ensemble.
+
+### Quand l'utiliser
+
+- première prise en main ;
+- avant une intervention ;
+- après un changement important ;
+- pendant un diagnostic ;
+- avant de décider si une réinstallation est vraiment nécessaire.
+
+Audit ne signifie pas conformité.
+
+---
+
+## Apply
 
 ```powershell
 .\install.ps1 -Mode Apply
 ```
 
-Installation complète :
+### But
 
-```powershell
-.\install.ps1 -Mode Apply -FullInstall
-```
+Faire converger les composants demandés.
 
-### Verify
+### Fonctionnement
 
-Contrôle que la machine correspond à l'état attendu.
+Pour chaque élément planifié :
+
+1. exécuter le validateur ;
+2. considérer la cible `DÉJÀ OK` si le validateur réussit ;
+3. planifier l'Apply seulement si le validateur signale un écart ;
+4. appliquer ;
+5. re-vérifier.
+
+Cette séparation est la base de l'idempotence.
+
+---
+
+## Verify
 
 ```powershell
 .\install.ps1 -Mode Verify
 ```
+
+### But
+
+Exiger la conformité de la workstation selon les validateurs sélectionnés.
 
 Validation étendue :
 
@@ -78,118 +159,222 @@ Validation étendue :
   -ValidateDevOps
 ```
 
-### Rollback
+`Verify` est le mode de décision de conformité. Il est détaillé dans [`11_VALIDATION.md`](11_VALIDATION.md).
 
-Restaure les éléments pour lesquels le dépôt possède un état initial fiable et une procédure de retour sûre.
+---
+
+## Rollback
 
 ```powershell
 .\install.ps1 -Mode Rollback
 ```
 
-Un rollback applicatif n'est pas une restauration bare-metal. Les opérations destructives restent séparées de l'orchestration normale.
+### But
 
-## Prévisualiser sans mutation
+Revenir aux états initiaux que le dépôt a réellement enregistrés et sait restaurer sans ambiguïté.
 
-Pour calculer le plan complet sans appliquer les changements :
+Le rollback concerne surtout les réglages Windows et composants bornés.
+
+Il ne signifie pas :
+
+- restauration complète de disque ;
+- suppression d'Ubuntu ;
+- suppression automatique d'OpenClaw ;
+- retour arrière d'un changement matériel ;
+- restauration magique de données utilisateur.
+
+Le projet préfère une frontière explicite à une promesse de rollback irréaliste.
+
+---
+
+# 5. `FullInstall`
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall
+```
+
+`-FullInstall` demande le parcours complet prévu par l'orchestrateur et active notamment les validations/compléments du périmètre DevOps et OpenClaw prévus par ce mode.
+
+Ce paramètre ne contourne pas le modèle machine-first : chaque composant doit toujours être vérifié avant d'être modifié.
+
+Une installation complète peut donc produire beaucoup de `DÉJÀ OK` sur une machine déjà partiellement configurée.
+
+---
+
+# 6. `PlanOnly`
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-Ce mode est utile pour :
+`PlanOnly` est le moyen le plus simple de répondre à :
 
-- comprendre ce qui serait modifié ;
-- vérifier qu'une machine presque conforme ne déclenche pas une réinstallation inutile ;
-- préparer une intervention ;
-- diagnostiquer un écart avant de l'accepter.
+> « Que ferait le projet si je lançais la convergence maintenant ? »
 
-## État machine et sources de vérité
+Le moteur réalise la phase de découverte, teste les composants, affiche le plan puis s'arrête avant les modifications.
 
-Le moteur distingue :
+À utiliser avant une intervention sensible ou pour prouver l'idempotence d'une machine déjà prête.
 
-1. **faits machine** — état réellement observé ;
-2. **configuration versionnée** — état attendu ;
-3. **état de rollback** — information conservée uniquement pour revenir en arrière ;
-4. **logs et rapports** — preuve d'une exécution.
+---
 
-Les fichiers de rollback ne doivent jamais être utilisés comme preuve que la machine est actuellement conforme.
+# 7. Construction du plan
 
-## Idempotence
+Le plan repose sur une fonction logique du type :
 
-Une deuxième exécution sur une machine déjà conforme doit tendre vers :
+```text
+VerifyPath
+   ↓
+succès ?
+   ├── oui -> Compliant -> DÉJÀ OK
+   └── non -> NeedsChange -> À FAIRE
+```
+
+L'Apply associé n'est déclenché que pour `NeedsChange`.
+
+Cette architecture impose une règle importante aux composants :
+
+> **Ce que `Apply` produit doit correspondre exactement à ce que `Verify` attend.**
+
+Si ce contrat est rompu, un composant peut boucler indéfiniment entre `À FAIRE` et `Apply`.
+
+Le troubleshooting de cette situation est décrit dans [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md).
+
+---
+
+# 8. Statuts utilisateur
+
+Le vocabulaire commun est :
 
 ```text
 DÉJÀ OK
+À FAIRE
+EN COURS
+FAIT
+ACTION REQUISE
+ATTENTE
+IGNORE
+AVERTISSEMENT
+ERREUR
 ```
 
-plutôt que vers une nouvelle mutation.
+Ces statuts ont une signification opérationnelle, pas seulement esthétique.
 
-Exemples de composants vérifiés avant action :
+- `DÉJÀ OK` : aucune mutation nécessaire ;
+- `À FAIRE` : delta détecté ;
+- `FAIT` : une action a modifié l'état ;
+- `ACTION REQUISE` : l'automatisation ne peut pas inventer la décision ;
+- `ERREUR` : le composant ne peut pas être déclaré conforme.
 
-- applications WinGet ;
-- PowerShell / OpenSSH ;
-- VS Code / WezTerm ;
-- WSL2 ;
-- utilisateur Ubuntu ;
-- outils DevOps ;
-- réglages Windows ;
-- Defender ;
-- OpenClaw lorsque cette intégration est activée.
+`FAIT` doit être suivi d'une re-vérification. Une modification réussie techniquement peut encore produire un état final incorrect.
 
-## Réversibilité
+---
 
-Le dépôt privilégie le triptyque :
+# 9. Confirmation et protection avant changement
 
-```text
-mesurer l'état initial
-        ↓
-appliquer un changement borné
-        ↓
-pouvoir revenir à l'état initial
-```
+Lorsqu'un plan contient des modifications, l'orchestrateur peut demander une confirmation et préparer un point de restauration avant les changements Windows concernés.
 
-Cela concerne surtout les réglages Windows et les composants dont l'état précédent peut être enregistré sans ambiguïté.
+Si aucune modification n'est nécessaire, le projet ne crée pas inutilement un point de restauration ni de nouvelles preuves de benchmark simplement pour « faire quelque chose ».
 
-À l'inverse, le dépôt **ne prétend pas rollbacker automatiquement** :
+C'est une conséquence directe de la logique machine-first.
 
-- un flash BIOS ;
-- un changement physique de SSD ;
-- une fréquence mémoire ;
-- une restauration bare-metal ;
-- des données utilisateur supprimées.
+---
 
-## Actions nécessitant l'utilisateur
+# 10. Mesures avant/après
 
-Certaines validations sont explicitement marquées comme action humaine :
+Pour certains réglages Windows, le projet produit des mesures légères avant et après afin de comparer l'état sans lancer de benchmark agressif.
+
+Le but est de documenter les effets d'une optimisation, pas de générer un score artificiel.
+
+Les preuves existantes ne sont pas réécrites inutilement sur une relance totalement conforme, sauf lorsqu'une base de validation est absente.
+
+---
+
+# 11. Actions humaines
+
+Certaines informations restent nécessairement humaines :
 
 - contrôles BIOS/UEFI ;
-- validation ReBAR / Above 4G ;
+- ReBAR / Above 4G ;
 - stabilité mémoire ;
-- présence physique des SSD aux bons emplacements ;
-- choix de restauration destructive ;
-- redémarrage lorsqu'il est nécessaire ;
-- saisie de secrets ou mots de passe.
+- emplacement physique des SSD ;
+- choix de restauration ;
+- saisie de secrets ;
+- création/confirmation de certains éléments utilisateur ;
+- redémarrages demandés par le système.
 
-Le projet préfère une **ACTION_REQUISE honnête** à un faux succès.
+Le moteur doit les rendre visibles comme `ACTION REQUISE` plutôt que simuler un succès.
 
-## Journaux
+---
 
-Chaque exécution importante conserve des informations persistantes :
+# 12. WSL2 dans l'orchestration
 
-```text
-logs/<catégorie>/<script>.log
-logs/runs/<RunId>/events.ndjson
-logs/runs/<RunId>/summary.json
-reports/
+Le composant WSL vérifie notamment :
+
+- disponibilité de WSL ;
+- nom de distribution ;
+- mode WSL2 ;
+- profil `.wslconfig` ;
+- emplacement sur `D:` ;
+- release Ubuntu attendue ;
+- préconditions de stockage.
+
+Une distribution existante mais incompatible n'est pas supprimée automatiquement. L'orchestrateur s'arrête avec un état explicite afin que l'utilisateur décide de la migration appropriée.
+
+Guide : [`06_WSL2.md`](06_WSL2.md).
+
+---
+
+# 13. DevOps dans l'orchestration
+
+La stack DevOps est volontairement opt-in dans un `Apply` standard :
+
+```powershell
+.\install.ps1 -Mode Apply -InstallDevOps
 ```
 
-Les événements détaillent ce qui a été observé, planifié, appliqué et vérifié.
+`-FullInstall` l'inclut.
 
-Les arguments sensibles sont masqués autant que possible ; un secret ne doit jamais être ajouté volontairement dans Git ou dans une ligne de commande journalisée.
+Cette séparation permet d'auditer ou de corriger Windows sans réinstaller la couche Linux DevOps lorsqu'elle n'est pas demandée.
 
-## Exécution non interactive
+La validation DevOps reste disponible séparément.
 
-Certaines opérations supportent des options destinées à l'automatisation ou aux tests :
+---
+
+# 14. OpenClaw dans l'orchestration
+
+L'intégration OpenClaw est également explicite :
+
+```powershell
+.\install.ps1 -Mode Apply -InstallOpenClawAI
+```
+
+L'orchestrateur lit normalement le ref approuvé depuis `config/openclaw/control-plane.json`.
+
+Le rollback général ne supprime pas automatiquement l'état OpenClaw, car ce répertoire peut contenir des données et credentials qui nécessitent une décision spécifique.
+
+---
+
+# 15. Journaux et événements
+
+Chaque run possède un identifiant unique et peut produire :
+
+```text
+logs\install.log
+logs\<catégorie>\<script>.log
+logs\runs\<RunId>\events.ndjson
+logs\runs\<RunId>\summary.json
+reports\orchestration\latest-run.json
+```
+
+Les événements structurés enregistrent notamment le script, la phase, le résultat, la durée et le chemin du log.
+
+Les arguments dont le nom indique une donnée sensible sont masqués dans la représentation journalisée.
+
+---
+
+# 16. Non-interactif
+
+Les options d'automatisation comprennent notamment :
 
 ```text
 -NonInteractive
@@ -197,46 +382,53 @@ Certaines opérations supportent des options destinées à l'automatisation ou a
 -PlanOnly
 ```
 
-Ces options ne doivent pas contourner les frontières de sécurité : une restauration destructrice ou une preuve matérielle impossible à automatiser reste une décision humaine.
+Elles sont utiles en automatisation ou en CI, mais elles ne doivent pas contourner une frontière qui nécessite réellement une action humaine.
 
-## Relation avec le Control Center
+Par exemple, une preuve matérielle impossible à observer ne devient pas vraie parce qu'une exécution est non interactive.
 
-```text
-utilisateur
-   ↓
-menu.ps1
-   ↓
-install.ps1 / update.ps1
-   ↓
-composants spécialisés
-```
+---
 
-Le menu sert à choisir une intention ; l'orchestrateur reste la source de vérité de l'installation et de la convergence.
+# 17. Relation avec `update.ps1`
 
-Guide du menu : [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
+`install.ps1` gère la conformité de la workstation.
 
-## Relation avec les mises à jour
+`update.ps1` gère la maintenance de plusieurs couches : Windows Update, WinGet, runtime WSL, Ubuntu, outils DevOps épinglés et extensions VS Code.
 
-Les mises à jour possèdent leur propre orchestrateur :
-
-```powershell
-.\update.ps1
-```
-
-Il applique les mêmes principes : audit, action ciblée et vérification finale. Voir [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
-
-## Critère de réussite
-
-Une opération n'est considérée réussie que si :
+Les deux moteurs partagent la philosophie :
 
 ```text
-le plan était cohérent
-+
-les changements nécessaires ont été appliqués
-+
-le nouvel état a été re-vérifié
-+
-aucun blocage important n'est masqué
+observer
+→ planifier
+→ appliquer uniquement ce qui est nécessaire
+→ re-vérifier
 ```
 
-Ce comportement est la base qui permet au dépôt de fonctionner comme une **workstation-as-code** plutôt que comme un simple dossier de scripts PowerShell.
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
+
+---
+
+# 18. Critère de réussite de l'orchestration
+
+Une exécution est satisfaisante lorsque :
+
+```text
+état réel lu
++
+plan cohérent
++
+actions nécessaires uniquement
++
+re-vérification réussie
++
+actions humaines visibles
++
+preuves disponibles
+```
+
+Mais le **projet complet** demande encore la qualification et les critères d'acceptation décrits dans :
+
+- [`11_VALIDATION.md`](11_VALIDATION.md) ;
+- [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) ;
+- [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
+
+C'est cette distinction entre **orchestrer** et **valider le projet** qui empêche de confondre « le script a tourné » avec « la workstation est prête ».
