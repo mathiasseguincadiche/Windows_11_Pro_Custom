@@ -150,7 +150,8 @@ if needs kind; then
   kind_url="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
   curl -fsSL "$kind_url" -o "$tmpdir/kind"
   curl -fsSL "${kind_url}.sha256sum" -o "$tmpdir/kind.sha256sum"
-  echo "$(cat "$tmpdir/kind.sha256sum")  $tmpdir/kind" | sha256sum -c -
+  kind_sha="$(awk '{print $1}' "$tmpdir/kind.sha256sum")"
+  echo "$kind_sha  $tmpdir/kind" | sha256sum -c -
   sudo install -m 0755 "$tmpdir/kind" /usr/local/bin/kind
 fi
 
