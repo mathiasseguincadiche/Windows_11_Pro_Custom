@@ -166,7 +166,6 @@ function Invoke-WpcRepoScript {
             if ($process.ExitCode -ne 0) { throw "Le processus eleve a retourne le code $($process.ExitCode)." }
         } else {
             & $Path @Arguments
-            if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Le script a retourne le code $LASTEXITCODE." }
         }
         Write-Line '[TERMINE] Action terminee.' Green
         return $true
