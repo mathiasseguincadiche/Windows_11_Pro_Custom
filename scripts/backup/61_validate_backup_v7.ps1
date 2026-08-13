@@ -22,54 +22,54 @@ function Test-Administrator {
 }
 
 if (-not (Test-Administrator)) {
-    throw 'V7 backup validation requires an elevated PowerShell session.'
+    throw 'La validation de sauvegarde nécessite une session PowerShell élevée.'
 }
 
 foreach ($command in @('wbadmin.exe', 'reagentc.exe')) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
-        throw "Required command is unavailable: $command"
+        throw "Commande requise indisponible: $command"
     }
 }
 
 if (-not (Test-Path $V7Root)) {
-    throw "V7 backup root not found: $V7Root"
+    throw "Racine de sauvegarde introuvable: $V7Root"
 }
 
 if (-not (Test-Path $WindowsImageRoot)) {
-    throw "WindowsImageBackup was not found at the root of $TargetDrive."
+    throw "WindowsImageBackup est absent à la racine de $TargetDrive."
 }
 
 $ManifestFile = Get-ChildItem -Path $V7Root -Filter 'backup-manifest.json' -File -Recurse |
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 if (-not $ManifestFile) {
-    throw 'No V7 backup manifest was found.'
+    throw 'Aucun manifest de sauvegarde n’a été trouvé.'
 }
 
 $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
 if ($Manifest.version -ne 'V7') {
-    throw "Unexpected manifest version: $($Manifest.version)"
+    throw "Version interne de manifest inattendue: $($Manifest.version)"
 }
 
 $SessionRoot = Split-Path (Split-Path $ManifestFile.FullName -Parent) -Parent
 $WslFileName = Split-Path ([string]$Manifest.wsl.exportPath) -Leaf
 $WslBackupPath = Join-Path (Join-Path $SessionRoot 'WSL') $WslFileName
 if (-not (Test-Path $WslBackupPath)) {
-    throw "WSL VHDX backup is missing: $WslBackupPath"
+    throw "Sauvegarde WSL VHDX manquante: $WslBackupPath"
 }
 
 $ExpectedHash = ([string]$Manifest.wsl.sha256).ToUpperInvariant()
 $ActualHash = (Get-FileHash -Path $WslBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
 $HashValid = $ExpectedHash -eq $ActualHash
 if (-not $HashValid) {
-    throw 'WSL VHDX SHA-256 verification failed. Do not use this VHDX for restoration.'
+    throw 'La vérification SHA-256 du VHDX WSL a échoué. Ne pas utiliser ce VHDX pour une restauration.'
 }
 
 $VersionsOutput = @(& wbadmin.exe get versions "-backupTarget:$TargetDrive" 2>&1)
 $VersionsExitCode = $LASTEXITCODE
 $VersionsValid = $VersionsExitCode -eq 0 -and $VersionsOutput.Count -gt 0
 if (-not $VersionsValid) {
-    throw 'wbadmin cannot enumerate a recoverable Windows backup version on the target.'
+    throw 'wbadmin ne peut pas énumérer de version Windows récupérable sur la cible.'
 }
 
 $WinReOutput = @(& reagentc.exe /info 2>&1)
@@ -77,14 +77,14 @@ $WinReExitCode = $LASTEXITCODE
 $WinReText = $WinReOutput -join [Environment]::NewLine
 $WinReEnabled = $WinReExitCode -eq 0 -and $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw 'Windows Recovery Environment is not currently confirmed as enabled.'
+    throw 'Windows Recovery Environment n’est pas confirmé comme actif.'
 }
 
 $SafetyValid = ($Manifest.safety.destructiveRestoreAutomation -eq $false) -and
     ($Manifest.safety.unregisterExistingDistribution -eq $false) -and
     ($Manifest.safety.automaticDiskRecreation -eq $false)
 if (-not $SafetyValid) {
-    throw 'V7 manifest does not preserve the required non-destructive restore policy.'
+    throw 'Le manifest ne respecte pas la politique de restauration non destructive requise.'
 }
 
 New-Item -ItemType Directory -Force -Path $ReportDirectory | Out-Null
@@ -101,14 +101,14 @@ $Report = [ordered]@{
     wslSha256Actual = $ActualHash
     wslSha256Valid = [bool]$HashValid
     destructiveRestoreAutomation = $false
-    verdict = 'V7 BACKUP READY'
+    verdict = 'BACKUP READY'
 }
 $Report | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $ReportPath
 
-Write-Host '[OK] WindowsImageBackup exists.' -ForegroundColor Green
-Write-Host '[OK] wbadmin enumerates a recoverable backup version.' -ForegroundColor Green
-Write-Host '[OK] Windows RE is enabled.' -ForegroundColor Green
-Write-Host '[OK] WSL2 VHDX SHA-256 matches the manifest.' -ForegroundColor Green
-Write-Host '[OK] Destructive restore automation remains disabled.' -ForegroundColor Green
-Write-Host "[OK] Validation report: $ReportPath" -ForegroundColor Green
-Write-Host 'VERDICT: V7 BACKUP READY' -ForegroundColor Green
+Write-Host '[OK] WindowsImageBackup présent.' -ForegroundColor Green
+Write-Host '[OK] wbadmin énumère une version de sauvegarde récupérable.' -ForegroundColor Green
+Write-Host '[OK] Windows RE est actif.' -ForegroundColor Green
+Write-Host '[OK] Le SHA-256 du VHDX WSL correspond au manifest.' -ForegroundColor Green
+Write-Host '[OK] La restauration destructive automatique reste désactivée.' -ForegroundColor Green
+Write-Host "[OK] Rapport de validation: $ReportPath" -ForegroundColor Green
+Write-Host 'VERDICT: BACKUP READY' -ForegroundColor Green
