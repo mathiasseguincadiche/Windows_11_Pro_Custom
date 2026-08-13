@@ -50,14 +50,23 @@ jobs:
       - name: Enforce update safety boundaries
         run: |
           grep -Fq 'Microsoft.Update.Session' scripts/updates/10_windows_update.ps1
-          ! grep -Fq 'PSWindowsUpdate' scripts/updates/10_windows_update.ps1
+          if grep -Fq 'PSWindowsUpdate' scripts/updates/10_windows_update.ps1; then
+            echo 'PSWindowsUpdate tiers interdit dans V11.' >&2
+            exit 1
+          fi
           grep -Fq -- '--upgrade-available' scripts/updates/20_winget_update.ps1
           grep -Fq "@('upgrade','--all'" scripts/updates/20_winget_update.ps1
-          ! grep -Eq -- '--include-pinned|--force' scripts/updates/20_winget_update.ps1
+          if grep -Eq '\$args.*(--include-pinned|--force)' scripts/updates/20_winget_update.ps1; then
+            echo 'Les arguments WinGet ne doivent contourner aucun pin.' >&2
+            exit 1
+          fi
           grep -Fq "@('--update')" scripts/updates/30_wsl_update.ps1
           grep -Fq -- '--update-extensions' scripts/updates/60_vscode_extensions_update.ps1
           grep -Fq 'tool-versions.env' scripts/wsl/reconcile-pinned-devops.sh
-          ! grep -Eq 'apt-get[[:space:]]+(dist-upgrade|full-upgrade|autoremove)' scripts/wsl/update-system-packages.sh
+          if grep -Eq 'apt-get[[:space:]]+(dist-upgrade|full-upgrade|autoremove)' scripts/wsl/update-system-packages.sh; then
+            echo 'Upgrade APT destructif/interdit détecté.' >&2
+            exit 1
+          fi
           grep -Fq 'apt-get upgrade -y --with-new-pkgs' scripts/wsl/update-system-packages.sh
           grep -Fq 'Confirm-WpcChanges' update.ps1
           grep -Fq 'Redémarrer Windows maintenant ? [O/N]' update.ps1
@@ -125,8 +134,8 @@ jobs:
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors)
-            foreach ($error in @($errors)) {
-              Write-Host "${file}:$($error.Extent.StartLineNumber):$($error.Extent.StartColumnNumber): $($error.Message)"
+            foreach ($parseError in @($errors)) {
+              Write-Host "${file}:$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
               $failed = $true
             }
           }
@@ -144,4 +153,4 @@ jobs:
             if (-not $windows.Contains($needle)) { throw "Contrat Windows Update absent: $needle" }
           }
           $winget = Get-Content -Raw scripts/updates/20_winget_update.ps1
-          if ($winget -match '--include-pinned|--force') { throw 'Les pins WinGet ne doivent jamais être contournés par V11.' }
+          if ($winget -match '\$args[^\r\n]*(--include-pinned|--force)') { throw 'Les arguments WinGet ne doivent jamais contourner les pins.' }
