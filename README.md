@@ -81,9 +81,9 @@ PowerShell 7                  -> administration Windows
 OpenClaw / clawops (Windows)  -> CLI IA native Windows
 ```
 
-Le profil OpenClaw **ne lance automatiquement ni agent, ni Gateway, ni onboarding, ni action sensible**. Il ouvre une session PowerShell 7, se place sous `D:\AI\OpenClaw` lorsque la racine existe et vérifie simplement si `openclaw` et `clawops` sont disponibles.
+Le profil OpenClaw **ne lance automatiquement ni agent, ni Gateway, ni onboarding, ni action sensible**. Il ouvre une session PowerShell 7, recharge dans cette session les variables utilisateur OpenClaw, ajoute uniquement à son `PATH` les répertoires CLI gérés sous `D:\AI\OpenClaw`, puis vérifie si `openclaw` et `clawops` sont disponibles.
 
-Après une première installation d'OpenClaw, relancer WezTerm permet au nouveau processus de récupérer le `PATH` utilisateur installé par le control-plane.
+Ces ajustements restent limités à la session terminal : WezTerm ne remplace ni l'installation ni la validation OpenClaw et ne modifie pas les contrats persistants du control-plane.
 
 Documentation : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) et [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
