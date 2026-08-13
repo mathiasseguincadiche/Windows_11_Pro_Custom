@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'Centre de contrôle' README.md
+          grep -Fq 'centre de contrôle' README.md
           grep -Fq 'System Update Manager V11' README.md
           grep -Fq 'Golden Backup V7' README.md
           grep -Fq 'Ubuntu 26.04' README.md
@@ -125,7 +125,6 @@ jobs:
                       if not target:
                           continue
                       target = unquote(target)
-                      # Ignore Windows examples accidentally represented as link targets.
                       if re.match(r'^[A-Za-z]:[\\/]', target):
                           continue
                       resolved = (md.parent / target).resolve()
