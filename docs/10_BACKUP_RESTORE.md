@@ -1,20 +1,14 @@
-# Sauvegarde et restauration — vue d'ensemble
+# Sauvegarde, restauration et reprise après incident
 
-Ce fichier donne la version courte de la stratégie de protection.
+Une workstation reproductible doit pouvoir être **reconstruite**, mais une reconstruction n'est pas toujours le moyen le plus rapide de récupérer une machine réelle après panne.
 
-Pour la procédure complète, utiliser :
-
-[`18_BACKUP_DISASTER_RECOVERY_V7.md`](18_BACKUP_DISASTER_RECOVERY_V7.md)
-
-Pour reconstruire la machine après incident :
-
-[`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md)
+Le projet combine donc Git, sauvegarde Windows, export WSL2 et procédures de reprise.
 
 ---
 
-## 1. Ce que GitHub protège — et ne protège pas
+## Ce que GitHub protège
 
-Le dépôt GitHub protège :
+GitHub protège :
 
 - scripts ;
 - configurations ;
@@ -22,131 +16,152 @@ Le dépôt GitHub protège :
 - documentation ;
 - historique du code.
 
-Il ne remplace pas une sauvegarde de :
+Il ne protège pas automatiquement :
 
-- Windows réel ;
+- l'installation Windows réelle ;
 - `C:` ;
-- données de `D:` ;
-- profil utilisateur ;
-- VHDX WSL réel ;
-- données OpenClaw ;
-- fichiers locaux non commités ;
-- credentials.
+- les données de `D:` ;
+- le profil utilisateur ;
+- le VHDX WSL réel ;
+- les données OpenClaw ;
+- les fichiers locaux non commités ;
+- les credentials.
+
+GitHub est donc une **source de reconstruction**, pas une image de sauvegarde de la machine.
 
 ---
 
-## 2. Stratégie V7
+## Stratégie de protection
 
 ```text
 System Restore
       ↓
-régression Windows légère
+rollback Windows léger
 
 WindowsImageBackup
       ↓
 C: + D: + volumes critiques
 
-WSL export VHDX + SHA-256
+Export WSL VHDX + SHA-256
       ↓
 Ubuntu restaurable séparément
 
 GitHub
       ↓
-reconstruction si les sauvegardes locales sont perdues
+reconstruction du socle versionné
 ```
 
-La politique machine-readable se trouve dans :
-
-```text
-config/backup/v7-policy.json
-```
+Ces couches répondent à des incidents différents.
 
 ---
 
-## 3. Cible de sauvegarde
+## Cible de sauvegarde
 
-La cible recommandée est un **disque USB NTFS physiquement distinct** des deux Crucial T705.
+La sauvegarde de référence doit être stockée sur un **disque USB NTFS physiquement distinct** des deux Crucial T705 internes.
 
-Politique actuelle :
+Politique courante :
 
 ```text
 C: protégé                         OUI
 D: protégé                         OUI
-cible USB par défaut               OUI
-minimum libre avant lancement      100 Go
+cible externe par défaut           OUI
+espace libre minimum               100 Go
 WSL export                         VHDX
-hash                               SHA-256
+intégrité WSL                      SHA-256
 restore destructif automatique     NON
 ```
 
-Un dossier `D:\BACKUPS` sur le SSD interne ne constitue pas un Golden Backup V7 suffisant pour protéger ce même disque `D:`.
+Un dossier `D:\BACKUPS` sur le SSD interne n'est pas une protection suffisante de ce même disque.
 
 ---
 
-## 4. Créer une sauvegarde
+## Créer une sauvegarde de référence
 
-Exemple avec disque USB `E:` :
+Exemple avec un disque USB monté sur `E:` :
 
 ```powershell
 .\install.ps1 -BackupAction Create -BackupTargetDrive E:
 ```
 
-La V7 :
+Le parcours vérifie notamment :
 
-1. vérifie la cible ;
-2. refuse le même disque physique que `C:` / `D:` ;
-3. contrôle NTFS / espace libre / USB ;
-4. vérifie WinRE ;
-5. tente un point de restauration ;
-6. arrête WSL ;
-7. crée l'image Windows ;
-8. exporte Ubuntu en VHDX ;
-9. calcule SHA-256 ;
-10. écrit le manifest.
+1. présence de la cible ;
+2. filesystem NTFS ;
+3. espace libre ;
+4. séparation physique avec `C:` et `D:` ;
+5. disponibilité de WinRE ;
+6. création d'un point de restauration lorsque possible ;
+7. arrêt propre de WSL ;
+8. création de l'image Windows ;
+9. export de la distribution Ubuntu en VHDX ;
+10. calcul du SHA-256 ;
+11. écriture d'un manifest de sauvegarde.
+
+Le script ne doit pas annoncer une sauvegarde fiable uniquement parce que `wbadmin` ou `wsl --export` a démarré : les artefacts doivent être vérifiables.
 
 ---
 
-## 5. Vérifier la sauvegarde
+## Vérifier une sauvegarde
 
 ```powershell
 .\install.ps1 -BackupAction Verify -BackupTargetDrive E:
 ```
 
-Verdict attendu après une **vraie sauvegarde** :
+La vérification contrôle notamment :
 
-```text
-VERDICT: V7 BACKUP READY
-```
+- présence d'une image Windows récupérable ;
+- état WinRE ;
+- manifest ;
+- export WSL ;
+- hash SHA-256 ;
+- cohérence de la politique de sécurité ;
+- absence de procédure destructive exécutée automatiquement.
 
 Une sauvegarde non vérifiée ne doit pas être considérée comme un plan de reprise fiable.
 
 ---
 
-## 6. Préparer une restauration
+## Générer un plan de restauration
 
 ```powershell
 .\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
 ```
 
-Produit :
+Cette opération prépare les étapes de reprise **sans lancer la restauration destructive**.
+
+Le principe est :
 
 ```text
-reports/backup/restore-plan-v7.txt
+analyser le backup
+   ↓
+identifier les options de reprise
+   ↓
+générer un plan
+   ↓
+laisser l'utilisateur choisir
 ```
-
-La commande génère un plan, elle ne lance pas de restauration destructive.
 
 ---
 
-## 7. WSL uniquement
+## Restaurer WSL2 sans détruire l'Ubuntu actuel
 
-La distribution restaurée est importée sous un nom différent :
+La restauration Linux est conçue pour être validée **à côté** de la distribution active.
+
+Au lieu de supprimer immédiatement Ubuntu, le projet importe d'abord la sauvegarde sous un nom distinct, par exemple :
 
 ```text
-Ubuntu-Restore-V7
+Ubuntu-Restore
 ```
 
-L'Ubuntu actuel reste intact pendant la validation.
+Cela permet de vérifier :
+
+- démarrage ;
+- utilisateur ;
+- fichiers ;
+- Docker ;
+- outils DevOps ;
+- projets ;
+- intégrité globale.
 
 Le projet n'exécute jamais automatiquement :
 
@@ -154,16 +169,16 @@ Le projet n'exécute jamais automatiquement :
 wsl --unregister Ubuntu
 ```
 
-car cette commande détruit la distribution ciblée.
+sur la distribution active pour « simplifier » une restauration.
 
 ---
 
-## 8. Windows complet
+## Restaurer Windows complètement
 
-Pour une panne Windows/disque :
+Pour une panne Windows ou un remplacement de disque :
 
 ```text
-WinRE / Recovery Drive
+WinRE / média de récupération
       ↓
 WindowsImageBackup
       ↓
@@ -172,28 +187,103 @@ version explicitement choisie
 restauration bare-metal manuelle
 ```
 
-La restauration complète reste une décision humaine, car elle peut remplacer partitions et données.
+Une restauration bare-metal peut remplacer des partitions et des données. Elle doit donc rester une décision humaine consciente.
+
+Le dépôt peut préparer les informations utiles ; il ne clique pas automatiquement sur le point de non-retour.
 
 ---
 
-## 9. Quand refaire un Golden Backup ?
+## Différence entre rollback et restauration
 
-Après un changement **important et stabilisé**, par exemple :
+### Rollback
+
+Utilisé pour revenir sur un réglage géré par le dépôt lorsque l'état initial est connu.
+
+```powershell
+.\install.ps1 -Mode Rollback
+```
+
+### System Restore
+
+Retour Windows léger à un point de restauration.
+
+### Restauration WSL
+
+Réimport d'un VHDX sauvegardé et validation indépendante.
+
+### Bare-metal recovery
+
+Restauration complète de l'image Windows sur le stockage physique.
+
+Ces mécanismes ne sont pas interchangeables.
+
+---
+
+## Quand créer une nouvelle sauvegarde de référence ?
+
+Après un changement important **et stabilisé**, par exemple :
 
 - grosse mise à niveau Windows ;
-- pilote majeur validé ;
-- évolution WSL structurante ;
-- changement important DevOps/OpenClaw ;
+- changement de pilote majeur validé ;
+- évolution structurante de WSL2 ;
+- changement important de la stack DevOps ;
+- intégration OpenClaw stabilisée ;
 - avant une opération risquée.
 
 Ne supprime pas immédiatement la dernière sauvegarde validée lorsque tu en crées une nouvelle.
 
 ---
 
-## 10. Secrets
+## Après une réinstallation
+
+Le Runbook complet de reconstruction est :
+
+[`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md).
+
+Il sert lorsque :
+
+- aucune image fiable n'est disponible ;
+- on veut repartir d'un Windows propre ;
+- la restauration complète n'est pas souhaitable ;
+- on doit reconstruire le socle depuis Git.
+
+---
+
+## Secrets et données sensibles
 
 Les clés SSH, tokens, mots de passe et API keys doivent être conservés dans un stockage adapté.
 
+Une sauvegarde contenant :
+
+```text
+D:\AI\OpenClaw\state
+profil utilisateur
+clés SSH
+credentials locaux
+```
+
+est un support sensible et doit être protégée physiquement.
+
 Le dépôt Git ne doit jamais devenir un coffre de secrets.
 
-Une sauvegarde contenant `D:\AI\OpenClaw\state` ou d'autres credentials doit être traitée comme un support sensible.
+---
+
+## Critère de réussite
+
+La stratégie de reprise est considérée prête lorsque :
+
+```text
+backup externe réel
++
+image Windows vérifiable
++
+export WSL vérifié
++
+hash valide
++
+WinRE disponible
++
+procédure comprise
+```
+
+Une CI verte ne peut pas créer ni certifier à elle seule un vrai disque USB de sauvegarde : cette validation doit être réalisée sur la workstation réelle.
