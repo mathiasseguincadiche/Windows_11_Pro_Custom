@@ -11,8 +11,11 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1') -Force
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $windowsScript = Join-Path $repoRoot 'scripts\wsl\validate-devops.sh'
+$terminalScript = Join-Path $repoRoot 'scripts\wsl\validate-devops-terminal.sh'
 
-if (-not (Test-Path $windowsScript)) { throw "Script absent: $windowsScript" }
+foreach ($path in @($windowsScript, $terminalScript)) {
+    if (-not (Test-Path $path)) { throw "Script absent: $path" }
+}
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe introuvable.' }
 $installed = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $global:LASTEXITCODE = 0
@@ -26,10 +29,15 @@ if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
 }
 if ($LinuxUser -eq 'root') { throw 'Validation DevOps refusée sous root: configure dʼabord un utilisateur WSL normal.' }
 
-$linuxScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $windowsScript).Trim()
-$convertCode = $LASTEXITCODE
-$global:LASTEXITCODE = 0
-if ($convertCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxScript)) { throw 'Impossible de convertir le chemin du validateur DevOps avec wslpath.' }
+foreach ($item in @(
+    @{ WindowsPath=$windowsScript; Log='scripts/wsl/validate-devops.sh'; Name='validate-devops.sh' },
+    @{ WindowsPath=$terminalScript; Log='scripts/wsl/validate-devops-terminal.sh'; Name='validate-devops-terminal.sh' }
+)) {
+    $linuxScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $item.WindowsPath).Trim()
+    $convertCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($convertCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxScript)) { throw "Impossible de convertir le chemin de $($item.Name) avec wslpath." }
+    Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxScript) -LogIdentity $item.Log -DisplayName $item.Name
+}
 
-Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxScript) -LogIdentity 'scripts/wsl/validate-devops.sh' -DisplayName 'validate-devops.sh'
-Write-Host '[OK] Stack DevOps WSL validée factuellement.' -ForegroundColor Green
+Write-Host '[OK] Stack DevOps + Terminal V10 validés factuellement.' -ForegroundColor Green
