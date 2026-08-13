@@ -40,4 +40,4 @@ foreach ($item in @(
     Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxScript) -LogIdentity $item.Log -DisplayName $item.Name
 }
 
-Write-Host '[OK] Stack DevOps + Terminal V10 validés factuellement.' -ForegroundColor Green
+Write-Host '[OK] Stack DevOps + terminal validés factuellement.' -ForegroundColor Green

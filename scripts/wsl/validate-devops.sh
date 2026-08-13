@@ -11,7 +11,7 @@ ok() { printf '[OK] %s\n' "$*"; }
 ko() { printf '[KO] %s\n' "$*"; failed=$((failed + 1)); }
 warn() { printf '[AVERTISSEMENT] %s\n' "$*"; warnings=$((warnings + 1)); }
 
-printf 'Validation stack DevOps WSL2 - V3\n\n'
+printf 'Validation stack DevOps WSL2\n\n'
 
 for cmd in "${required[@]}"; do
   if command -v "$cmd" >/dev/null 2>&1; then
@@ -79,9 +79,9 @@ done
 
 printf '\nProfil shell\n'
 if bash "$SCRIPT_DIR/manage-shell-profile.sh" verify; then
-  ok 'Profil shell V3 opérationnel.'
+  ok 'Profil shell DevOps opérationnel.'
 else
-  ko 'Profil shell V3 invalide.'
+  ko 'Profil shell DevOps invalide.'
 fi
 
 printf '\nVS Code WSL\n'
@@ -130,4 +130,4 @@ if [[ $failed -gt 0 ]]; then
   exit 1
 fi
 
-printf '\nVERDICT: V3 DEVOPS READY (%d avertissement(s))\n' "$warnings"
+printf '\nVERDICT: DEVOPS READY (%d avertissement(s))\n' "$warnings"

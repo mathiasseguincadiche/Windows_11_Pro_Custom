@@ -100,7 +100,7 @@ foreach ($check in $checks.GetEnumerator()) {
 }
 
 if ($failed.Count -gt 0) {
-    throw "V4 qualification failed: $($failed.Count) check(s). See $reportPath"
+    throw "Qualification Windows échouée: $($failed.Count) contrôle(s). Voir $reportPath"
 }
 
-Write-Host 'VERDICT: V4 WINDOWS OPTIMIZATION READY' -ForegroundColor Green
+Write-Host 'VERDICT: WINDOWS OPTIMIZATION READY' -ForegroundColor Green

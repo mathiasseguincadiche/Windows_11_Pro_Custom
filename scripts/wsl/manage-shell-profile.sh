@@ -52,9 +52,9 @@ audit() {
 if [[ "$mode" == audit ]]; then
   audit
   if target_matches && hook_matches; then
-    echo '[DÉJÀ OK] Profil Bash DevOps V10 conforme.'
+    echo '[DÉJÀ OK] Profil Bash DevOps conforme.'
   else
-    echo '[À FAIRE] Profil Bash DevOps V10 incomplet ou différent.'
+    echo '[À FAIRE] Profil Bash DevOps incomplet ou différent.'
   fi
   exit 0
 fi
@@ -62,13 +62,13 @@ fi
 if [[ "$mode" == verify ]]; then
   target_matches || { echo '[KO] Profil DevOps et/ou Starship différent de la source.' >&2; exit 1; }
   hook_matches || { echo '[KO] Hook .bashrc absent, dupliqué ou incorrect.' >&2; exit 1; }
-  echo '[OK] Profil Bash DevOps V10 validé.'
+  echo '[OK] Profil Bash DevOps validé.'
   exit 0
 fi
 
 if [[ "$mode" == apply ]]; then
   if target_matches && hook_matches; then
-    echo '[DÉJÀ OK] Profil Bash DevOps V10 déjà conforme; aucune réécriture.'
+    echo '[DÉJÀ OK] Profil Bash DevOps déjà conforme; aucune réécriture.'
     exit 0
   fi
 
@@ -121,7 +121,7 @@ if [[ "$mode" == apply ]]; then
   fi
 
   bash "$0" verify
-  printf '[FAIT] Profil terminal V10 convergé (%d changement(s)).\n' "$changes"
+  printf '[FAIT] Profil terminal convergé (%d changement(s)).\n' "$changes"
   exit 0
 fi
 

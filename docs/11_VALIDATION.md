@@ -1,4 +1,4 @@
-# Validation — comment prouver que la workstation est réellement prête
+# Validation — prouver que la workstation est réellement prête
 
 La validation du projet ne se résume pas à « le script n'a pas affiché d'erreur ».
 
@@ -16,11 +16,11 @@ preuve exploitable
 verdict
 ```
 
-Ce document présente les validations principales du `main` actuel, de V3 jusqu'aux couches V12.
+Ce document décrit **les validations du `main` actuel**, sans demander au lecteur de connaître l'ordre historique dans lequel elles ont été ajoutées.
 
 ---
 
-## 1. Validation de base Windows / workstation
+## Validation de base Windows / workstation
 
 Commande :
 
@@ -30,18 +30,17 @@ Commande :
 
 Elle vérifie notamment les composants inclus dans la portée normale de l'orchestrateur :
 
-- applications automatiques ;
-- réglages Windows de base ;
-- profils V4 demandés ;
-- réactivité V8 ;
+- applications gérées ;
+- réglages Windows ;
+- réactivité ;
 - WSL2 ;
 - utilisateur WSL ;
-- workstation VS Code / WezTerm / OpenSSH ;
+- VS Code / WezTerm / OpenSSH ;
 - exclusions Defender approuvées ;
 - Defender actif ;
-- qualification Windows V3.
+- cohérence générale de la workstation.
 
-Le validateur V3 contrôle notamment :
+La base Windows doit notamment confirmer :
 
 - Windows 11 ;
 - `C:` en NTFS ;
@@ -50,16 +49,13 @@ Le validateur V3 contrôle notamment :
 - protection temps réel active ;
 - absence d'exclusion racine dangereuse `C:\` / `D:\` ;
 - WSL disponible ;
-- profil WSL demandé ;
 - distribution Ubuntu présente ;
-- emplacement sous `D:\WSL\Ubuntu-DevOps` ;
-- workstation VS Code/WezTerm conforme.
+- stockage WSL attendu ;
+- workstation VS Code/WezTerm cohérente.
 
 ---
 
-## 2. Validation matérielle V5
-
-Commande :
+## Validation matérielle
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateHardware
@@ -71,27 +67,28 @@ Elle combine :
 
 - CPU ;
 - cœurs / threads ;
-- quantité et fréquence RAM visible ;
+- RAM visible ;
 - carte mère ;
 - GPU / driver ;
-- SSD / santé / filesystem ;
+- SSD / filesystems ;
 - GPT ;
 - Secure Boot ;
 - TPM ;
 - virtualisation firmware ;
 - affichage ;
-- plan d'alimentation.
+- plan d'alimentation ;
+- autres informations observables sans mutation dangereuse.
 
-### Faits manuels obligatoires pour le verdict complet
+### Faits manuels
 
-- CSM désactivé ;
+- CSM ;
 - Above 4G ;
 - ReBAR ;
-- emplacement physique des T705 ;
+- emplacement physique des SSD ;
 - refroidissement/airflow ;
-- stabilité RAM 6000 ;
-- revue BIOS stable ;
-- revue drivers constructeur.
+- stabilité mémoire ;
+- revue BIOS ;
+- revue des pilotes constructeur.
 
 Saisie guidée :
 
@@ -101,46 +98,34 @@ Saisie guidée :
 
 Le projet refuse de fabriquer ces preuves à partir d'une supposition.
 
-Verdict cible :
-
-```text
-VERDICT: V5 HARDWARE READY
-```
+Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-## 3. Validation WSL2 V6
-
-Commande :
+## Validation WSL2
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateWsl
 ```
 
-Le contrat courant exige :
+Le contrat courant exige notamment :
 
 ```text
 Ubuntu 26.04
 D:\WSL\Ubuntu-DevOps
 HOME ext4
 ressources conformes au profil choisi
-systemd / environnement attendu
+systemd actif
 racines de travail Linux conformes
 ```
 
-Le profil de référence est contrôlé par rapport aux fichiers versionnés dans `config/wsl/`.
+Le validateur compare l'état réel aux configurations courantes sous `config/wsl/`.
 
-Verdict cible :
-
-```text
-VERDICT: V6 WSL2 PLATFORM READY
-```
+Guide : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-## 4. Validation DevOps
-
-Commande :
+## Validation DevOps
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateDevOps
@@ -151,7 +136,7 @@ Le validateur Linux contrôle notamment :
 - Git ;
 - Docker Engine ;
 - Docker Compose ;
-- Buildx selon le socle ;
+- Buildx ;
 - kubectl ;
 - Helm ;
 - Minikube ;
@@ -167,58 +152,47 @@ Le validateur Linux contrôle notamment :
 - actionlint ;
 - yq ;
 - TFLint ;
-- accès Docker attendu ;
 - service Docker ;
 - politique de logs Docker ;
 - HOME hors de `/mnt/c` et `/mnt/d` ;
-- racines Linux de travail ;
+- racines Linux ;
 - profil shell ;
-- tests/contrats DevOps associés.
+- smoke tests IaC.
 
-Les versions critiques doivent correspondre à :
+Les versions critiques doivent correspondre à `config/devops/tool-versions.env` plutôt qu'à une version `latest` arbitraire.
 
-```text
-config/devops/tool-versions.env
-```
-
-et non à une version `latest` arbitraire.
-
-Verdict historique attendu :
-
-```text
-VERDICT: V3 DEVOPS READY
-```
-
-Le nom V3 est conservé pour compatibilité historique même si la stack est aujourd'hui utilisée dans l'architecture V12.
+Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-## 5. Validation Windows Optimization V4
+## Validation des optimisations Windows
 
-Après un vrai `Apply`, les mesures avant/après doivent exister pour permettre la comparaison.
+Les réglages Windows gérés sont vérifiés après application.
 
-Rapports typiques :
+Les mesures avant/après permettent d'éviter une validation basée uniquement sur le ressenti.
 
-```text
-reports/windows/v4-benchmark-before.json
-reports/windows/v4-benchmark-after.json
-reports/windows/v4-benchmark-comparison.json
-reports/validation-v4.json
-```
-
-Le `Verify` signale `ACTION_REQUISE` si les preuves nécessaires à la validation V4 n'existent pas encore.
-
-Verdict cible :
+Les rapports vivent sous :
 
 ```text
-VERDICT: V4 WINDOWS OPTIMIZATION READY
+reports/windows/
 ```
+
+La validation doit également confirmer que les garde-fous restent intacts :
+
+- Defender actif ;
+- Windows Update disponible ;
+- firewall actif ;
+- WSL/Hyper-V fonctionnels ;
+- pagefile et compression mémoire conservés selon la politique ;
+- stockage et TRIM non cassés.
+
+Guide : [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md).
 
 ---
 
-## 6. Validation Backup V7
+## Validation de la sauvegarde
 
-Une sauvegarde ne peut pas être validée par la CI seule : il faut une vraie cible physique et une vraie image.
+Une sauvegarde ne peut pas être validée par la CI seule : il faut une vraie cible physique et de vrais artefacts.
 
 Créer :
 
@@ -232,40 +206,26 @@ Vérifier :
 .\install.ps1 -BackupAction Verify -BackupTargetDrive E:
 ```
 
-Le validateur exige notamment :
+Le validateur contrôle notamment :
 
-- `WindowsImageBackup` ;
-- version énumérable par `wbadmin` ;
-- WinRE actif ;
-- manifest V7 ;
+- image Windows ;
+- version récupérable ;
+- WinRE ;
+- manifest ;
 - export VHDX Ubuntu ;
-- SHA-256 valide ;
-- politique destructive désactivée.
+- SHA-256 ;
+- absence de restauration destructive automatique.
 
-Verdict runtime cible :
-
-```text
-VERDICT: V7 BACKUP READY
-```
+Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-## 7. Validation réactivité V8
+## Validation de l'orchestration
 
-La réactivité Windows est un composant géré et vérifiable, pas une suite de tweaks invisibles.
-
-Elle est incluse dans le `Verify` normal de `install.ps1`.
-
-Le rollback utilise l'état initial V8 uniquement s'il a réellement été enregistré.
-
----
-
-## 8. Validation orchestration V9
-
-V9 vérifie surtout le **processus de convergence** :
+L'orchestration doit prouver le **processus de convergence** :
 
 ```text
-facts machine
+faits machine
 ↓
 Verify
 ↓
@@ -278,7 +238,7 @@ re-Verify
 logs / summary
 ```
 
-Une deuxième exécution conforme doit éviter une mutation inutile.
+Une deuxième exécution conforme doit éviter les mutations inutiles.
 
 Journaux :
 
@@ -288,50 +248,54 @@ logs/runs/<RunId>/events.ndjson
 logs/runs/<RunId>/summary.json
 ```
 
+Guide : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
+
 ---
 
-## 9. Validation terminal V10
+## Validation du terminal et de VS Code
 
 Le contrat terminal vérifie notamment :
 
 - WezTerm configuré ;
-- Ubuntu/Bash profil principal ;
+- Ubuntu/Bash comme environnement Linux principal ;
 - PowerShell 7 disponible ;
-- VS Code terminal WSL ;
+- VS Code WSL ;
 - profil Bash géré ;
-- Starship / outils CLI prévus ;
+- outils CLI prévus ;
 - absence de duplication du bloc `.bashrc` ;
-- Apply idempotent ;
-- rollback du profil.
+- comportement idempotent ;
+- rollback du profil lorsque prévu.
 
-Le rendu physique de la Nerd Font reste à observer sur la vraie machine : une CI ne voit pas ton écran.
+Le rendu physique d'une police ou d'un écran ne peut pas être prouvé par une CI headless.
 
 ---
 
-## 10. Validation mises à jour V11
+## Validation des mises à jour
 
 ```powershell
 .\update.ps1 -Mode Verify
 ```
 
-V11 recontrôle les catégories qu'il gère :
+Le gestionnaire recontrôle les catégories qu'il gère :
 
 ```text
 Windows Update
 WinGet
 WSL
 Ubuntu/APT
-DevOps pinned
+DevOps épinglé
 VS Code extensions
 ```
 
-Un reboot requis n'est pas masqué : il est signalé comme action à effectuer.
+Un reboot requis n'est pas masqué : il reste une action à effectuer.
+
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-## 11. Validation menu V12
+## Validation du centre de contrôle
 
-La CI teste le routage du centre de contrôle en `DryRun` afin de vérifier qu'une option appelle le bon orchestrateur sans exécuter de mutation sur le runner.
+La CI teste le routage de `menu.ps1` en mode non destructif.
 
 Exemple :
 
@@ -339,51 +303,48 @@ Exemple :
 .\menu.ps1 -Choice 1 -DryRun -NoPause -NoClear
 ```
 
-Sur la vraie machine, la validation fonctionnelle consiste également à confirmer :
+Sur la vraie machine, il faut également confirmer :
 
 - affichage correct ;
 - choix lisibles ;
-- UAC sur les actions nécessitant l'administration ;
-- retour correct vers les orchestrateurs ;
-- logs/rapports accessibles.
+- élévation UAC uniquement lorsqu'elle est nécessaire ;
+- routage correct vers les orchestrateurs ;
+- accès aux logs/rapports.
+
+Guide : [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
 
 ---
 
-## 12. OpenClaw / OpenRouter
+## OpenClaw / OpenRouter
 
-Si utilisé :
+Si l'intégration est utilisée :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateOpenClawAI
 ```
 
-Validation étendue :
+Le contrôle doit notamment vérifier l'intégration attendue sans exposer de clé API dans Git ou dans les logs.
 
-```powershell
-.\install.ps1 `
-  -Mode Verify `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateOpenClawAI
-```
-
-Le control-plane doit correspondre au SHA épinglé dans le dépôt Windows.
-
-La clé API OpenRouter n'est pas une preuve Git et ne doit pas être commitée.
+Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
-## 13. Commande de validation complète recommandée
+## Validation complète recommandée
 
-Après une installation/reconstruction complète :
+Après une installation ou reconstruction :
 
 ```powershell
 .\install.ps1 `
   -Mode Verify `
   -ValidateHardware `
   -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateOpenClawAI
+  -ValidateDevOps
+```
+
+Si OpenClaw est utilisé :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateOpenClawAI
 ```
 
 Puis :
@@ -392,7 +353,7 @@ Puis :
 .\update.ps1 -Mode Verify
 ```
 
-Et après création réelle du Golden Backup :
+Et après création d'une vraie sauvegarde :
 
 ```powershell
 .\install.ps1 -BackupAction Verify -BackupTargetDrive E:
@@ -400,48 +361,47 @@ Et après création réelle du Golden Backup :
 
 ---
 
-## 14. CI GitHub
+## Ce que la CI vérifie
 
-Le dépôt possède des workflows spécialisés qui couvrent notamment :
+Les workflows couvrent notamment :
 
 - parsing PowerShell ;
 - PSScriptAnalyzer ;
 - Bash / ShellCheck ;
 - actionlint ;
 - JSON / configurations structurées ;
-- syntaxe WezTerm ;
-- garde-fous contre les opérations destructives ;
-- V5 hardware contracts ;
-- WSL runtime ;
-- backup safety ;
+- WezTerm ;
+- garde-fous destructifs ;
+- contrats matériels ;
+- runtime WSL ;
+- sécurité backup ;
 - orchestration/idempotence ;
 - versions DevOps épinglées ;
-- terminal V10 ;
-- updates V11 ;
-- menu V12.
-
-Un workflow spécialisé peut ne pas se déclencher sur un commit documentaire à cause de ses filtres de chemins ; cela ne signifie pas que le workflow n'existe plus. La non-régression documentaire V13 doit compléter ces contrôles.
+- terminal ;
+- mises à jour ;
+- centre de contrôle ;
+- cohérence documentaire.
 
 ---
 
-## 15. Ce que la CI ne peut pas prouver
+## Ce que la CI ne peut pas prouver
 
 La CI ne peut pas affirmer qu'une vraie machine possède :
 
 - le BIOS voulu ;
 - ReBAR réellement actif ;
-- DDR5 stable à 6000 ;
-- les T705 physiquement aux bons slots ;
+- DDR5 réellement stable ;
+- les SSD physiquement aux bons slots ;
 - les températures correctes ;
-- un vrai Golden Backup sur USB ;
-- un rendu graphique correct de WezTerm ;
-- un Windows Update réellement terminé après reboot.
+- un vrai backup USB ;
+- un rendu graphique parfait ;
+- un Windows Update réellement finalisé après reboot.
 
 Ces points nécessitent une validation runtime réelle.
 
 ---
 
-## 16. Règle de sortie
+## Règle de sortie
 
 Un composant est qualifié seulement si :
 
@@ -452,7 +412,7 @@ sa preuve est disponible
 +
 son Verify passe
 +
-les ACTION_REQUISE pertinentes sont traitées
+les actions humaines pertinentes sont traitées
 ```
 
-Un `KO` ou une preuve manquante ne doit pas être renommé en succès pour terminer plus vite.
+Un `KO` ou une preuve manquante ne doit jamais être renommé en succès simplement pour terminer plus vite.

@@ -41,18 +41,18 @@ function Get-DiskForDriveLetter {
 }
 
 if (-not (Test-Administrator)) {
-    throw 'V7 backup creation requires an elevated PowerShell session.'
+    throw 'La création de sauvegarde nécessite une session PowerShell élevée.'
 }
 
 foreach ($command in @('wbadmin.exe', 'reagentc.exe', 'wsl.exe', 'powershell.exe')) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
-        throw "Required command is unavailable: $command"
+        throw "Commande requise indisponible: $command"
     }
 }
 
 $TargetVolume = Get-Volume -DriveLetter $TargetLetter -ErrorAction Stop
 if ($TargetVolume.FileSystem -ne 'NTFS') {
-    throw "Backup target $TargetDrive must use NTFS. Detected: $($TargetVolume.FileSystem)"
+    throw "La cible de sauvegarde $TargetDrive doit utiliser NTFS. Détecté: $($TargetVolume.FileSystem)"
 }
 
 $TargetDisk = Get-DiskForDriveLetter -DriveLetter $TargetLetter
@@ -63,7 +63,7 @@ foreach ($volumeName in @($Policy.systemVolumes)) {
     $letter = ([string]$volumeName).TrimEnd(':')
     $volume = Get-Volume -DriveLetter $letter -ErrorAction SilentlyContinue
     if ($null -eq $volume) {
-        throw "Required protected volume is missing: $volumeName"
+        throw "Volume protégé requis absent: $volumeName"
     }
 
     $disk = Get-DiskForDriveLetter -DriveLetter $letter
@@ -78,32 +78,32 @@ foreach ($volumeName in @($Policy.systemVolumes)) {
 }
 
 if ($ProtectedDiskNumbers -contains $TargetDisk.Number) {
-    throw "Backup target $TargetDrive is on a physical disk that is itself protected by the V7 backup. Use a separate physical disk."
+    throw "La cible $TargetDrive se trouve sur un disque physique lui-même protégé. Utilise un disque physique séparé."
 }
 
 $TargetBusType = [string]$TargetDisk.BusType
 if ($Policy.requireUsbTargetByDefault -and -not $AllowNonUsbTarget -and $TargetBusType -ne 'USB') {
-    throw "V7 requires a USB backup disk by default. Detected BusType=$TargetBusType. Use -AllowNonUsbTarget only after verifying this is a separate backup disk."
+    throw "La politique exige un disque USB de sauvegarde par défaut. BusType détecté=$TargetBusType. Utilise -AllowNonUsbTarget seulement après avoir vérifié qu'il s'agit bien d'un disque de sauvegarde séparé."
 }
 
 $DistroNames = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
 if ($DistroNames -notcontains $Distribution) {
-    throw "WSL distribution '$Distribution' was not found. Available: $($DistroNames -join ', ')"
+    throw "Distribution WSL '$Distribution' introuvable. Disponibles: $($DistroNames -join ', ')"
 }
 
 $WslUsedOutput = @(& wsl.exe -d $Distribution -- bash -lc 'df -B1 --output=used / | tail -n 1' 2>$null)
 if ($LASTEXITCODE -ne 0) {
-    throw "Unable to estimate used space for WSL distribution '$Distribution'."
+    throw "Impossible d'estimer l'espace utilisé par la distribution WSL '$Distribution'."
 }
 $WslUsedText = (($WslUsedOutput -join '') -replace "`0", '').Trim()
 $WslUsedBytes = [long]0
 if (-not [long]::TryParse($WslUsedText, [ref]$WslUsedBytes)) {
-    throw "Unexpected WSL used-space value: '$WslUsedText'"
+    throw "Valeur d'espace WSL inattendue: '$WslUsedText'"
 }
 
 $MarginPercent = [double]$Policy.capacitySafetyMarginPercent
 if ($MarginPercent -lt 0 -or $MarginPercent -gt 100) {
-    throw "Invalid V7 capacitySafetyMarginPercent: $MarginPercent"
+    throw "Marge de capacité invalide: $MarginPercent"
 }
 $EstimatedPayloadBytes = [long]($ProtectedUsedBytes + $WslUsedBytes)
 $EstimatedRequiredBytes = [long][math]::Ceiling($EstimatedPayloadBytes * (1 + ($MarginPercent / 100)))
@@ -112,13 +112,13 @@ $MinimumTargetFreeGB = [double]$Policy.minimumTargetFreeGB
 $RequiredTargetFreeGB = [math]::Max($MinimumTargetFreeGB, $EstimatedRequiredGB)
 $FreeGB = [math]::Round($TargetVolume.SizeRemaining / 1GB, 2)
 
-Write-Host "[INFO] Protected Windows data used: $([math]::Round($ProtectedUsedBytes / 1GB, 2)) GB" -ForegroundColor Cyan
-Write-Host "[INFO] WSL used data for independent export: $([math]::Round($WslUsedBytes / 1GB, 2)) GB" -ForegroundColor Cyan
-Write-Host "[INFO] Capacity margin: $MarginPercent%" -ForegroundColor Cyan
-Write-Host "[INFO] Backup target free: $FreeGB GB; required preflight: $RequiredTargetFreeGB GB" -ForegroundColor Cyan
+Write-Host "[INFO] Données Windows protégées utilisées: $([math]::Round($ProtectedUsedBytes / 1GB, 2)) Go" -ForegroundColor Cyan
+Write-Host "[INFO] Données WSL utilisées pour l'export indépendant: $([math]::Round($WslUsedBytes / 1GB, 2)) Go" -ForegroundColor Cyan
+Write-Host "[INFO] Marge de capacité: $MarginPercent%" -ForegroundColor Cyan
+Write-Host "[INFO] Espace libre cible: $FreeGB Go; prérequis estimé: $RequiredTargetFreeGB Go" -ForegroundColor Cyan
 
 if ($FreeGB -lt $RequiredTargetFreeGB) {
-    throw "Backup target has only $FreeGB GB free. V7 estimates at least $RequiredTargetFreeGB GB are required (protected data + independent WSL export + $MarginPercent% margin, with an absolute floor of $MinimumTargetFreeGB GB)."
+    throw "La cible ne dispose que de $FreeGB Go libres. Au moins $RequiredTargetFreeGB Go sont estimés nécessaires (données protégées + export WSL indépendant + marge de $MarginPercent%, avec minimum absolu de $MinimumTargetFreeGB Go)."
 }
 
 New-Item -ItemType Directory -Force -Path $WslBackupDirectory, $MetadataDirectory | Out-Null
@@ -143,28 +143,28 @@ $WinReExitCode = $LASTEXITCODE
 $WinReText = $WinReOutput -join [Environment]::NewLine
 $WinReText | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'winre-info.txt')
 if ($WinReExitCode -ne 0) {
-    throw "reagentc /info failed with exit code $WinReExitCode."
+    throw "reagentc /info a échoué avec le code $WinReExitCode."
 }
 
 $WinReEnabled = $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw 'Windows Recovery Environment is not confirmed as enabled. V7 refuses to create a Golden Backup without a usable WinRE configuration.'
+    throw "Windows Recovery Environment n’est pas confirmé comme actif. La sauvegarde de référence exige un WinRE utilisable."
 }
 
 $RestorePointAttempted = $false
 if (-not $SkipRestorePoint) {
     $RestorePointAttempted = $true
     $RestorePointScript = Join-Path $RepoRoot 'scripts\windows\41_restore_point.ps1'
-    $RestorePointOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestorePointScript -Description 'Windows_11_Pro_Custom V7 Golden Backup' 2>&1)
+    $RestorePointOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestorePointScript -Description 'Windows_11_Pro_Custom Golden Backup' 2>&1)
     $RestorePointOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
 } else {
     'Restore point explicitly skipped by operator.' | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
 }
 
-Write-Host '[INFO] Stopping WSL before imaging C: and D:.' -ForegroundColor Yellow
+Write-Host "[INFO] Arrêt de WSL avant l’image de C: et D:." -ForegroundColor Yellow
 & wsl.exe --shutdown
 if ($LASTEXITCODE -ne 0) {
-    throw "wsl --shutdown failed with exit code $LASTEXITCODE."
+    throw "wsl --shutdown a échoué avec le code $LASTEXITCODE."
 }
 
 $WbadminArguments = @(
@@ -176,30 +176,30 @@ $WbadminArguments = @(
     '-vssCopy'
 )
 
-Write-Host "[INFO] Starting Windows Golden Backup to $TargetDrive. wbadmin will request confirmation for this first run." -ForegroundColor Cyan
+Write-Host "[INFO] Démarrage de la sauvegarde Windows vers $TargetDrive. wbadmin peut demander une confirmation lors de la première exécution." -ForegroundColor Cyan
 $WbadminOutput = @(& wbadmin.exe @WbadminArguments 2>&1)
 $WbadminExitCode = $LASTEXITCODE
 $WbadminOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'wbadmin-start-backup.txt')
 if ($WbadminExitCode -ne 0) {
-    throw "wbadmin start backup failed with exit code $WbadminExitCode. Review wbadmin-start-backup.txt."
+    throw "wbadmin start backup a échoué avec le code $WbadminExitCode. Consulter wbadmin-start-backup.txt."
 }
 
 $VersionsOutput = @(& wbadmin.exe get versions "-backupTarget:$TargetDrive" 2>&1)
 $VersionsExitCode = $LASTEXITCODE
 $VersionsOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'wbadmin-get-versions.txt')
 if ($VersionsExitCode -ne 0 -or $VersionsOutput.Count -eq 0) {
-    throw 'The Windows image completed but wbadmin could not enumerate a recoverable backup version.'
+    throw "L’image Windows est terminée mais wbadmin ne peut pas énumérer de version récupérable."
 }
 
 $WslBackupPath = Join-Path $WslBackupDirectory "$Distribution-GOLDEN-V7.vhdx"
-Write-Host "[INFO] Exporting WSL2 distribution '$Distribution' as VHDX." -ForegroundColor Cyan
+Write-Host "[INFO] Export de la distribution WSL2 '$Distribution' au format VHDX." -ForegroundColor Cyan
 & wsl.exe --export $Distribution $WslBackupPath --vhd
 if ($LASTEXITCODE -ne 0) {
-    throw "WSL export failed with exit code $LASTEXITCODE."
+    throw "L’export WSL a échoué avec le code $LASTEXITCODE."
 }
 
 if (-not (Test-Path $WslBackupPath)) {
-    throw 'WSL export returned success but the VHDX backup file is missing.'
+    throw "L’export WSL a retourné un succès mais le fichier VHDX est absent."
 }
 
 $WslHash = Get-FileHash -Path $WslBackupPath -Algorithm SHA256
@@ -242,8 +242,8 @@ $Manifest = [ordered]@{
 $ManifestPath = Join-Path $MetadataDirectory 'backup-manifest.json'
 $Manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $ManifestPath
 
-Write-Host '[OK] Capacity preflight passed.' -ForegroundColor Green
-Write-Host '[OK] Windows image created and enumerated by wbadmin.' -ForegroundColor Green
-Write-Host '[OK] WSL2 VHDX exported and SHA-256 recorded.' -ForegroundColor Green
+Write-Host '[OK] Préflight de capacité validé.' -ForegroundColor Green
+Write-Host '[OK] Image Windows créée et énumérée par wbadmin.' -ForegroundColor Green
+Write-Host '[OK] VHDX WSL2 exporté et SHA-256 enregistré.' -ForegroundColor Green
 Write-Host "[OK] Manifest: $ManifestPath" -ForegroundColor Green
-Write-Host 'VERDICT: V7 GOLDEN BACKUP CREATED' -ForegroundColor Green
+Write-Host 'VERDICT: GOLDEN BACKUP CREATED' -ForegroundColor Green

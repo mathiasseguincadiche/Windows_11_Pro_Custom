@@ -54,7 +54,7 @@ function Write-Header {
     $adminColor = if ($admin) { [ConsoleColor]::Green } else { [ConsoleColor]::Yellow }
 
     Write-Line ('=' * 78) DarkCyan
-    Write-Line ' WINDOWS 11 PRO CUSTOM - CENTRE DE CONTROLE V12' Cyan
+    Write-Line ' WINDOWS 11 PRO CUSTOM - CENTRE DE CONTROLE' Cyan
     Write-Line ('=' * 78) DarkCyan
     Write-Host ' PowerShell : ' -NoNewline -ForegroundColor DarkGray
     Write-Host $PSVersionTable.PSVersion -ForegroundColor White
@@ -203,18 +203,18 @@ function Invoke-MainAction {
         }
         '3' {
             if (Confirm-WpcAction -Message 'Lancer les mises a jour completes du systeme') {
-                [void](Invoke-WpcRepoScript -DisplayName 'System Update Manager V11' -Path $UpdateScript -Arguments @{ Mode='Apply' } -RequiresAdmin)
+                [void](Invoke-WpcRepoScript -DisplayName 'Gestionnaire de mises a jour' -Path $UpdateScript -Arguments @{ Mode='Apply' } -RequiresAdmin)
             }
         }
         '4.1' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Creer une sauvegarde V7' -Path $InstallScript -Arguments @{ BackupAction='Create' } -RequiresAdmin)
+            [void](Invoke-WpcRepoScript -DisplayName 'Creer une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Create' } -RequiresAdmin)
         }
         '4.2' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Verifier une sauvegarde V7' -Path $InstallScript -Arguments @{ BackupAction='Verify' })
+            [void](Invoke-WpcRepoScript -DisplayName 'Verifier une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Verify' })
         }
         '5.1' {
             Write-Line '[SECURITE] Cette option genere uniquement un plan de restauration. Elle ne restaure rien automatiquement.' Yellow
-            [void](Invoke-WpcRepoScript -DisplayName 'Plan de restauration V7' -Path $InstallScript -Arguments @{ BackupAction='RestorePlan' })
+            [void](Invoke-WpcRepoScript -DisplayName 'Plan de restauration' -Path $InstallScript -Arguments @{ BackupAction='RestorePlan' })
         }
         '5.2' {
             if (Confirm-WpcAction -Message 'Rollback des reglages Windows geres par le depot' -Dangerous) {
@@ -270,7 +270,7 @@ function Show-RestoreMenu {
         Write-Header
         Write-Line ' RESTAURATION' White
         Write-Line ''
-        Write-Line '  1. Generer un plan de restauration V7 (aucune ecriture)' White
+        Write-Line '  1. Generer un plan de restauration (aucune ecriture)' White
         Write-Line '  2. Rollback des reglages geres par le depot' Yellow
         Write-Line '  0. Retour' DarkGray
         Write-Host ''
@@ -330,9 +330,9 @@ function Show-Help {
     Write-Line 'Logiciels' Cyan
     Write-Line '  Installe uniquement les applications WinGet manquantes ou non conformes.' DarkGray
     Write-Line 'Mises a jour' Cyan
-    Write-Line '  Lance V11: Windows Update, WinGet, WSL, Ubuntu/APT, VS Code et DevOps pinned.' DarkGray
+    Write-Line '  Gere Windows Update, WinGet, WSL, Ubuntu/APT, VS Code et les outils DevOps epingles.' DarkGray
     Write-Line 'Sauvegarde' Cyan
-    Write-Line '  Cree ou valide une sauvegarde via les mecanismes V7 existants.' DarkGray
+    Write-Line '  Cree ou valide la sauvegarde de reference de la workstation.' DarkGray
     Write-Line 'Restauration' Cyan
     Write-Line '  Genere un plan de restauration ou rollback les reglages geres. Pas de restauration destructive automatique.' DarkGray
     Write-Line 'Audit / verification' Cyan

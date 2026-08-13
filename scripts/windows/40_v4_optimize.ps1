@@ -13,13 +13,13 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $profilePath = Join-Path $repoRoot "config\windows\v4\$Profile.json"
 $stateDir = Join-Path $repoRoot 'state\windows-v4'
 $statePath = Join-Path $stateDir "$Profile.before.json"
-if (-not (Test-Path $profilePath)) { throw "V4 profile not found: $profilePath" }
+if (-not (Test-Path $profilePath)) { throw "Profil d'optimisation introuvable: $profilePath" }
 $config = Get-Content -Raw $profilePath | ConvertFrom-Json
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Apply and Rollback require an elevated PowerShell session.' }
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Apply et Rollback exigent une session PowerShell élevée.' }
 }
 
 function Get-RegistryState {
@@ -68,7 +68,7 @@ function Get-PendingChanges {
 }
 
 function Show-ProfileStatus {
-    Write-Host "V4 profile: $Profile" -ForegroundColor Cyan
+    Write-Host "Profil d'optimisation: $Profile" -ForegroundColor Cyan
     Write-Host $config.description
     foreach ($entry in @($config.registry)) {
         $current = Get-RegistryState -Entry $entry
@@ -88,7 +88,7 @@ switch ($Mode) {
     'Apply' {
         $pending = Get-PendingChanges
         if ($pending.Registry.Count -eq 0 -and $pending.Services.Count -eq 0) {
-            Write-Host "[DÉJÀ OK] Profil V4 '$Profile' déjà conforme; aucune écriture registre/service." -ForegroundColor Green
+            Write-Host "[DÉJÀ OK] Profil '$Profile' déjà conforme; aucune écriture registre/service." -ForegroundColor Green
             return
         }
         Assert-Administrator
@@ -107,9 +107,9 @@ switch ($Mode) {
                 }
             )
             [ordered]@{ Profile=$Profile; CapturedAt=(Get-Date).ToString('o'); Registry=$registryBackup; Services=$serviceBackup } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $statePath
-            Write-Host "[OK] État initial V4 sauvegardé: $statePath" -ForegroundColor Green
+            Write-Host "[OK] État initial du profil sauvegardé: $statePath" -ForegroundColor Green
         } else {
-            Write-Host "[DÉJÀ OK] Sauvegarde initiale V4 préservée: $statePath" -ForegroundColor Green
+            Write-Host "[DÉJÀ OK] Sauvegarde initiale du profil préservée: $statePath" -ForegroundColor Green
         }
 
         foreach ($entry in @($pending.Registry)) {
@@ -135,23 +135,23 @@ switch ($Mode) {
         }
         $afterPending = Get-PendingChanges
         if ($afterPending.Registry.Count -gt 0 -or $afterPending.Services.Count -gt 0) {
-            throw "Profil V4 '$Profile' encore incomplet après Apply."
+            throw "Profil '$Profile' encore incomplet après Apply."
         }
-        Write-Host "[FAIT] Profil V4 '$Profile': $($pending.Registry.Count) registre(s), $($pending.Services.Count) service(s) corrigé(s)." -ForegroundColor Green
+        Write-Host "[FAIT] Profil '$Profile': $($pending.Registry.Count) registre(s), $($pending.Services.Count) service(s) corrigé(s)." -ForegroundColor Green
         if ($config.rebootRecommended) { Write-Host '[ACTION REQUISE] Redémarrage recommandé pour stabiliser ce profil.' -ForegroundColor Magenta }
     }
     'Verify' {
         $pending = Get-PendingChanges
         if ($pending.Registry.Count -gt 0 -or $pending.Services.Count -gt 0) {
             $items = @($pending.Registry | ForEach-Object { "REG:$($_.name)" }) + @($pending.Services | ForEach-Object { "SVC:$($_.name)" })
-            throw "V4 profile '$Profile' non conforme: $($items -join ', ')"
+            throw "Profil '$Profile' non conforme: $($items -join ', ')"
         }
-        Write-Host "[OK] V4 profile '$Profile' verified." -ForegroundColor Green
+        Write-Host "[OK] Profil '$Profile' vérifié." -ForegroundColor Green
     }
     'Rollback' {
         Assert-Administrator
         if (-not (Test-Path $statePath)) {
-            Write-Host "[DÉJÀ OK] Aucun état initial V4 '$Profile' enregistré; rollback inutile." -ForegroundColor Green
+            Write-Host "[DÉJÀ OK] Aucun état initial '$Profile' enregistré; rollback inutile." -ForegroundColor Green
             return
         }
         $backup = Get-Content -Raw $statePath | ConvertFrom-Json
@@ -167,6 +167,6 @@ switch ($Mode) {
             $startupType = switch ([string]$entry.StartMode) { 'Auto' { 'Automatic' } 'Manual' { 'Manual' } 'Disabled' { 'Disabled' } default { $null } }
             if ($startupType) { Set-Service -Name $entry.Name -StartupType $startupType }
         }
-        Write-Host "[FAIT] Profil V4 '$Profile' restauré depuis lʼétat initial." -ForegroundColor Green
+        Write-Host "[FAIT] Profil '$Profile' restauré depuis lʼétat initial." -ForegroundColor Green
     }
 }

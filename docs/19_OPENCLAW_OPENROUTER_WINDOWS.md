@@ -1,8 +1,14 @@
-# OpenClaw + OpenRouter sous Windows 11 — installation propre sur D:\
+# OpenClaw + OpenRouter sous Windows 11 — intégration sur `D:`
 
-Cette intégration ajoute la pile IA du dépôt privé `mathiasseguincadiche/openclaw_openrouter` au poste `Windows_11_Pro_Custom` avec une séparation stricte entre le runtime Windows et le backend Linux DevOps.
+Cette documentation explique **la place d'OpenClaw/OpenRouter dans la workstation Windows**.
 
-## Architecture retenue
+Elle ne remplace pas la documentation fonctionnelle du dépôt `mathiasseguincadiche/openclaw_openrouter`. Le dépôt Windows prépare l'environnement, les emplacements, les frontières avec WSL2 et la validation d'intégration.
+
+OpenClaw est une **capacité optionnelle** de la workstation, pas son identité principale.
+
+---
+
+## Architecture
 
 ```text
 C:\
@@ -16,12 +22,12 @@ D:\WSL\Ubuntu-DevOps\
     └── kubectl / Helm / Minikube / kind
 
 D:\AI\OpenClaw\
-├── control-plane\     # checkout détaché du commit OpenClaw approuvé
-├── npm-global\        # runtime npm OpenClaw épinglé par le control-plane
-├── state\             # configuration, credentials, sessions et état OpenClaw
-├── workspace\         # workspace principal
-├── clawops\           # projets, intake et état du toolkit
-├── venv\              # Python + CLI clawops
+├── control-plane\
+├── npm-global\
+├── state\
+├── workspace\
+├── clawops\
+├── venv\
 ├── logs\
 └── cache\
 ```
@@ -30,13 +36,17 @@ La séparation est volontaire :
 
 ```text
 Windows natif
-└── OpenClaw + OpenRouter + clawops
+└── OpenClaw / OpenRouter / clawops
 
-WSL2 Ubuntu 26.04
-└── exécution des charges DevOps Linux
+Ubuntu WSL2
+└── backend Linux DevOps
 ```
 
-Un dépôt Linux actif reste sous le filesystem Linux, par exemple :
+---
+
+## Frontière avec les projets Linux
+
+Un dépôt Linux actif continue de vivre sous :
 
 ```text
 ~/projects
@@ -44,24 +54,32 @@ Un dépôt Linux actif reste sous le filesystem Linux, par exemple :
 ~/repositories
 ```
 
-Il ne doit pas être déplacé sous `/mnt/c` ou `/mnt/d` pour faciliter l'accès depuis Windows. Une ingestion `clawops project ingest` est une copie d'analyse/audit et ne remplace jamais le checkout opérationnel WSL2.
+Il ne doit pas être déplacé vers `/mnt/c` ou `/mnt/d` pour faciliter l'accès depuis Windows.
 
-## Pin immuable du control-plane
+Une ingestion par `clawops` sert à l'analyse ou à l'audit ; elle ne remplace pas le checkout opérationnel WSL2.
 
-Le dépôt Windows ne suit pas une branche mobile de `openclaw_openrouter`. La source de vérité est :
+---
+
+## Control-plane épinglé
+
+Le dépôt Windows ne suit pas aveuglément une branche mobile de `openclaw_openrouter`.
+
+La source de vérité est :
 
 ```text
 config/openclaw/control-plane.json
 ```
 
-Le champ `ref` contient un SHA Git de 40 caractères validé par CI. Le bootstrap :
+Le bootstrap :
 
-1. récupère exactement ce ref ;
-2. utilise un checkout détaché ;
-3. vérifie que `HEAD` correspond au SHA attendu ;
-4. refuse d'écraser un checkout contenant des modifications locales.
+1. récupère le ref approuvé ;
+2. vérifie le checkout ;
+3. refuse d'écraser des modifications locales non prévues ;
+4. utilise le contrôle-plane validé pour installer et qualifier la pile.
 
-Une montée de version OpenClaw se fait donc volontairement dans le dépôt IA, avec tests, puis par mise à jour explicite du pin dans ce dépôt.
+Une mise à jour OpenClaw doit donc être testée dans le dépôt IA, puis le pin Windows est mis à jour explicitement.
+
+---
 
 ## Audit
 
@@ -71,46 +89,60 @@ Depuis PowerShell 7 :
 .\install.ps1 -Mode Audit
 ```
 
-L'audit contrôle notamment :
+L'audit peut contrôler notamment :
 
 - `D:` en NTFS ;
-- la présence éventuelle de `D:\AI\OpenClaw\control-plane` ;
-- le commit control-plane attendu et le `HEAD` local ;
-- les launchers OpenClaw et `clawops` ;
-- la présence du validateur WSL2 fourni par le control-plane ;
-- les variables utilisateur persistées.
+- présence de `D:\AI\OpenClaw` ;
+- checkout du control-plane ;
+- launchers OpenClaw et `clawops` ;
+- environnement WSL2 attendu ;
+- variables utilisateur pertinentes ;
+- cohérence des frontières Windows/Linux.
+
+---
 
 ## Installation
+
+Si la stack DevOps et OpenClaw doivent être installés :
 
 ```powershell
 .\install.ps1 -Mode Apply -InstallDevOps -InstallOpenClawAI
 ```
 
-Le bootstrap Windows :
+Le parcours Windows :
 
-1. prépare WSL2 Ubuntu selon le contrat `config/wsl/runtime-contract.json` ;
-2. installe la stack DevOps dans Ubuntu si `-InstallDevOps` est demandé ;
-3. vérifie que la cible IA est `D:` en NTFS ;
-4. installe Git for Windows si nécessaire ;
-5. clone le dépôt privé OpenClaw sous `D:\AI\OpenClaw\control-plane` ;
-6. positionne le checkout sur le commit immuable approuvé ;
-7. lance l'installateur Windows versionné du control-plane ;
-8. conserve tous les secrets hors de Git.
+1. qualifie WSL2 Ubuntu ;
+2. installe/converge la stack DevOps si demandée ;
+3. vérifie que la cible IA se trouve sur `D:` NTFS ;
+4. prépare Git Windows si nécessaire ;
+5. récupère le control-plane sous `D:\AI\OpenClaw\control-plane` ;
+6. positionne le checkout sur le ref approuvé ;
+7. appelle l'installateur Windows du control-plane ;
+8. conserve les secrets hors de Git.
 
-Le dépôt IA étant privé, Git Credential Manager doit être authentifié auprès de GitHub lors du premier clone.
+Le dépôt IA étant privé, l'authentification GitHub doit être disponible pour le clone initial.
+
+---
 
 ## Runtime OpenClaw et Node.js
 
-Le control-plane contient son propre contrat runtime machine-readable. Il fixe notamment :
+Le control-plane possède son propre contrat runtime machine-readable.
+
+Il fixe notamment :
 
 - la version OpenClaw validée ;
-- les plages Node.js supportées ;
-- la distribution WSL2 DevOps ;
-- les racines Linux autorisées et interdites.
+- les versions Node.js supportées ;
+- le mode de déploiement ;
+- les frontières WSL2 ;
+- les racines autorisées pour les projets Linux.
 
-L'installateur ne dépend donc plus de `openclaw@latest`. Il refuse une version OpenClaw différente du lock et vérifie la version réelle de Node.js avant installation ou validation.
+Le dépôt Windows ne doit pas remplacer ce contrat par un `openclaw@latest` arbitraire.
 
-## Variables persistées
+---
+
+## Variables d'environnement
+
+Architecture attendue :
 
 ```text
 OPENCLAW_HOME=D:\AI\OpenClaw
@@ -122,40 +154,46 @@ CLAWOPS_DEPLOYMENT_MODE=windows-native
 CLAWOPS_WSL_DISTRIBUTION=Ubuntu
 ```
 
+Ces chemins séparent clairement l'état IA des projets Linux DevOps.
+
+---
+
 ## OpenRouter
 
-La clé API n'est pas demandée automatiquement pendant l'installation par défaut.
+OpenRouter est un **service Cloud/API**, pas un logiciel à installer localement.
 
-Quand vous êtes prêt :
+La workstation prépare OpenClaw ; la configuration de la clé OpenRouter se fait explicitement selon les mécanismes du dépôt IA.
+
+Exemple :
 
 ```powershell
 openclaw onboard --auth-choice openrouter-api-key
 ```
 
-Puis :
+Puis les commandes `clawops` du control-plane peuvent être utilisées pour valider la configuration, les modèles, le budget et l'équipe IA.
 
-```powershell
-clawops validate config
-clawops validate models
-clawops budget status
-clawops team deploy
-clawops team status
-```
+La clé API ne doit jamais être commitée dans ce dépôt.
+
+---
 
 ## Gateway
 
-Le Gateway reste une décision explicite :
+Le Gateway reste une action explicite :
 
 ```powershell
 openclaw gateway install
 openclaw gateway status --json
 ```
 
-L'exposition réseau ne doit pas être élargie sans besoin explicite. La qualification du socle Windows/WSL2 ne force pas l'installation ou la publication du Gateway.
+L'exposition réseau ne doit pas être élargie sans besoin clair.
 
-## Qualification complète
+La qualification de la workstation Windows/WSL2 n'oblige pas à publier automatiquement un Gateway.
 
-Après installation de la stack DevOps et d'OpenClaw :
+---
+
+## Qualification
+
+Après installation :
 
 ```powershell
 .\install.ps1 `
@@ -165,44 +203,98 @@ Après installation de la stack DevOps et d'OpenClaw :
   -ValidateOpenClawAI
 ```
 
-Cette séquence vérifie :
+La chaîne de validation doit démontrer :
 
 ```text
-Windows 11 / D: NTFS
+Windows 11 + D: NTFS
         ↓
-control-plane OpenClaw au SHA épinglé
+control-plane approuvé
         ↓
 OpenClaw Windows + Node.js + clawops
         ↓
 Ubuntu 26.04 WSL2
         ↓
-HOME et workspaces Linux sur ext4
+HOME et projets Linux sur ext4
         ↓
-Git / Docker / Terraform / Ansible / AWS / kubectl / Helm
+Docker / Terraform / Ansible / AWS / Kubernetes
         ↓
-frontière /mnt/c et /mnt/d respectée
+frontière Windows/Linux respectée
 ```
 
-Verdicts attendus incluent notamment :
+Les sorties internes de certains validateurs peuvent conserver des identifiants techniques historiques tant que les scripts n'ont pas été refactorés, mais **la documentation utilisateur ne les présente plus comme des versions actives de la workstation**.
 
-```text
-VERDICT: V6 WSL2 PLATFORM READY
-VERDICT: V3 DEVOPS READY
-VERDICT: OPENCLAW WINDOWS D DRIVE READY
-VERDICT: OPENCLAW WSL DEVOPS BACKEND READY
-VERDICT: OPENCLAW AI READY
-```
-
-Le dernier verdict `OPENCLAW AI READY` n'est émis qu'après validation du runtime Windows et du backend DevOps WSL2 fourni par le control-plane épinglé.
+---
 
 ## Rollback
 
-`install.ps1 -Mode Rollback` ne supprime jamais automatiquement `D:\AI\OpenClaw` ni la distribution WSL2.
+```powershell
+.\install.ps1 -Mode Rollback
+```
 
-C'est volontaire : `state` peut contenir des credentials, des sessions et des données de travail. Toute suppression, migration ou restauration destructive reste une décision explicite précédée d'une sauvegarde.
+ne doit jamais supprimer automatiquement :
+
+```text
+D:\AI\OpenClaw
+Ubuntu WSL2
+```
+
+`state` peut contenir des credentials, sessions et données de travail.
+
+Toute suppression, migration ou restauration destructive doit rester une décision explicite précédée d'une sauvegarde.
+
+---
 
 ## Sauvegarde
 
-La stratégie V7 protège `C:` et `D:` et exporte séparément la distribution WSL2 en VHDX avec SHA-256. `D:\AI\OpenClaw` est donc inclus dans la protection du volume DATA tandis que l'environnement Linux dispose de son export dédié.
+La stratégie de la workstation protège :
 
-Les sauvegardes contenant `D:\AI\OpenClaw\state` doivent être traitées comme sensibles et conservées sur un support de confiance.
+- `C:` ;
+- `D:` ;
+- l'état OpenClaw présent sur `D:` ;
+- Ubuntu via un export WSL dédié et vérifié.
+
+Les sauvegardes contenant `D:\AI\OpenClaw\state` sont sensibles.
+
+Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
+
+---
+
+## Relation avec le dépôt OpenClaw/OpenRouter
+
+```text
+Windows_11_Pro_Custom
+        ↓
+prépare la workstation
+        ↓
+Windows + D:\AI + WSL2 backend
+        ↓
+openclaw_openrouter
+        ↓
+configuration IA, modèles, agents, clawops, Gateway
+```
+
+Le dépôt Windows ne doit pas dupliquer la documentation fonctionnelle de l'équipe IA.
+
+Son rôle est de garantir que la plateforme locale est correctement installée, isolée, validée et sauvegardable.
+
+---
+
+## Règle de sortie
+
+L'intégration est considérée prête lorsque :
+
+```text
+workstation Windows conforme
++
+WSL2 DevOps conforme
++
+control-plane approuvé
++
+OpenClaw Windows validé
++
+frontières de stockage respectées
++
+secrets hors de Git
+```
+
+OpenClaw reste alors une **extension propre de la workstation**, sans transformer le projet Windows en simple installateur IA.

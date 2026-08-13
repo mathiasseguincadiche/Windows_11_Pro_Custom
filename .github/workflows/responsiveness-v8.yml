@@ -1,4 +1,4 @@
-name: Windows responsiveness V8
+name: Windows responsiveness
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
       - 'scripts/windows/42_benchmark.ps1'
       - 'scripts/windows/43_compare_benchmarks.ps1'
       - 'install.ps1'
-      - 'docs/20_WINDOWS_RESPONSIVENESS_V8.md'
+      - 'docs/04_OPTIMISATION_WINDOWS.md'
       - 'CHANGELOG.md'
   push:
     branches: [main]
@@ -20,7 +20,7 @@ on:
       - 'scripts/windows/42_benchmark.ps1'
       - 'scripts/windows/43_compare_benchmarks.ps1'
       - 'install.ps1'
-      - 'docs/20_WINDOWS_RESPONSIVENESS_V8.md'
+      - 'docs/04_OPTIMISATION_WINDOWS.md'
       - 'CHANGELOG.md'
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Validate V8 policy
+      - name: Validate responsiveness policy
         shell: bash
         run: |
           set -euo pipefail
@@ -60,15 +60,15 @@ jobs:
           script='scripts/windows/53_responsiveness_v8.ps1'
           forbidden='EmptyStandbyList|Clear-Standby|bcdedit|useplatformclock|disabledynamictick|Set-Service|Stop-Service|Set-MpPreference|DisableRealtimeMonitoring|Remove-AppxPackage|Disable-WindowsOptionalFeature|winget[[:space:]]+uninstall|Optimize-Volume.*-Defrag|DisableDeleteNotify[[:space:]]+1'
           if grep -nEi "$forbidden" "$script"; then
-            echo 'Unsafe V8 responsiveness tweak detected.' >&2
+            echo 'Unsafe responsiveness tweak detected.' >&2
             exit 1
           fi
           grep -Fq "AutomaticManagedPagefile = \$true" "$script"
           grep -Fq 'Enable-MMAgent -MemoryCompression' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationLaunchPrefetching' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationPreLaunch' "$script"
-          grep -Fq 'Startup applications are inventory-only' "$script"
-          grep -Fq "Add-PlanItem -Name 'Réactivité Windows V8'" install.ps1
+          grep -Fq 'Les applications de démarrage sont uniquement inventoriées' "$script"
+          grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
           grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
           grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
       - name: Protect benchmark methodology
@@ -76,7 +76,7 @@ jobs:
         run: |
           set -euo pipefail
           if grep -nEi 'diskspd|winsat[[:space:]]+disk|fio|WriteAllBytes|fsutil[[:space:]]+file[[:space:]]+createnew|EmptyStandbyList' scripts/windows/42_benchmark.ps1; then
-            echo 'V8 benchmark must stay lightweight and non-destructive.' >&2
+            echo 'Responsiveness benchmark must stay lightweight and non-destructive.' >&2
             exit 1
           fi
           grep -Fq 'AutomaticManagedPagefile' scripts/windows/42_benchmark.ps1
@@ -87,18 +87,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Execute V8 non-mutating audit
+      - name: Execute non-mutating responsiveness audit
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           .\scripts\windows\53_responsiveness_v8.ps1 -Mode Audit
           .\scripts\windows\42_benchmark.ps1 -Stage snapshot
-      - name: Validate V8 reports
+      - name: Validate responsiveness reports
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $report = Get-Content -Raw .\reports\windows\v8-responsiveness.json | ConvertFrom-Json
-          if ($report.Version -ne 'V8') { throw 'Unexpected V8 report version.' }
+          if ($report.Version -ne 'V8') { throw 'Unexpected internal responsiveness report schema version.' }
           if ($report.StartupAutomaticDisable -ne $false) { throw 'Startup automatic disable must remain off.' }
           if ($report.BackgroundGlobalDisable -ne $false) { throw 'Background global disable must remain off.' }
           $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json

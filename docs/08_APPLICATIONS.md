@@ -6,14 +6,14 @@ La source de vérité applicative est :
 manifests/winget/apps-core.json
 ```
 
-Le bootstrap ne cherche jamais une application « au nom approximatif » : pour les applications automatiques, il exige un identifiant WinGet exact, vérifie qu'il est résolu, détecte si l'application est déjà présente et revalide l'installation après exécution.
+Le bootstrap ne cherche jamais une application « au nom approximatif ». Pour les applications automatiques, il exige un identifiant WinGet exact, vérifie qu'il est résolu, détecte si l'application est déjà présente et revalide l'installation après exécution.
 
 ---
 
 ## Applications automatiques actuelles
 
 | Application | ID WinGet |
-|---|---|
+| --- | --- |
 | Visual Studio Code | `Microsoft.VisualStudioCode` |
 | PowerShell 7 | `Microsoft.PowerShell` |
 | JetBrainsMono Nerd Font | `DEVCOM.JetBrainsMonoNerdFont` |
@@ -29,32 +29,33 @@ Le bootstrap ne cherche jamais une application « au nom approximatif » : pour 
 | draw.io | `JGraph.Draw` |
 | Bitwarden | `Bitwarden.Bitwarden` |
 
+Le manifeste versionné reste la source de vérité si cette liste évolue.
+
 ---
 
 ## Applications volontairement manuelles
 
+Certaines applications peuvent rester déclarées avec `autoInstall=false`, par exemple lorsqu'une licence, un compte ou un canal d'installation ambigu empêche une automatisation fiable.
+
+Le principe est :
+
 ```text
-MarkText
-Microsoft Office
-PDFgear
-Files
+package fiable et vérifiable
+        ↓
+automatisation
+
+package ambigu / licence / compte
+        ↓
+ACTION REQUISE
 ```
 
-Elles restent déclarées dans le manifeste, mais `autoInstall=false`.
-
-Pourquoi ?
-
-- le canal d'installation exact peut être ambigu ou dépendre d'un compte/licence ;
-- une automatisation fragile est pire qu'une action manuelle explicite ;
-- le dépôt préfère afficher `ACTION REQUISE` plutôt que prétendre avoir installé le mauvais package.
-
-Microsoft Office, en particulier, peut nécessiter une licence et une authentification ; aucune installation silencieuse n'est supposée.
+Une automatisation fragile est pire qu'une action manuelle explicite.
 
 ---
 
-## Installer / réparer uniquement les logiciels
+## Installer ou réparer uniquement les logiciels
 
-Via le menu V12 :
+Via le centre de contrôle :
 
 ```text
 2. Installation / réparation des logiciels
@@ -66,13 +67,13 @@ ou directement :
 .\scripts\bootstrap\03_apps.ps1 -Mode Apply
 ```
 
-### Audit
+Audit :
 
 ```powershell
 .\scripts\bootstrap\03_apps.ps1 -Mode Audit
 ```
 
-### Vérification
+Vérification :
 
 ```powershell
 .\scripts\bootstrap\03_apps.ps1 -Mode Verify
@@ -85,107 +86,137 @@ ou directement :
 Pour chaque package automatique :
 
 ```text
-winget show ID exact
+résoudre l'ID WinGet exact
         ↓
 package valide ?
         ↓
-winget list ID exact
+vérifier la présence
         ↓
 présent ?
-├── oui -> DEJA_OK
-└── non -> install
+├── oui -> DÉJÀ OK
+└── non -> installer
              ↓
-          winget list
+          re-vérifier
              ↓
           preuve réelle
 ```
 
-Une relance ne doit donc pas réinstaller les logiciels déjà détectés.
+Une relance ne doit pas réinstaller les logiciels déjà conformes.
 
 ---
 
-## Pourquoi PowerShell 7 est dans le socle
+## PowerShell 7
 
-Le projet utilise PowerShell pour son orchestration. Windows PowerShell 5.1 reste disponible pour compatibilité système, mais PowerShell 7 est le shell moderne recommandé pour l'utilisation quotidienne et est également accessible dans WezTerm/VS Code.
+Windows PowerShell 5.1 reste disponible pour les composants système qui en dépendent, mais **PowerShell 7** est le shell moderne recommandé pour l'utilisation quotidienne et l'administration du dépôt.
+
+Il est accessible depuis WezTerm et VS Code.
 
 ---
 
-## Pourquoi la Nerd Font est dans le socle
+## JetBrainsMono Nerd Font
 
-JetBrainsMono Nerd Font fournit les glyphes utilisés par Starship et le terminal DevOps V10 dans :
+La Nerd Font fournit les glyphes utilisés par Starship et l'environnement terminal :
 
 - WezTerm ;
-- le terminal intégré VS Code.
+- terminal intégré VS Code.
 
-Elle est donc un composant fonctionnel de l'expérience terminal, pas seulement un choix esthétique.
+Elle est donc un composant fonctionnel de l'expérience CLI, pas seulement un choix esthétique.
 
 ---
 
-## WSL2 n'est pas une application WinGet du socle
+## WSL2 n'est pas une application WinGet
 
-WSL2 appartient au socle système et est provisionné par :
-
-```text
-scripts/bootstrap/06_wsl.ps1
-```
+WSL2 appartient au socle système et possède sa propre gestion.
 
 Cela évite de confondre :
 
 ```text
 application Windows
 vs
-capacité/runtime système
+capacité système
+vs
+distribution Linux
 ```
 
-OpenSSH Client suit également une gestion système dédiée.
+Guide : [`06_WSL2.md`](06_WSL2.md).
+
+---
+
+## OpenSSH Client
+
+Le client OpenSSH Windows est géré comme capacité système afin de permettre :
+
+- SSH depuis PowerShell ;
+- Remote - SSH depuis VS Code ;
+- administration distante.
+
+Le serveur OpenSSH Windows n'est pas installé par défaut : la workstation n'a pas besoin d'exposer un serveur SSH entrant pour ses usages normaux.
 
 ---
 
 ## OneDrive : volontairement absent
 
-La workstation cible un état **sans Microsoft OneDrive**.
+La workstation cible actuellement un état **sans Microsoft OneDrive**.
 
-Le contrat est :
+Le contrat se trouve dans :
 
 ```text
 config/windows/onedrive.json
 ```
 
-et le composant :
+et le composant dédié dans :
 
 ```text
 scripts/windows/33_onedrive.ps1
 ```
 
-En `Apply`, le dépôt :
+En application, le dépôt :
 
-- enregistre l'état antérieur ;
+- observe l'état antérieur ;
 - arrête OneDrive s'il tourne ;
-- désinstalle uniquement le package OneDrive avec fallback contrôlé ;
+- désinstalle uniquement le client concerné ;
 - applique les stratégies prévues ;
-- revalide l'absence du package/processus et la présence des stratégies.
+- revalide l'état.
 
 ### Protection des données
 
-Le script ne supprime jamais les dossiers OneDrive ni les fichiers utilisateur.
+Le script ne doit pas supprimer les dossiers personnels ni les fichiers utilisateur.
 
-Si Documents/Bureau/Images ont déjà été redirigés/synchronisés par OneDrive, sécurise d'abord les données locales avant de supprimer le client.
+Si Documents/Bureau/Images ont été redirigés ou synchronisés par OneDrive, sécurise d'abord les données locales avant toute suppression du client.
 
 ### Rollback
 
-Le rollback restaure les stratégies antérieures et ne réinstalle OneDrive que s'il était réellement présent avant l'Apply du dépôt.
+Le rollback restaure les stratégies antérieures et ne réinstalle le client que si son état précédent le justifie.
 
 ---
 
-## Mises à jour applicatives
-
-L'installation initiale et les mises à jour sont deux responsabilités différentes :
+## Installation et mise à jour sont deux responsabilités différentes
 
 ```text
-Installation / réparation -> scripts/bootstrap/03_apps.ps1
-Mises à jour régulières   -> update.ps1 / V11
+Installation / réparation
+        ↓
+scripts/bootstrap/03_apps.ps1
+
+Maintenance régulière
+        ↓
+update.ps1
 ```
 
-V11 respecte les pins WinGet et ne force pas les packages volontairement bloqués.
+Le gestionnaire de mises à jour respecte les pins et les exclusions du dépôt.
 
-Voir [`22_SYSTEM_UPDATE_MANAGER_V11.md`](22_SYSTEM_UPDATE_MANAGER_V11.md).
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
+
+---
+
+## Règles de sécurité
+
+Le socle applicatif ne doit jamais :
+
+- installer un package dont l'identifiant n'est pas résolu proprement ;
+- traiter un logiciel déjà présent comme absent sans vérification ;
+- contourner une licence ;
+- stocker des identifiants ou tokens dans le manifeste ;
+- ajouter un logiciel simplement parce qu'il est populaire ;
+- remplacer une application manuelle par un package différent portant un nom similaire.
+
+L'objectif est un **socle cohérent et reproductible**, pas un catalogue le plus long possible.

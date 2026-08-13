@@ -1,10 +1,10 @@
-name: System Update V11
+name: System Update
 
 on:
   push:
     branches:
       - main
-      - feat/system-update-manager-v11
+      - docs/restore-project-first-canonical
     paths:
       - update.ps1
       - config/updates/**
@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Validate V11 policy
+      - name: Validate update policy
         run: |
           jq -e '.schemaVersion == "1.0"' config/updates/v11.json >/dev/null
           jq -e '.windowsUpdate.includeDriversByDefault == false' config/updates/v11.json >/dev/null
@@ -41,7 +41,7 @@ jobs:
           jq -e '.ubuntu.autoremove == false and .ubuntu.distUpgrade == false' config/updates/v11.json >/dev/null
           jq -e '.devops.internetLatestIsTruth == false and .devops.reconcileOnlyPinnedTargets == true' config/updates/v11.json >/dev/null
 
-      - name: Parse and lint V11 Bash
+      - name: Parse and lint update Bash
         run: |
           bash -n scripts/wsl/update-system-packages.sh
           bash -n scripts/wsl/reconcile-pinned-devops.sh
@@ -51,7 +51,7 @@ jobs:
         run: |
           grep -Fq 'Microsoft.Update.Session' scripts/updates/10_windows_update.ps1
           if grep -Fq 'PSWindowsUpdate' scripts/updates/10_windows_update.ps1; then
-            echo 'PSWindowsUpdate tiers interdit dans V11.' >&2
+            echo 'Le module tiers PSWindowsUpdate est interdit.' >&2
             exit 1
           fi
           grep -Fq -- '--upgrade-available' scripts/updates/20_winget_update.ps1
@@ -106,18 +106,18 @@ jobs:
           printf '%s\n' '{"terraform_version":"0.0.0"}'
           EOF
           chmod +x .ci-fake-bin/terraform
-          if PATH="$PWD/.ci-fake-bin:$PATH" bash scripts/wsl/reconcile-pinned-devops.sh verify > .ci-v11-negative.log 2>&1; then
+          if PATH="$PWD/.ci-fake-bin:$PATH" bash scripts/wsl/reconcile-pinned-devops.sh verify > .ci-update-negative.log 2>&1; then
             echo 'Le verify devait échouer avec Terraform hors cible.' >&2
             exit 1
           fi
-          grep -Fq '[À FAIRE] terraform' .ci-v11-negative.log
+          grep -Fq '[À FAIRE] terraform' .ci-update-negative.log
 
   powershell-parse:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
 
-      - name: Parse V11 PowerShell
+      - name: Parse update PowerShell
         shell: pwsh
         run: |
           $files = @(
@@ -139,9 +139,9 @@ jobs:
               $failed = $true
             }
           }
-          if ($failed) { throw 'V11 PowerShell parse failed.' }
+          if ($failed) { throw 'Update PowerShell parse failed.' }
 
-      - name: Validate V11 orchestration contract
+      - name: Validate update orchestration contract
         shell: pwsh
         run: |
           $root = Get-Content -Raw update.ps1

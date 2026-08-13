@@ -41,7 +41,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $RepoRoot = $PSScriptRoot
 $runtimeModule = Join-Path $RepoRoot 'scripts\core\runtime.psm1'
-if (-not (Test-Path $runtimeModule)) { throw "Moteur V9 introuvable: $runtimeModule" }
+if (-not (Test-Path $runtimeModule)) { throw "Moteur d'orchestration introuvable: $runtimeModule" }
 Import-Module $runtimeModule -Force
 $context = New-WpcRunContext -RepoRoot $RepoRoot -Mode $Mode -NonInteractive:$NonInteractive
 $runSuccess = $false
@@ -89,7 +89,7 @@ function Add-PlanItem {
 function Show-Plan {
     Write-Host ''
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
-    Write-Host '  PLAN FACTUEL V9 — calculé depuis lʼétat actuel de la machine' -ForegroundColor Cyan
+    Write-Host '  PLAN FACTUEL — calculé depuis lʼétat actuel de la machine' -ForegroundColor Cyan
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
     foreach ($item in $script:plan) {
         if ($item.Compliant) {
@@ -112,7 +112,7 @@ function Invoke-PlannedItems {
 
 function Invoke-HardwareQualification {
     $manualPath = Get-RepoScript -RelativePath 'scripts\windows\51_hardware_manual_checks.ps1'
-    $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Preuves matérielles manuelles V5'
+    $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Preuves matérielles manuelles'
     if (-not $manualReady) {
         Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves matérielles manuelles incomplètes' -Detail 'Ces données BIOS/placement/stabilité ne peuvent pas être inventées par Windows.' -Context $context
         if ($context.NonInteractive) {
@@ -122,10 +122,10 @@ function Invoke-HardwareQualification {
         if ($answer -in @('o','oui','y','yes')) {
             [void](Invoke-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Record'; Interactive=[switch]::Present } -DisplayName 'Saisie guidée des preuves matérielles' -Phase 'ManualEvidence')
         } else {
-            throw 'Qualification matérielle laissée incomplète par choix utilisateur. Aucune réussite V5 ne sera déclarée.'
+            throw 'Qualification matérielle laissée incomplète par choix utilisateur. Aucun verdict positif ne sera déclaré.'
         }
     }
-    [void](Invoke-Step -RelativePath 'scripts\bootstrap\13_validate_hardware_v5.ps1' -Arguments @{ RequireManualChecks=[switch]::Present } -Name 'Qualification matérielle V5' -Phase 'FinalValidation')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\13_validate_hardware_v5.ps1' -Arguments @{ RequireManualChecks=[switch]::Present } -Name 'Qualification matérielle' -Phase 'FinalValidation')
 }
 
 try {
@@ -146,7 +146,7 @@ try {
         if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) { throw 'OpenClaw control-plane pin vide.' }
     }
 
-    Write-WpcBanner -Context $context -Title "Windows 11 Pro Custom — Orchestrateur V9 — $Mode"
+    Write-WpcBanner -Context $context -Title "Windows 11 Pro Custom — Orchestrateur — $Mode"
     Write-Host "Profil WSL2          : $WslProfile"
     Write-Host "Distribution         : $Distribution"
     Write-Host "Emplacement WSL      : $WslInstallLocation"
@@ -164,10 +164,10 @@ try {
                 $args.Distribution = $Distribution
                 if ($AllowNonUsbBackupTarget) { $args.AllowNonUsbTarget=[switch]::Present }
                 if ($SkipBackupRestorePoint) { $args.SkipRestorePoint=[switch]::Present }
-                [void](Invoke-Step -RelativePath 'scripts\backup\60_create_backup_v7.ps1' -Arguments $args -Name 'Création sauvegarde V7' -Phase 'Backup')
+                [void](Invoke-Step -RelativePath 'scripts\backup\60_create_backup_v7.ps1' -Arguments $args -Name 'Création sauvegarde' -Phase 'Backup')
             }
-            'Verify' { [void](Invoke-Step -RelativePath 'scripts\backup\61_validate_backup_v7.ps1' -Arguments $args -Name 'Validation sauvegarde V7' -Phase 'Backup') }
-            'RestorePlan' { [void](Invoke-Step -RelativePath 'scripts\backup\62_restore_plan_v7.ps1' -Arguments $args -Name 'Plan de restauration V7' -Phase 'Backup') }
+            'Verify' { [void](Invoke-Step -RelativePath 'scripts\backup\61_validate_backup_v7.ps1' -Arguments $args -Name 'Validation sauvegarde' -Phase 'Backup') }
+            'RestorePlan' { [void](Invoke-Step -RelativePath 'scripts\backup\62_restore_plan_v7.ps1' -Arguments $args -Name 'Plan de restauration' -Phase 'Backup') }
         }
         $runSuccess = $true
         return
@@ -176,15 +176,15 @@ try {
     if ($Mode -eq 'Rollback') {
         Write-WpcStatus -Status 'ANALYSE' -Message 'Rollback' -Detail 'Seuls les états initiaux réellement enregistrés par le dépôt seront restaurés.' -Context $context
         $v8StatePath = Join-Path $RepoRoot 'state\windows-v8\responsiveness.before.json'
-        if (Test-Path $v8StatePath) { [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Rollback' } -Name 'Réactivité Windows V8' -Phase 'Rollback') }
-        else { Write-WpcStatus -Status 'DEJA_OK' -Message 'Réactivité Windows V8' -Detail 'Aucun état initial V8 enregistré; rien à restaurer.' -Context $context }
+        if (Test-Path $v8StatePath) { [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Rollback' } -Name 'Réactivité Windows' -Phase 'Rollback') }
+        else { Write-WpcStatus -Status 'DEJA_OK' -Message 'Réactivité Windows' -Detail 'Aucun état initial enregistré; rien à restaurer.' -Context $context }
 
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\10_workstation.ps1' -Arguments @{ Mode='Rollback' } -Name 'Poste de travail' -Phase 'Rollback')
         $profilesToRollback = @($OptimizationProfiles)
         if (-not $PSBoundParameters.ContainsKey('OptimizationProfiles')) {
             $profilesToRollback = @('optional','gaming','privacy','standard') | Where-Object { Test-Path (Join-Path $RepoRoot "state\windows-v4\${_}.before.json") }
         } else { [array]::Reverse($profilesToRollback) }
-        foreach ($profile in $profilesToRollback) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Rollback'; Profile=$profile } -Name "Profil V4 $profile" -Phase 'Rollback') }
+        foreach ($profile in $profilesToRollback) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Rollback'; Profile=$profile } -Name "Profil optimisation $profile" -Phase 'Rollback') }
         [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Rollback' } -Name 'Réglages Windows de base' -Phase 'Rollback')
         [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Rollback' } -Name 'Exclusions Defender' -Phase 'Rollback')
         Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'OpenClaw non supprimé automatiquement' -Detail 'Son état et ses identifiants sur D: nécessitent une décision explicite; le rollback ne les efface jamais.' -Context $context
@@ -197,13 +197,13 @@ try {
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\01_machine_state.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; WslInstallLocation=$WslInstallLocation; OpenClawRoot=$OpenClawRoot } -Name 'État réel de la machine' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\20_system_audit.ps1' -Name 'Audit système Windows' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\50_hardware_inventory.ps1' -Name 'Inventaire matériel' -Phase 'Discovery')
-    [void](Invoke-Step -RelativePath 'scripts\windows\52_hardware_symbiosis.ps1' -Arguments @{ Mode='Audit' } -Name 'Symbiose matérielle V5' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\52_hardware_symbiosis.ps1' -Arguments @{ Mode='Audit' } -Name 'Symbiose matérielle' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\21_storage_trim.ps1' -Arguments @{ Mode='Audit' } -Name 'Stockage/TRIM' -Phase 'Discovery')
-    [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Audit' } -Name 'Réactivité Windows V8' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Audit' } -Name 'Réactivité Windows' -Phase 'Discovery')
 
     if ($Mode -eq 'Audit') {
         [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Audit' } -Name 'Réglages Windows de base' -Phase 'Audit')
-        foreach ($profile in $OptimizationProfiles) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Audit'; Profile=$profile } -Name "Profil V4 $profile" -Phase 'Audit') }
+        foreach ($profile in $OptimizationProfiles) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Audit'; Profile=$profile } -Name "Profil optimisation $profile" -Phase 'Audit') }
         [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='snapshot' } -Name 'Mesure Windows' -Phase 'Audit')
         [void](Invoke-Step -RelativePath 'scripts\windows\51_hardware_manual_checks.ps1' -Arguments @{ Mode='Show' } -Name 'Preuves matérielles manuelles' -Phase 'Audit')
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\03_apps.ps1' -Arguments @{ Mode='Audit' } -Name 'Applications WinGet' -Phase 'Audit')
@@ -220,29 +220,29 @@ try {
     if ($Mode -eq 'Verify') {
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\03_apps.ps1' -Arguments @{ Mode='Verify' } -Name 'Applications WinGet' -Phase 'Verify')
         [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Verify' } -Name 'Réglages Windows de base' -Phase 'Verify')
-        foreach ($profile in $OptimizationProfiles) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Verify'; Profile=$profile } -Name "Profil V4 $profile" -Phase 'Verify') }
-        [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Verify' } -Name 'Réactivité Windows V8' -Phase 'Verify')
+        foreach ($profile in $OptimizationProfiles) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Verify'; Profile=$profile } -Name "Profil optimisation $profile" -Phase 'Verify') }
+        [void](Invoke-Step -RelativePath 'scripts\windows\53_responsiveness_v8.ps1' -Arguments @{ Mode='Verify' } -Name 'Réactivité Windows' -Phase 'Verify')
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\06_wsl.ps1' -Arguments @{ Mode='Verify'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'WSL2' -Phase 'Verify')
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\07_wsl_user.ps1' -Arguments @{ Mode='Verify'; Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Utilisateur WSL' -Phase 'Verify')
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\10_workstation.ps1' -Arguments @{ Mode='Verify' } -Name 'Poste de travail' -Phase 'Verify')
         [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Verify' } -Name 'Exclusions Defender' -Phase 'Verify')
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\05_defender.ps1' -Name 'Microsoft Defender' -Phase 'Verify')
-        [void](Invoke-Step -RelativePath 'scripts\bootstrap\11_validate_v3.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'Qualification Windows V3' -Phase 'FinalValidation')
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\11_validate_v3.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'Qualification Windows' -Phase 'FinalValidation')
 
         $beforeReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-before.json'
         $afterReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-after.json'
         if ((Test-Path $beforeReport) -and (Test-Path $afterReport)) {
             [void](Invoke-Step -RelativePath 'scripts\windows\43_compare_benchmarks.ps1' -Name 'Comparaison mesures Windows' -Phase 'Verify')
-            [void](Invoke-Step -RelativePath 'scripts\bootstrap\12_validate_v4.ps1' -Arguments @{ OptimizationProfiles=$OptimizationProfiles } -Name 'Qualification Windows V4' -Phase 'FinalValidation')
+            [void](Invoke-Step -RelativePath 'scripts\bootstrap\12_validate_v4.ps1' -Arguments @{ OptimizationProfiles=$OptimizationProfiles } -Name 'Qualification optimisation Windows' -Phase 'FinalValidation')
         } else {
-            Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves avant/après V4 absentes' -Detail 'Exécute une fois .\install.ps1 -Mode Apply pour générer les mesures factuelles, puis relance Verify.' -Context $context
+            Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves avant/après optimisation absentes' -Detail 'Exécute une fois .\install.ps1 -Mode Apply pour générer les mesures factuelles, puis relance Verify.' -Context $context
         }
 
         if ($ValidateHardware) { Invoke-HardwareQualification }
-        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification physique V5 non demandée' -Detail 'Ajoute -ValidateHardware pour vérifier aussi les preuves BIOS/placement/stabilité.' -Context $context }
+        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification physique non demandée' -Detail 'Ajoute -ValidateHardware pour vérifier aussi les preuves BIOS/placement/stabilité.' -Context $context }
 
-        if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2 V6' -Phase 'FinalValidation') }
-        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification runtime WSL2 V6 non demandée' -Detail 'Ajoute -ValidateWsl.' -Context $context }
+        if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2' -Phase 'FinalValidation') }
+        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification runtime WSL2 non demandée' -Detail 'Ajoute -ValidateWsl.' -Context $context }
 
         if ($ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\09_validate_devops.ps1' -Arguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Qualification stack DevOps' -Phase 'FinalValidation') }
         else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification DevOps non demandée' -Detail 'Ajoute -ValidateDevOps après installation de la stack.' -Context $context }
@@ -258,9 +258,9 @@ try {
     Add-PlanItem -Name 'Applications WinGet' -VerifyRelativePath 'scripts\bootstrap\03_apps.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\bootstrap\03_apps.ps1' -ApplyArguments @{ Mode='Apply' }
     Add-PlanItem -Name 'Réglages Windows de base' -VerifyRelativePath 'scripts\windows\10_tune.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\windows\10_tune.ps1' -ApplyArguments @{ Mode='Apply' }
     foreach ($profile in $OptimizationProfiles) {
-        Add-PlanItem -Name "Profil V4 $profile" -VerifyRelativePath 'scripts\windows\40_v4_optimize.ps1' -VerifyArguments @{ Mode='Verify'; Profile=$profile } -ApplyRelativePath 'scripts\windows\40_v4_optimize.ps1' -ApplyArguments @{ Mode='Apply'; Profile=$profile }
+        Add-PlanItem -Name "Profil optimisation $profile" -VerifyRelativePath 'scripts\windows\40_v4_optimize.ps1' -VerifyArguments @{ Mode='Verify'; Profile=$profile } -ApplyRelativePath 'scripts\windows\40_v4_optimize.ps1' -ApplyArguments @{ Mode='Apply'; Profile=$profile }
     }
-    Add-PlanItem -Name 'Réactivité Windows V8' -VerifyRelativePath 'scripts\windows\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\windows\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }
+    Add-PlanItem -Name 'Réactivité Windows' -VerifyRelativePath 'scripts\windows\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\windows\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }
     Add-PlanItem -Name 'WSL2' -VerifyRelativePath 'scripts\bootstrap\06_wsl.ps1' -VerifyArguments @{ Mode='Verify'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -ApplyRelativePath 'scripts\bootstrap\06_wsl.ps1' -ApplyArguments @{ Mode='Apply'; Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation }
     Add-PlanItem -Name 'Utilisateur WSL' -VerifyRelativePath 'scripts\bootstrap\07_wsl_user.ps1' -VerifyArguments @{ Mode='Verify'; Distribution=$Distribution; LinuxUser=$WslUser } -ApplyRelativePath 'scripts\bootstrap\07_wsl_user.ps1' -ApplyArguments @{ Mode='Apply'; Distribution=$Distribution; LinuxUser=$WslUser }
     Add-PlanItem -Name 'Poste de travail' -VerifyRelativePath 'scripts\bootstrap\10_workstation.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\bootstrap\10_workstation.ps1' -ApplyArguments @{ Mode='Apply' }
@@ -308,7 +308,7 @@ try {
         $beforeReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-before.json'
         $afterReport = Join-Path $RepoRoot 'reports\windows\v4-benchmark-after.json'
         if (-not ((Test-Path $beforeReport) -and (Test-Path $afterReport))) {
-            Write-WpcStatus -Status 'ANALYSE' -Message 'Preuves V4 absentes malgré configuration conforme' -Detail 'Création de deux snapshots non mutatifs pour disposer dʼune base de validation.' -Context $context
+            Write-WpcStatus -Status 'ANALYSE' -Message 'Preuves dʼoptimisation absentes malgré configuration conforme' -Detail 'Création de deux snapshots non mutatifs pour disposer dʼune base de validation.' -Context $context
             [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='before' } -Name 'Mesure de référence' -Phase 'Measurement')
             [void](Invoke-Step -RelativePath 'scripts\windows\42_benchmark.ps1' -Arguments @{ Stage='after' } -Name 'Mesure de confirmation' -Phase 'Measurement')
             [void](Invoke-Step -RelativePath 'scripts\windows\43_compare_benchmarks.ps1' -Name 'Comparaison de confirmation' -Phase 'Measurement')
@@ -316,13 +316,13 @@ try {
     }
 
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\05_defender.ps1' -Name 'Microsoft Defender' -Phase 'FinalValidation')
-    [void](Invoke-Step -RelativePath 'scripts\bootstrap\11_validate_v3.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'Qualification Windows V3' -Phase 'FinalValidation')
-    [void](Invoke-Step -RelativePath 'scripts\bootstrap\12_validate_v4.ps1' -Arguments @{ OptimizationProfiles=$OptimizationProfiles } -Name 'Qualification Windows V4' -Phase 'FinalValidation')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\11_validate_v3.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; InstallLocation=$WslInstallLocation } -Name 'Qualification Windows' -Phase 'FinalValidation')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\12_validate_v4.ps1' -Arguments @{ OptimizationProfiles=$OptimizationProfiles } -Name 'Qualification optimisation Windows' -Phase 'FinalValidation')
 
     if ($ValidateHardware) { Invoke-HardwareQualification }
-    else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification physique V5 non demandée' -Detail 'Le script ne suppose jamais les données BIOS/placement/stabilité.' -Context $context }
+    else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification physique non demandée' -Detail 'Le script ne suppose jamais les données BIOS/placement/stabilité.' -Context $context }
 
-    if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2 V6' -Phase 'FinalValidation') }
+    if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2' -Phase 'FinalValidation') }
     if ($ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\09_validate_devops.ps1' -Arguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Qualification stack DevOps' -Phase 'FinalValidation') }
     if ($ValidateOpenClawAI) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'Qualification OpenClaw/OpenRouter' -Phase 'FinalValidation') }
 

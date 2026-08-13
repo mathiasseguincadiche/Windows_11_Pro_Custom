@@ -44,14 +44,14 @@ jobs:
             $results | Format-Table -AutoSize
             exit 1
           }
-      - name: Audit V4 profiles on Windows
+      - name: Audit Windows optimization profiles
         shell: pwsh
         run: |
           foreach ($profile in @('standard', 'privacy', 'gaming', 'optional')) {
-            Write-Host "Auditing V4 profile: $profile"
+            Write-Host "Auditing optimization profile: $profile"
             & .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
           }
-      - name: Windows PowerShell 5.1 V5 smoke test
+      - name: Windows PowerShell 5.1 hardware smoke test
         shell: powershell
         run: |
           Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
@@ -60,6 +60,7 @@ jobs:
 
   shell:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Parse Bash files
@@ -91,7 +92,7 @@ jobs:
           find . -type f -name '*.json' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do
             jq empty "$file"
           done
-      - name: Validate V4 profile schema
+      - name: Validate optimization profile schema
         shell: bash
         run: |
           set -euo pipefail
@@ -107,7 +108,7 @@ jobs:
             ' "$file" >/dev/null
           done
           jq -e '.execution == "reference-only"' config/winutil/mathias-winutil.json >/dev/null
-      - name: Validate V5 hardware target schema
+      - name: Validate hardware target schema
         shell: bash
         run: |
           set -euo pipefail
@@ -126,7 +127,7 @@ jobs:
             (.manualChecks | type == "array") and
             (.manualChecks | length == 8)
           ' config/hardware/target-v5.json >/dev/null
-      - name: Validate V6 WSL profiles and remote tooling
+      - name: Validate WSL profiles and remote tooling
         shell: bash
         run: |
           set -euo pipefail
@@ -164,7 +165,7 @@ jobs:
           grep -qx 'ms-vscode-remote.remote-ssh' config/vscode/extensions.txt
           grep -qx 'Natizyskunk.sftp' config/vscode/extensions.txt
           grep -qx 'Natizyskunk.sftp' config/vscode/extensions-wsl.txt
-      - name: Validate V7 backup policy and wiring
+      - name: Validate backup policy and wiring
         shell: bash
         run: |
           set -euo pipefail
@@ -184,7 +185,7 @@ jobs:
           test -f scripts/backup/60_create_backup_v7.ps1
           test -f scripts/backup/61_validate_backup_v7.ps1
           test -f scripts/backup/62_restore_plan_v7.ps1
-          test -f docs/18_BACKUP_DISASTER_RECOVERY_V7.md
+          test -f docs/10_BACKUP_RESTORE.md
           grep -q "ValidateSet('None', 'Create', 'Verify', 'RestorePlan')" install.ps1
           grep -q 'scripts\\backup\\60_create_backup_v7.ps1' install.ps1
           grep -q 'scripts\\backup\\61_validate_backup_v7.ps1' install.ps1
@@ -230,67 +231,67 @@ jobs:
             exit 1
           fi
           echo 'Base safety guard: OK'
-      - name: Enforce V4 safety boundaries
+      - name: Enforce optimization safety boundaries
         shell: bash
         run: |
           set -euo pipefail
           profiles=(config/windows/v4/*.json)
           forbidden_services='^(SharedAccess|StorSvc|wuauserv|WinDefend|mpssvc|vmcompute|hns)$'
           if jq -r '.services[]?.name' "${profiles[@]}" | grep -E "$forbidden_services"; then
-            echo 'A forbidden Windows/WSL/security service is targeted by a V4 profile.' >&2
+            echo 'A forbidden Windows/WSL/security service is targeted by an optimization profile.' >&2
             exit 1
           fi
           if jq -r '.registry[]?.path' "${profiles[@]}" | grep -Ei 'Windows Defender|WindowsUpdate|WindowsFirewall'; then
-            echo 'A forbidden security/update Registry path is targeted by a V4 profile.' >&2
+            echo 'A forbidden security/update Registry path is targeted by an optimization profile.' >&2
             exit 1
           fi
           if [[ "$(jq '.services | length' config/windows/v4/standard.json)" != '0' ]]; then
-            echo 'The default V4 standard profile must not modify services.' >&2
+            echo 'The default standard optimization profile must not modify services.' >&2
             exit 1
           fi
           if grep -RInE 'Remove-AppxPackage|Disable-WindowsOptionalFeature|winget[[:space:]]+uninstall' scripts/windows/4*.ps1; then
-            echo 'V4 optimization scripts must not remove Windows components or apps.' >&2
+            echo 'Optimization scripts must not remove Windows components or apps.' >&2
             exit 1
           fi
-          echo 'V4 safety boundaries: OK'
-      - name: Enforce V5 observational hardware policy
+          echo 'Optimization safety boundaries: OK'
+      - name: Enforce observational hardware policy
         shell: bash
         run: |
           set -euo pipefail
           forbidden='Set-Service|New-ItemProperty|Set-ItemProperty|Remove-ItemProperty|Format-Volume|Clear-Disk|Initialize-Disk|Set-Disk|Set-Partition|Resize-Partition|Optimize-Volume|Set-Storage|Set-MpPreference|bcdedit|RyzenMaster'
           if grep -InE "$forbidden" scripts/windows/50_hardware_inventory.ps1 scripts/windows/51_hardware_manual_checks.ps1 scripts/bootstrap/13_validate_hardware_v5.ps1; then
-            echo 'V5 hardware qualification must remain observational and must not tune hardware automatically.' >&2
+            echo 'Hardware qualification must remain observational and must not tune hardware automatically.' >&2
             exit 1
           fi
-          echo 'V5 observational hardware policy: OK'
-      - name: Enforce V6 WSL safety boundaries
+          echo 'Observational hardware policy: OK'
+      - name: Enforce WSL safety boundaries
         shell: bash
         run: |
           set -euo pipefail
           if grep -RInE '^(memory=(3[3-9]|[4-9][0-9])GB|processors=(1[3-9]|[2-9][0-9])|swap=0|nestedVirtualization=true)$' config/wsl/*.wslconfig; then
-            echo 'Unsafe or oversized WSL V6 resource setting detected.' >&2
+            echo 'Unsafe or oversized WSL resource setting detected.' >&2
             exit 1
           fi
           if grep -RInE 'autoMemoryReclaim=disabled|firewall=false|dnsTunneling=false' config/wsl/*.wslconfig; then
-            echo 'A required WSL V6 memory/network safety setting was disabled.' >&2
+            echo 'A required WSL memory/network safety setting was disabled.' >&2
             exit 1
           fi
-          echo 'V6 WSL safety boundaries: OK'
-      - name: Enforce V7 backup and restore safety boundaries
+          echo 'WSL safety boundaries: OK'
+      - name: Enforce backup and restore safety boundaries
         shell: bash
         run: |
           set -euo pipefail
           jq -e '.destructiveRestoreAutomation == false' config/backup/v7-policy.json >/dev/null
           if grep -InE 'sysrecovery|start[[:space:]]+recovery|--unregister|-recreateDisks|Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition' scripts/backup/60_create_backup_v7.ps1 scripts/backup/61_validate_backup_v7.ps1; then
-            echo 'V7 create/validate scripts must never contain destructive restore or disk-recreation operations.' >&2
+            echo 'Backup create/validate scripts must never contain destructive restore or disk-recreation operations.' >&2
             exit 1
           fi
           if grep -InE 'Invoke-Expression|Start-Process|^[[:space:]]*&' scripts/backup/62_restore_plan_v7.ps1; then
-            echo 'V7 restore plan must remain instruction-only and must not execute native restore commands.' >&2
+            echo 'Restore plan must remain instruction-only and must not execute native restore commands.' >&2
             exit 1
           fi
           if grep -InE "['\"]-quiet['\"]" scripts/backup/60_create_backup_v7.ps1; then
             echo 'The first Golden Backup must retain wbadmin operator confirmation; the wbadmin -quiet argument is forbidden.' >&2
             exit 1
           fi
-          echo 'V7 backup and restore safety boundaries: OK'
+          echo 'Backup and restore safety boundaries: OK'

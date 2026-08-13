@@ -1,20 +1,20 @@
-name: Interactive Control Center V12
+name: Interactive Control Center
 
 on:
   push:
     branches:
       - main
-      - feat/interactive-control-center-v12
+      - docs/restore-project-first-canonical
     paths:
       - menu.ps1
       - START_MENU.cmd
-      - docs/23_INTERACTIVE_CONTROL_CENTER_V12.md
+      - docs/17_CONTROL_CENTER.md
       - .github/workflows/control-center-v12.yml
   pull_request:
     paths:
       - menu.ps1
       - START_MENU.cmd
-      - docs/23_INTERACTIVE_CONTROL_CENTER_V12.md
+      - docs/17_CONTROL_CENTER.md
       - .github/workflows/control-center-v12.yml
 
 permissions:
@@ -57,10 +57,13 @@ jobs:
             "DryRun",
             "Start-Process -FilePath `$exe -Verb RunAs"
           )) {
-            if (-not $menu.Contains($needle)) { throw "Contrat V12 absent: $needle" }
+            if (-not $menu.Contains($needle)) { throw "Contrat Control Center absent: $needle" }
           }
           if ($menu -match 'Remove-Item\s+-Recurse|Format-Volume|Clear-Disk') {
-            throw 'Le menu V12 ne doit contenir aucune restauration destructive propre.'
+            throw 'Le menu ne doit contenir aucune restauration destructive propre.'
+          }
+          if ($menu -match 'CENTRE DE CONTROLE V\d+|System Update Manager V\d+|sauvegarde V\d+|restauration V\d+') {
+            throw 'Le menu ne doit plus exposer de numéro de version historique.'
           }
 
       - name: Prove all critical routes with DryRun

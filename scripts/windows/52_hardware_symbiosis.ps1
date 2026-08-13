@@ -13,7 +13,7 @@ $reportDir = Join-Path $repoRoot 'reports\hardware'
 $reportPath = Join-Path $reportDir 'hardware-symbiosis-v5.json'
 
 if (-not (Test-Path $policyPath)) {
-    throw "Hardware symbiosis policy missing: $policyPath"
+    throw "Politique de qualification matérielle absente: $policyPath"
 }
 
 $policy = Get-Content -Raw $policyPath | ConvertFrom-Json
@@ -68,7 +68,7 @@ $amdBaseline = $null
 if ($null -ne $amdInstalledVersion -and $null -ne $amdMinimumVersion) {
     $amdBaseline = ($amdInstalledVersion -ge $amdMinimumVersion)
 } else {
-    $warnings.Add('AMD Chipset Software package version could not be read reliably; final vendor-driver review remains manual.')
+    $warnings.Add('La version du package AMD Chipset Software ne peut pas être lue de façon fiable; la revue finale des pilotes constructeur reste manuelle.')
 }
 
 $videoControllers = @(Get-CimInstance Win32_VideoController)
@@ -92,16 +92,16 @@ foreach ($disk in $t705) {
     try {
         $reliability = $disk | Get-StorageReliabilityCounter -ErrorAction Stop | Select-Object Temperature, TemperatureMax, Wear, PowerOnHours, ReadErrorsTotal, WriteErrorsTotal
     } catch {
-        $warnings.Add("Storage reliability counters unavailable for $($disk.FriendlyName).")
+        $warnings.Add("Compteurs de fiabilité stockage indisponibles pour $($disk.FriendlyName).")
     }
 
     if ($null -ne $reliability -and $null -ne $reliability.Temperature) {
         $temperature = [int]$reliability.Temperature
         if ($temperature -gt [int]$policy.storage.temperatureCriticalC) {
             $criticalTemperatureDetected = $true
-            $warnings.Add("CRITICAL: $($disk.FriendlyName) temperature is ${temperature} C.")
+            $warnings.Add("CRITIQUE: température $($disk.FriendlyName) = ${temperature} C.")
         } elseif ($temperature -ge [int]$policy.storage.temperatureWarningC) {
-            $warnings.Add("WARNING: $($disk.FriendlyName) temperature is ${temperature} C; review heatsink and airflow.")
+            $warnings.Add("AVERTISSEMENT: température $($disk.FriendlyName) = ${temperature} C; vérifier dissipateur et airflow.")
         }
     }
 
@@ -129,7 +129,7 @@ $physicalAdapters = @()
 try {
     $physicalAdapters = @(Get-NetAdapter -Physical -ErrorAction Stop | Select-Object Name, InterfaceDescription, Status, LinkSpeed, MacAddress, DriverInformation)
 } catch {
-    $warnings.Add('Physical network adapter runtime state could not be read.')
+    $warnings.Add('État runtime des interfaces réseau physiques indisponible.')
 }
 
 $lanAdapters = @($physicalAdapters | Where-Object {
@@ -142,7 +142,7 @@ if ($lanAdapters.Count -gt 0) {
             $lanRss += @(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop | Select-Object Name, Enabled, NumberOfReceiveQueues, Profile)
         }
     } catch {
-        $warnings.Add('RSS state could not be read for the 5 GbE adapter; no network setting was changed.')
+        $warnings.Add("État RSS illisible pour l’adaptateur 5 GbE; aucun réglage réseau n’a été modifié.")
     }
 }
 
@@ -150,15 +150,15 @@ $deviceGuard = $null
 try {
     $deviceGuard = Get-CimInstance -Namespace 'root\Microsoft\Windows\DeviceGuard' -ClassName Win32_DeviceGuard -ErrorAction Stop
 } catch {
-    $warnings.Add('VBS DeviceGuard runtime state is unavailable on this Windows instance.')
+    $warnings.Add('État runtime VBS DeviceGuard indisponible sur cette instance Windows.')
 }
 $vbsRunning = if ($null -ne $deviceGuard) { [int]$deviceGuard.VirtualizationBasedSecurityStatus -eq 2 } else { $null }
 $hvciEnabled = Get-HvciState
 if ($vbsRunning -eq $false) {
-    $warnings.Add('VBS is not reported as running. Review Windows Security and driver compatibility before enabling it.')
+    $warnings.Add("VBS n’est pas signalé actif. Vérifier Windows Security et la compatibilité pilotes avant toute activation.")
 }
 if ($hvciEnabled -eq $false) {
-    $warnings.Add('Memory integrity/HVCI is not reported as enabled. Do not force-enable it until incompatible drivers have been reviewed.')
+    $warnings.Add("Memory Integrity/HVCI n’est pas signalé actif. Ne pas forcer son activation avant revue des pilotes incompatibles.")
 }
 
 $hardChecks = [ordered]@{
@@ -213,12 +213,12 @@ foreach ($check in $hardChecks.GetEnumerator()) {
 foreach ($message in $warnings) {
     Write-Warning $message
 }
-Write-Host "[INFO] Hardware symbiosis report: $reportPath"
+Write-Host "[INFO] Rapport de qualification matérielle: $reportPath"
 
 if ($Mode -eq 'Verify') {
     $failed = @($hardChecks.GetEnumerator() | Where-Object { -not [bool]$_.Value })
     if ($failed.Count -gt 0) {
-        throw "V5 hardware symbiosis qualification failed: $($failed.Count) hard check(s). See $reportPath"
+        throw "Qualification de symbiose matérielle échouée: $($failed.Count) contrôle(s) bloquant(s). Voir $reportPath"
     }
-    Write-Host 'VERDICT: V5 HARDWARE SYMBIOSIS READY' -ForegroundColor Green
+    Write-Host 'VERDICT: HARDWARE SYMBIOSIS READY' -ForegroundColor Green
 }

@@ -1,4 +1,4 @@
-name: Hardware symbiosis V5
+name: Hardware qualification
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
       - 'config/hardware/symbiosis-v5.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
       - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
-      - 'docs/15_HARDWARE_QUALIFICATION_V5.md'
+      - 'docs/12_HARDWARE_QUALIFICATION.md'
       - 'README.md'
       - 'CHANGELOG.md'
   push:
@@ -21,7 +21,7 @@ on:
       - 'config/hardware/symbiosis-v5.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
       - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
-      - 'docs/15_HARDWARE_QUALIFICATION_V5.md'
+      - 'docs/12_HARDWARE_QUALIFICATION.md'
       - 'README.md'
       - 'CHANGELOG.md'
 
@@ -62,7 +62,7 @@ jobs:
           grep -Fq 'scripts\windows\52_hardware_symbiosis.ps1' scripts/bootstrap/13_validate_hardware_v5.ps1
           grep -Fq -- '-Mode Verify' scripts/bootstrap/13_validate_hardware_v5.ps1
 
-      - name: Validate V9 bootstrap wiring
+      - name: Validate bootstrap wiring
         shell: bash
         run: |
           set -euo pipefail
@@ -80,10 +80,10 @@ jobs:
           trim_line="$(grep -nF "$trim_pattern" install.ps1 | head -n1 | cut -d: -f1)"
 
           if (( symbiosis_line <= inventory_line || symbiosis_line >= trim_line )); then
-            echo 'V5 symbiosis audit must run after inventory and before storage tuning audit.' >&2
+            echo 'Hardware symbiosis audit must run after inventory and before storage tuning audit.' >&2
             exit 1
           fi
-          echo 'V5 V9 bootstrap wiring: OK'
+          echo 'Hardware bootstrap wiring: OK'
 
       - name: Enforce observational safety boundary
         shell: bash
@@ -92,11 +92,11 @@ jobs:
           script='scripts/windows/52_hardware_symbiosis.ps1'
           forbidden='Set-NetAdapter|Set-NetAdapterAdvancedProperty|Set-MpPreference|bcdedit|Set-Service|Stop-Service|Disable-WindowsOptionalFeature|Format-Volume|Clear-Disk|Initialize-Disk|Resize-Partition|Remove-Partition|Update-StorageFirmware|powercfg(.exe)?[[:space:]]+/(setactive|setacvalueindex|setdcvalueindex)'
           if grep -nEi "$forbidden" "$script"; then
-            echo 'Hardware symbiosis V5 must remain observational and must not mutate platform tuning.' >&2
+            echo 'Hardware qualification must remain observational and must not mutate platform tuning.' >&2
             exit 1
           fi
           grep -Fq "ValidateSet('Audit', 'Verify')" "$script"
-          echo 'Hardware symbiosis safety boundary: OK'
+          echo 'Hardware safety boundary: OK'
 
   audit-smoke:
     runs-on: windows-latest
@@ -112,7 +112,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $report = Get-Content -Raw .\reports\hardware\hardware-symbiosis-v5.json | ConvertFrom-Json
-          if ($report.Version -ne 'V5') { throw 'Unexpected hardware symbiosis report version.' }
+          if ($report.Version -ne 'V5') { throw 'Unexpected internal hardware report schema version.' }
           if ($report.PolicyReviewedAt -ne '2026-08-12') { throw 'Hardware policy review date is missing.' }
           if ($null -eq $report.HardChecks) { throw 'HardChecks section is missing.' }
           if ($null -eq $report.Advisory) { throw 'Advisory section is missing.' }

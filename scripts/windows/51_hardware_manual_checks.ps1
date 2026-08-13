@@ -82,7 +82,7 @@ function Read-ManualConfirmation {
 
 if ($Mode -eq 'Reset') {
     if (Test-Path $statePath) { Remove-Item -LiteralPath $statePath -Force }
-    Write-Host '[FAIT] Preuves manuelles V5 réinitialisées.' -ForegroundColor Green
+    Write-Host '[FAIT] Preuves matérielles manuelles réinitialisées.' -ForegroundColor Green
     return
 }
 
@@ -132,6 +132,6 @@ $missing = @()
 foreach ($name in @($target.manualChecks)) { if (-not [bool]$state.Checks[$name]) { $missing += $name } }
 Show-State -State $state
 if ($missing.Count -gt 0) {
-    throw "Qualification matérielle manuelle V5 incomplète: $($missing -join ', '). Pour une saisie guidée: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
+    throw "Qualification matérielle manuelle incomplète: $($missing -join ', '). Pour une saisie guidée: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
 }
-Write-Host 'VERDICT: V5 HARDWARE MANUAL CHECKS READY' -ForegroundColor Green
+Write-Host 'VERDICT: HARDWARE MANUAL CHECKS READY' -ForegroundColor Green

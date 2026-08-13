@@ -1,308 +1,276 @@
 # Installation Windows 11 Pro — guide complet débutant
 
-Ce guide explique comment repartir d'un PC vide ou fraîchement réinstallé et obtenir une base Windows 11 Pro propre **avant** de lancer l'automatisation du dépôt.
+Ce guide explique comment partir d'un PC vide ou fraîchement réinstallé et obtenir une base **Windows 11 Pro propre et saine**, prête à accueillir la workstation décrite par ce dépôt.
 
-Il est volontairement détaillé : lorsqu'une étape est manuelle ou potentiellement dangereuse, elle est explicitement signalée.
+Il est volontairement détaillé. Les opérations manuelles ou potentiellement dangereuses sont signalées explicitement.
 
-> **Règle de sécurité absolue :** aucun script de ce dépôt ne formate les SSD. Le partitionnement et l'installation initiale de Windows restent des opérations manuelles contrôlées par l'utilisateur.
+> **Règle de sécurité :** aucun script de ce dépôt ne formate automatiquement un SSD, ne flashe le BIOS et ne déclenche une restauration bare-metal. Le partitionnement initial et l'installation de Windows restent des opérations humaines contrôlées.
+
+Pour comprendre le projet avant de commencer, lire [`../README.md`](../README.md) puis [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md).
 
 ---
 
-## 1. Résultat attendu
+## Résultat attendu
 
-À la fin de ce document, la machine doit ressembler à ceci :
+À la fin de l'installation de base :
 
 ```text
 Crucial T705 #1
-└── Windows 11 Pro
-    └── C: NTFS
+└── C: NTFS
+    └── Windows 11 Pro
 
 Crucial T705 #2
 └── D: NTFS
     ├── données
-    ├── WSL
-    └── OpenClaw plus tard
+    ├── D:\WSL\Ubuntu-DevOps
+    ├── D:\WSL\swap
+    └── D:\AI\OpenClaw       # si l'intégration IA est utilisée
 
 UEFI
-├── mode UEFI
+├── démarrage UEFI
 ├── CSM désactivé
 ├── Secure Boot actif
-├── TPM 2.0 / AMD fTPM actif
+├── TPM / AMD fTPM actif
 ├── SVM actif
 ├── Above 4G Decoding actif
 └── Resizable BAR actif
 ```
 
-Le filesystem Linux WSL sera plus tard contenu dans un fichier VHDX sur `D:`. **Ne crée pas de partition EXT4 sur le deuxième SSD.**
+Le filesystem Linux de WSL2 sera contenu dans un **VHDX** sur `D:`. Ne crée pas de partition EXT4 physique pour Ubuntu.
 
 ---
 
-## 2. Matériel concerné par ce projet
+## Matériel concerné
 
-Configuration cible versionnée dans `config/hardware/target-v5.json` :
+La workstation cible :
 
 - AMD Ryzen 7 7700 ;
 - MSI MAG B850M Mortar WiFi ;
 - 48 Go DDR5 ;
-- Intel Arc B580 ;
-- deux Crucial T705 ;
-- écran 2560×1440 à environ 240 Hz.
+- Intel Arc B580 12 Go ;
+- deux Crucial T705 PCIe 5.0 ;
+- écran 2560×1440 à haut taux de rafraîchissement.
 
-Les commandes du dépôt vérifieront plus tard une partie de ces éléments automatiquement. D'autres points, comme l'emplacement physique des SSD ou la stabilité RAM, restent manuels.
+La configuration machine-readable se trouve sous `config/hardware/`.
+
+Le dépôt pourra ensuite vérifier automatiquement une partie de ces éléments. D'autres points — ReBAR, emplacement physique des SSD, refroidissement, stabilité RAM — nécessitent une preuve humaine.
+
+Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-## 3. Ce qu'il faut préparer avant l'installation
+## Avant de commencer
 
 ### Obligatoire
 
+Prépare :
+
 - une clé USB de 8 Go ou plus ;
-- une connexion Internet disponible après installation ;
+- une connexion Internet disponible après l'installation ;
 - une licence ou un droit numérique Windows 11 Pro ;
-- l'accès à ce dépôt GitHub depuis un autre appareil en cas de besoin ;
-- idéalement les identifiants du compte Microsoft utilisés pour l'activation/configuration personnelle.
+- l'accès à ce dépôt depuis un autre appareil si nécessaire ;
+- une sauvegarde de tes données personnelles si la machine a déjà été utilisée.
 
 ### Recommandé
 
-Sur un autre support, conserver :
+Conserve sur un support séparé :
 
-- le pilote réseau/Wi-Fi MSI si Windows ne reconnaissait pas le réseau ;
-- le pilote chipset AMD B850 ;
-- le pilote Intel Arc ;
-- toute clé de récupération ou information importante liée à un chiffrement existant ;
-- une copie de tes fichiers personnels si tu réinstalles une machine déjà utilisée.
+- pilote réseau/Wi-Fi MSI si Windows ne reconnaît pas le réseau ;
+- pilote chipset AMD B850 ;
+- pilote Intel Arc ;
+- clés de récupération ou informations de chiffrement importantes ;
+- informations de compte nécessaires à tes logiciels.
 
-### À ne pas faire
+### À éviter
 
-- télécharger une ISO Windows depuis un site non officiel ;
-- télécharger des « driver packs » génériques ;
-- utiliser un script de debloat avant que Windows soit installé et validé ;
-- modifier PBO/overclocking pendant une reconstruction dont la stabilité n'est pas encore prouvée.
+Ne commence pas par :
+
+- une ISO Windows provenant d'un site non officiel ;
+- un « driver pack » générique ;
+- un script de debloat agressif ;
+- un overclocking CPU/GPU ;
+- une fréquence mémoire incertaine ;
+- une restauration de réglages anciens non compris.
+
+Le but est d'obtenir d'abord une base **stable et vérifiable**.
 
 ---
 
-## 4. Télécharger Windows 11 depuis Microsoft
+## Télécharger Windows 11
 
-Source officielle :
+Utilise l'image Windows 11 x64 stable officielle de Microsoft.
 
-- <https://www.microsoft.com/software-download/windows11>
-
-Pour ce projet, utiliser une **image x64 Windows 11 stable officielle**, pas une Insider Preview.
-
-Deux méthodes sont raisonnables :
-
-### Méthode A — outil Microsoft depuis un autre Windows
-
-Utilise l'outil officiel de création de média Microsoft et crée directement une clé USB d'installation.
-
-C'est la méthode la plus simple pour un débutant disposant déjà d'un PC Windows.
-
-### Méthode B — ISO officielle
-
-Télécharge l'ISO x64 officielle depuis la même page Microsoft.
-
-Microsoft fournit également les informations permettant de vérifier l'intégrité SHA-256 des ISO proposées. Si tu as téléchargé l'ISO manuellement, cette vérification est recommandée.
-
-Sous PowerShell :
+Si tu télécharges une ISO manuellement, tu peux vérifier son SHA-256 avec :
 
 ```powershell
 Get-FileHash .\Windows11.iso -Algorithm SHA256
 ```
 
-Compare le hash avec celui affiché par Microsoft pour **la même édition/langue de l'ISO**.
+Compare uniquement avec la valeur fournie pour **la même image, édition et langue**.
+
+Le projet ne dépend pas d'une Insider Preview ni d'un Windows modifié par un tiers.
 
 ---
 
-## 5. Créer la clé USB
+## Créer la clé USB
 
 ### Depuis Windows
 
-La voie la plus simple est l'outil Microsoft.
+La méthode la plus simple est l'outil officiel de création de média Microsoft.
 
-Rufus peut également écrire une ISO, mais le projet ne dépend d'aucun contournement matériel ou OOBE proposé par des outils tiers. L'objectif est une installation Windows 11 supportée normalement par le matériel.
+Une ISO officielle peut également être écrite avec un outil tel que Rufus, sans désactiver les exigences de sécurité supportées par cette machine.
 
 ### Depuis Linux avec Ventoy
 
-Si la clé est déjà préparée avec Ventoy :
+Si la clé Ventoy est déjà préparée :
 
 1. monte la grande partition `Ventoy` ;
-2. copie l'ISO Windows 11 officielle dans cette partition ;
+2. copie l'ISO Windows 11 officielle ;
 3. démonte proprement la clé ;
 4. démarre le PC en mode UEFI sur la clé ;
-5. dans le menu Ventoy, sélectionne l'ISO Windows 11.
+5. sélectionne l'ISO dans le menu Ventoy.
 
-Ne modifie pas l'ISO et ne contourne pas TPM/Secure Boot : la configuration cible respecte naturellement les exigences Windows 11.
+La configuration matérielle du projet respecte TPM 2.0, Secure Boot et les exigences normales de Windows 11 : aucun contournement n'est nécessaire.
 
 ---
 
-## 6. Avant l'installation : BIOS / UEFI
+## Préparer l'UEFI / BIOS
 
-### 6.1 Charger une base saine
+Si la machine vient d'être assemblée ou si le firmware contient de nombreux essais anciens, charge d'abord une base saine puis applique seulement les réglages nécessaires.
 
-Si la machine vient d'être assemblée ou si le BIOS a reçu beaucoup de réglages expérimentaux :
+### Réglages attendus
 
-1. entrer dans l'UEFI ;
-2. charger les paramètres optimisés/par défaut ;
-3. appliquer ensuite uniquement les réglages nécessaires ci-dessous.
-
-### 6.2 Réglages attendus
-
-| Réglage | Cible | Pourquoi |
-|---|---|---|
-| Boot mode | UEFI | requis pour GPT/Secure Boot |
-| CSM / Legacy boot | désactivé | évite le démarrage hérité |
-| TPM / AMD fTPM | actif | Windows 11 / sécurité |
-| Secure Boot | actif | protection du boot |
+| Réglage | Cible | Raison |
+| --- | --- | --- |
+| Boot mode | UEFI | GPT / Secure Boot |
+| CSM / Legacy | désactivé | éviter le boot hérité |
+| TPM / AMD fTPM | actif | sécurité Windows |
+| Secure Boot | actif | chaîne de démarrage |
 | SVM | actif | virtualisation / WSL2 |
 | Above 4G Decoding | actif | plateforme GPU moderne |
-| Resizable BAR | actif | requis/recommandé pour Intel Arc |
+| Resizable BAR | actif | fonctionnement optimal Intel Arc |
 
-Windows 11 exige notamment UEFI/Secure Boot capable et TPM 2.0. La configuration cible du projet dépasse largement le minimum Windows 11.
+Le dépôt ne modifie jamais ces réglages automatiquement.
 
-### 6.3 RAM 6000 MT/s
+### RAM DDR5
 
-La cible du projet est 6000 MT/s **uniquement si stable**.
+La cible peut être 6000 MT/s, mais uniquement si la stabilité est démontrée.
 
-Pour une réinstallation de dépannage :
+Pendant une réinstallation de dépannage :
 
-- si la mémoire 6000 a déjà été longuement validée sur cette machine, le profil connu comme stable peut être conservé ;
-- si tu diagnostiques des crashes, des erreurs mémoire ou une nouvelle version BIOS, reviens temporairement aux paramètres mémoire par défaut, installe/valide Windows, puis revalide 6000 séparément.
+```text
+stabilité connue à 6000
+        ↓
+profil validé acceptable
 
-Ne mélange pas un diagnostic Windows avec un overclocking mémoire incertain.
+instabilité / nouveau BIOS / doute
+        ↓
+revenir temporairement aux paramètres mémoire sûrs
+        ↓
+installer et valider Windows
+        ↓
+retester la mémoire séparément
+```
 
----
+Une workstation DevOps doit privilégier la fiabilité aux quelques pourcents de performance théorique.
 
-## 7. BIOS : faut-il le mettre à jour ?
+### Mise à jour BIOS
 
-Le dépôt ne flashe **jamais** le BIOS.
+Le dépôt ne flashe pas le BIOS.
 
-Support officiel de la carte mère :
+Avant une mise à jour :
 
-- <https://www.msi.com/Motherboard/MAG-B850M-MORTAR-WIFI/support>
-
-Procédure recommandée :
-
-1. relever la version BIOS actuellement installée ;
-2. consulter la page support MSI ;
+1. relever la version actuelle ;
+2. consulter la page support MSI de la carte mère ;
 3. lire les notes de version ;
-4. préférer une version stable/non bêta sauf raison précise ;
-5. ne flasher que si la mise à jour est pertinente : compatibilité CPU/RAM, sécurité, bug connu, stabilité ou recommandation constructeur.
+4. préférer une version stable ;
+5. ne flasher que pour une raison claire : stabilité, sécurité, compatibilité ou bug connu.
 
-**Ne mets jamais à jour le BIOS simplement pour « avoir le numéro le plus élevé » au milieu d'un diagnostic stable.**
+Ne mets pas à jour le firmware au milieu d'un diagnostic simplement pour « avoir la dernière version ».
 
 ---
 
-## 8. Sécuriser l'identification des deux SSD
+## Identifier correctement les deux SSD
 
-Le PC contient deux Crucial T705 similaires. C'est le moment le plus facile pour sélectionner le mauvais disque.
+Les deux SSD sont des Crucial T705 similaires. L'erreur la plus grave serait de supprimer les partitions du mauvais disque.
 
 ### Méthode la plus sûre
 
-Si c'est simple et sans risque matériel, désactive temporairement dans l'UEFI ou déconnecte le **deuxième SSD destiné à `D:`** pendant l'installation Windows.
+Si c'est simple matériellement, désactive temporairement dans l'UEFI ou déconnecte le SSD destiné à `D:` pendant l'installation de Windows.
 
-Avantages :
+Cela garantit :
 
-- impossible d'effacer accidentellement le DATA disk ;
-- les partitions EFI/Recovery de Windows restent naturellement sur le SSD système ;
-- l'identification du disque est évidente.
-
-Après le premier démarrage réussi de Windows, reconnecte/réactive le second SSD.
+- que l'installateur ne peut pas effacer le disque de données ;
+- que les partitions EFI/Recovery sont créées sur le SSD système ;
+- que le disque à sélectionner est évident.
 
 ### Si les deux SSD restent présents
 
-À l'écran de sélection des disques :
+À chaque étape de partitionnement :
 
-- vérifie soigneusement numéro et capacité ;
-- ne supprime jamais les partitions d'un disque dont tu n'es pas certain ;
-- en cas de doute, annule l'installation et vérifie physiquement/UEFI avant de continuer.
-
----
-
-## 9. Démarrer sur la clé USB
-
-1. insère la clé ;
-2. démarre le PC ;
-3. ouvre le Boot Menu MSI ;
-4. sélectionne l'entrée **UEFI** correspondant à la clé ;
-5. démarre l'installation Windows.
-
-Si la clé apparaît deux fois, choisis l'entrée explicitement UEFI.
+- vérifie le numéro et la capacité ;
+- ne supprime aucune partition si tu n'es pas certain du disque ;
+- en cas de doute, quitte l'installateur et vérifie l'UEFI ou le montage physique.
 
 ---
 
-## 10. Installer Windows 11 Pro
+## Installer Windows 11 Pro
 
-### 10.1 Langue et clavier
+### Démarrage
 
-Choisis la langue et le clavier réellement utilisés. Ils pourront être modifiés ensuite dans Windows.
+1. branche la clé USB ;
+2. ouvre le Boot Menu MSI ;
+3. choisis l'entrée **UEFI** de la clé ;
+4. démarre l'installation.
 
-### 10.2 Clé produit / édition
+### Édition
 
-Si l'activation numérique est déjà liée au matériel/compte, Windows peut permettre de poursuivre sans saisir immédiatement une clé.
+Quand l'édition est demandée, choisis **Windows 11 Pro** si ta licence correspond à Pro.
 
-Quand l'édition est demandée, sélectionne **Windows 11 Pro**.
+### Installation personnalisée
 
-Ne sélectionne pas Home si la licence et le projet ciblent Pro.
+Pour une installation propre, utilise l'option personnalisée.
 
-### 10.3 Type d'installation
+Sur le T705 système uniquement :
 
-Choisis une **installation personnalisée** pour une installation propre.
+1. confirme que les données utiles sont sauvegardées ;
+2. supprime les anciennes partitions Windows si tu veux réellement repartir de zéro ;
+3. sélectionne l'espace non alloué ;
+4. laisse Windows créer automatiquement les partitions GPT/EFI/MSR/Recovery/Primary.
 
-### 10.4 Sélection du SSD système
+> Supprimer une partition détruit ses données. Vérifie le disque avant chaque suppression.
 
-Sur le **T705 destiné à Windows uniquement** :
+### Premier redémarrage
 
-1. si tu souhaites réellement une réinstallation totalement propre et que les données sont sauvegardées, supprime les anciennes partitions Windows de ce SSD ;
-2. obtiens un espace non alloué ;
-3. sélectionne cet espace non alloué ;
-4. laisse Windows créer automatiquement ses partitions GPT/EFI/MSR/Recovery/Primary.
-
-Ne crée pas manuellement une partition EFI sans besoin particulier.
-
-> **ATTENTION : supprimer une partition détruit les données qu'elle contient. Vérifie le disque avant chaque suppression.**
-
-### 10.5 Premier redémarrage
-
-Après la copie des fichiers :
-
-- laisse le PC redémarrer ;
-- si le programme d'installation redémarre à nouveau sur la clé USB, retire la clé ou choisis Windows Boot Manager.
+Après la copie des fichiers, laisse Windows démarrer sur son propre SSD. Retire la clé ou choisis Windows Boot Manager si l'installateur revient sur l'USB.
 
 ---
 
-## 11. Premier démarrage Windows / OOBE
+## OOBE et premier bureau
 
-Suis l'assistant Windows officiel.
+Suis l'assistant Windows officiel jusqu'au bureau.
 
-Pour un usage personnel, les versions actuelles de Windows 11 Pro peuvent exiger une connexion Internet et un compte Microsoft pendant la configuration initiale. Le projet ne documente pas de contournement non supporté de l'OOBE.
+Pendant cette phase :
 
-Pendant l'OOBE :
-
-- vérifie le bon clavier ;
+- vérifie langue et clavier ;
 - choisis un nom de machine clair ;
-- configure l'authentification ;
-- lis les options de confidentialité au lieu de cliquer mécaniquement ;
-- termine complètement l'arrivée sur le bureau.
+- configure ton compte et ton authentification ;
+- lis les options de confidentialité ;
+- n'applique encore aucun tweak du dépôt.
 
-Les réglages du dépôt seront appliqués **après** la création d'un Windows fonctionnel et vérifiable.
-
----
-
-## 12. Vérifications immédiates après le bureau
-
-Ouvre :
+Une fois sur le bureau, vérifie :
 
 ```text
-Paramètres -> Système -> Activation
+Paramètres → Système → Activation
 ```
 
-Vérifie :
+Puis :
 
-- Windows 11 Pro ;
-- activation correcte ;
-- heure/fuseau corrects ;
-- Internet fonctionnel ;
-- résolution écran correcte au minimum.
+- édition Windows 11 Pro ;
+- activation ;
+- heure et fuseau ;
+- réseau ;
+- résolution écran.
 
 Commande utile :
 
@@ -312,381 +280,344 @@ winver
 
 ---
 
-## 13. Windows Update — premier passage
+## Premier cycle Windows Update
 
-Avant les optimisations du dépôt, termine un premier cycle Windows Update :
+Avant d'appliquer les optimisations du dépôt, termine un premier cycle normal de Windows Update.
 
 ```text
-Paramètres -> Windows Update -> Rechercher des mises à jour
+Paramètres → Windows Update → Rechercher des mises à jour
 ```
 
-Installe les mises à jour normales proposées, redémarre si demandé, puis recherche à nouveau jusqu'à obtenir un état stable.
+Installe les mises à jour standards, redémarre si nécessaire, puis vérifie à nouveau jusqu'à obtenir un état stable.
 
-Pour les **drivers optionnels**, ne clique pas automatiquement sur tout : la stratégie du projet préfère les sources constructeur pour le chipset AMD et le GPU Intel Arc.
+Pour les drivers facultatifs, évite d'installer tout mécaniquement : le projet privilégie les sources constructeur pertinentes pour le chipset AMD et le GPU Intel.
 
-Le gestionnaire V11 du dépôt prendra ensuite en charge la maintenance régulière.
-
----
-
-## 14. Pilote chipset AMD B850
-
-Source officielle AMD :
-
-- <https://www.amd.com/en/support/downloads/drivers.html/chipsets/am5/b850.html>
-
-AMD recommande d'utiliser un système Windows à jour avant d'installer son package chipset.
-
-Procédure :
-
-1. télécharger le package **AMD Chipset Drivers** pour B850 / Windows 11 64 bits ;
-2. lancer l'installateur ;
-3. conserver les composants recommandés par AMD sauf besoin spécifique ;
-4. redémarrer si demandé.
-
-Ne télécharge pas de chipset driver depuis un agrégateur tiers.
+La maintenance régulière sera ensuite gérée par [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-## 15. Pilote Intel Arc B580
+## Installer les pilotes principaux
 
-Source officielle Intel :
+### Chipset AMD B850
 
-- <https://www.intel.com/content/www/us/en/products/sku/241598/intel-arc-b580-graphics/downloads.html>
+Installe le package chipset AMD officiel adapté à Windows 11 et au chipset B850.
 
-Intel Arc B-Series bénéficie de Resizable BAR ; le projet vérifie donc manuellement ReBAR/Above 4G côté UEFI.
+Après installation, redémarre si demandé.
 
-Procédure :
+### Intel Arc B580
 
-1. télécharger le pilote Windows officiel Intel Arc B-Series ;
-2. installer le pilote ;
-3. redémarrer si nécessaire ;
-4. vérifier que l'Arc B580 apparaît sans erreur dans le Gestionnaire de périphériques ;
-5. régler ensuite l'écran à sa résolution/fréquence cible si disponible.
+Installe le pilote Intel Arc officiel, puis vérifie :
 
-Le numéro exact du pilote n'est pas figé dans ce guide car il évolue plus vite que le dépôt.
+- GPU présent sans erreur dans le Gestionnaire de périphériques ;
+- résolution correcte ;
+- fréquence d'affichage cible disponible ;
+- ReBAR / Above 4G validés dans l'UEFI.
 
----
+### MSI : LAN, Wi-Fi, Bluetooth, audio
 
-## 16. Pilotes MSI : LAN / Wi-Fi / Bluetooth / audio
+Utilise les pilotes MSI uniquement lorsque Windows n'a pas déjà un pilote correct ou lorsqu'un composant spécifique de la carte mère l'exige.
 
-Support officiel :
+Le dépôt ne dépend pas de MSI Center pour fonctionner.
 
-- <https://www.msi.com/Motherboard/MAG-B850M-MORTAR-WIFI/support>
+### Gestionnaire de périphériques
 
-Ordre pratique :
-
-1. vérifier d'abord le Gestionnaire de périphériques ;
-2. laisser Windows Update gérer ce qu'il reconnaît proprement ;
-3. pour un périphérique absent/mal reconnu ou pour un driver spécifique carte mère, utiliser MSI ;
-4. privilégier LAN/Wi-Fi/Bluetooth/audio nécessaires au fonctionnement réel ;
-5. éviter d'installer des utilitaires OEM simplement parce qu'ils existent.
-
-Le projet ne dépend pas de MSI Center pour fonctionner.
-
----
-
-## 17. Vérifier le Gestionnaire de périphériques
-
-Ouvre :
+Avant de poursuivre :
 
 ```text
-Win + X -> Gestionnaire de périphériques
+Win + X → Gestionnaire de périphériques
 ```
 
 Objectif :
 
-- aucun « périphérique inconnu » ;
+- aucun périphérique inconnu ;
 - aucun triangle jaune inattendu ;
 - Arc B580 détectée ;
 - réseau/Wi-Fi/Bluetooth fonctionnels ;
 - audio fonctionnel ;
 - stockage visible.
 
-Si un périphérique est inconnu, résous cela **avant** de passer aux optimisations.
-
 ---
 
-## 18. Reconnecter et préparer le deuxième Crucial T705
+## Préparer le second T705 comme `D:`
 
-Si tu avais désactivé/déconnecté le deuxième SSD, éteins proprement le PC et reconnecte/réactive-le.
+Si le second SSD avait été déconnecté, éteins la machine puis reconnecte-le.
 
-Dans Windows :
+Dans :
 
 ```text
-Win + X -> Gestion des disques
+Win + X → Gestion des disques
 ```
 
-Pour le deuxième T705 destiné aux données :
+Pour un disque neuf :
 
-1. initialise-le en **GPT** s'il est neuf ;
+1. initialise-le en GPT ;
 2. crée un volume simple ;
-3. formate-le en **NTFS** ;
-4. attribue la lettre **D:** ;
-5. un label comme `DATA` est recommandé pour le reconnaître rapidement.
+3. formate-le en NTFS ;
+4. attribue la lettre `D:` ;
+5. donne-lui un libellé clair si souhaité.
+
+Ne crée pas de partition EXT4 physique.
 
 Architecture attendue :
 
 ```text
-C: -> Windows 11 Pro
-D: -> DATA / WSL / OpenClaw / ISO / exports
+D:\
+├── DATA\
+├── WSL\
+│   ├── Ubuntu-DevOps\
+│   └── swap\
+├── AI\
+├── ISO\
+└── exports\
 ```
 
-Ne formate pas `D:` en EXT4.
+Les dossiers seront créés ou utilisés progressivement selon les composants activés.
+
+Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
 ---
 
-## 19. Vérifier C: et D: en PowerShell
+## Vérifications Windows avant automatisation
 
-Ouvre PowerShell :
-
-```powershell
-Get-Volume -DriveLetter C,D | Format-Table DriveLetter,FileSystem,FileSystemLabel,HealthStatus,Size,SizeRemaining
-```
-
-Résultat attendu :
-
-```text
-C  NTFS  ... Healthy
-D  NTFS  ... Healthy
-```
-
-Vérifier les disques :
+Ouvre PowerShell et vérifie :
 
 ```powershell
-Get-Disk | Format-Table Number,FriendlyName,PartitionStyle,HealthStatus,OperationalStatus,Size
-```
-
-Le disque système doit utiliser GPT.
-
----
-
-## 20. Vérifier Secure Boot et TPM
-
-### Secure Boot
-
-PowerShell administrateur :
-
-```powershell
+Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture
+Get-Volume | Select-Object DriveLetter, FileSystem, FileSystemLabel, SizeRemaining, Size
 Confirm-SecureBootUEFI
-```
-
-Résultat attendu :
-
-```text
-True
-```
-
-### TPM
-
-```powershell
 Get-Tpm
 ```
 
-Le TPM doit être présent/prêt ; Windows 11 exige TPM 2.0.
+Vérifie aussi que la virtualisation est disponible.
 
-Tu peux aussi utiliser :
-
-```text
-Win + R -> tpm.msc
-```
+Le dépôt fera des contrôles plus complets ensuite ; cette étape sert surtout à ne pas démarrer l'automatisation sur une base manifestement incorrecte.
 
 ---
 
-## 21. Vérifier la virtualisation
+## Récupérer le dépôt
 
-WSL2 nécessite la virtualisation firmware.
+Installe Git si nécessaire, puis clone le dépôt dans un emplacement Windows simple et accessible.
 
-Vérifie dans le Gestionnaire des tâches :
-
-```text
-Performances -> Processeur -> Virtualisation : Activée
-```
-
-Ou avec :
+Exemple :
 
 ```powershell
-systeminfo
-```
-
-Le firmware cible utilise SVM côté AMD.
-
----
-
-## 22. Vérifier l'écran
-
-Après installation du driver Arc :
-
-```text
-Paramètres -> Système -> Affichage -> Affichage avancé
-```
-
-Pour la cible du projet :
-
-```text
-2560 x 1440
-~240 Hz
-```
-
-Ne force pas une fréquence non proposée par Windows/driver/écran.
-
----
-
-## 23. Obtenir le dépôt sur un Windows vierge
-
-Une installation Windows propre **ne doit pas supposer que Git for Windows est déjà installé**.
-
-### Méthode recommandée débutant — Download ZIP
-
-1. ouvre la page GitHub du dépôt dans le navigateur ;
-2. `Code` -> `Download ZIP` ;
-3. extrais l'archive dans un dossier simple, par exemple :
-
-```text
-C:\Users\<user>\Documents\Windows_11_Pro_Custom
-```
-
-4. ouvre PowerShell dans ce dossier.
-
-### Méthode Git — seulement si Git est déjà disponible
-
-```powershell
+mkdir C:\Dev -ErrorAction SilentlyContinue
+cd C:\Dev
 git clone https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom.git
 cd Windows_11_Pro_Custom
 ```
 
-Le Git utilisé quotidiennement pour les projets DevOps sera ensuite celui d'Ubuntu WSL.
+Ne mets pas le dépôt dans un dossier temporaire ou un emplacement synchronisé dont le comportement n'est pas maîtrisé.
 
 ---
 
-## 24. Première exécution : Audit seulement
+## Première inspection
 
-Ouvre **PowerShell en administrateur** dans le dossier du dépôt.
-
-Autoriser les scripts uniquement pour cette session :
+Avant toute installation complète :
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-```
-
-Puis :
-
-```powershell
 .\install.ps1 -Mode Audit
 ```
 
-L'Audit observe la machine et génère des preuves. Il ne doit pas être confondu avec l'installation complète.
+L'audit doit observer l'état réel et signaler les éléments manquants ou incohérents.
 
-Contrôle notamment :
+Pour voir ce que l'installation complète ferait sans appliquer :
 
-- préflight Windows ;
-- état machine ;
-- stockage ;
-- applications ;
-- réglages Windows ;
-- WSL ;
-- workstation ;
-- Defender ;
-- inventaire matériel ;
-- OpenClaw s'il existe déjà.
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
 
-Si l'Audit détecte un problème fondamental — mauvais filesystem, stockage absent, configuration incohérente — **corrige ce problème avant Apply**.
+Guide : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
 
 ---
 
-## 25. Le menu interactif
+## Méthode recommandée : centre de contrôle
 
-Après l'Audit, le moyen le plus simple de poursuivre est :
-
-```powershell
-.\menu.ps1
-```
-
-ou double-clic :
+L'interface la plus simple est :
 
 ```text
 START_MENU.cmd
 ```
 
-Pour une reconstruction complète, choisis :
+ou :
 
-```text
-1. Installation complète
+```powershell
+.\menu.ps1
 ```
 
-Cela route vers :
+Pour une première configuration, choisir **Installation complète**.
+
+Le menu ne remplace pas `install.ps1` : il appelle les orchestrateurs existants avec les bonnes intentions et l'élévation UAC lorsque nécessaire.
+
+Guide : [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
+
+---
+
+## Installation complète en ligne de commande
+
+Si tu préfères voir explicitement la commande :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
----
+L'orchestrateur applique uniquement les écarts détectés et revalide les composants après modification.
 
-## 26. Pourquoi `FullInstall` peut demander des actions manuelles
-
-`FullInstall` active notamment :
-
-- installation DevOps ;
-- validation WSL ;
-- validation DevOps ;
-- qualification matérielle ;
-- OpenClaw/OpenRouter.
-
-Certaines preuves matérielles ne peuvent pas être inventées par un script :
-
-- ReBAR réellement actif dans l'UEFI ;
-- Above 4G ;
-- emplacement physique M2_1/M2_2 ;
-- refroidissement des T705 ;
-- stabilité mémoire 6000 ;
-- revue BIOS stable ;
-- revue des drivers constructeur.
-
-Le script peut donc demander une saisie guidée avant de déclarer `V5 HARDWARE READY`.
-
----
-
-## 27. Après installation de WSL
-
-Le contrat cible est :
+La liste exacte des composants peut évoluer, mais l'objectif reste :
 
 ```text
-Ubuntu 26.04
-D:\WSL\Ubuntu-DevOps
+Windows de base
+   ↓
+applications et outils Windows
+   ↓
+réglages gérés
+   ↓
+WSL2 / Ubuntu
+   ↓
+stack DevOps
+   ↓
+terminal / VS Code
+   ↓
+validation
 ```
-
-Au premier lancement Ubuntu, si Windows/WSL demande de créer l'utilisateur Linux, fais-le puis reviens au processus d'installation.
-
-Les projets DevOps doivent ensuite être placés dans :
-
-```bash
-mkdir -p ~/projects ~/labs ~/repositories
-```
-
-Évite `/mnt/c` et `/mnt/d` pour les projets Linux actifs.
-
-Guide pédagogique complet : [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md).
 
 ---
 
-## 28. Après installation : validation globale
+## Premier lancement Ubuntu
 
-Une fois les actions manuelles terminées :
+Lors de la première création ou installation de la distribution, Ubuntu peut demander la création de l'utilisateur Linux.
+
+Choisis :
+
+- un nom d'utilisateur Linux normal ;
+- un mot de passe distinct si tu le souhaites ;
+- **pas** un workflow quotidien en root.
+
+Le mot de passe `sudo` doit être saisi directement dans Linux lorsqu'il est demandé ; il ne doit pas être stocké dans Git ni passé comme argument journalisé.
+
+---
+
+## Vérifier WSL2
+
+Après installation :
 
 ```powershell
-.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps -ValidateOpenClawAI
+wsl --shutdown
+wsl -d Ubuntu
 ```
 
-Ou utilise l'option de vérification du menu V12.
+Dans Ubuntu :
 
-Ne considère pas la machine comme « terminée » simplement parce que les programmes sont visibles dans le menu Démarrer : la validation doit vérifier les contrats réels.
+```bash
+whoami
+uname -a
+nproc
+free -h
+swapon --show
+ps -p 1 -o comm=
+findmnt -T "$HOME"
+```
+
+Le HOME doit être sur le filesystem Linux ext4.
+
+Les projets DevOps doivent vivre sous `/home/<user>/...`.
+
+Guide : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-## 29. Créer le Golden Backup
+## Vérifier la stack DevOps
 
-Quand Windows, drivers, WSL, DevOps et applications sont réellement validés, connecte un **disque USB NTFS séparé**.
+Depuis PowerShell :
 
-Exemple si la cible est `E:` :
+```powershell
+.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
+```
+
+Dans Ubuntu, quelques contrôles utiles :
+
+```bash
+docker info
+terraform version
+ansible-playbook --version
+kubectl version --client
+helm version
+aws --version
+gh --version
+```
+
+Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
+
+---
+
+## Qualification matérielle
+
+Une fois les pilotes et Windows stabilisés :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateHardware
+```
+
+Puis renseigne les preuves manuelles si nécessaire :
+
+```powershell
+.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive
+```
+
+Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
+
+---
+
+## Validation complète
+
+Quand la workstation semble prête :
+
+```powershell
+.\install.ps1 `
+  -Mode Verify `
+  -ValidateHardware `
+  -ValidateWsl `
+  -ValidateDevOps
+```
+
+Si OpenClaw est utilisé :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateOpenClawAI
+```
+
+Puis :
+
+```powershell
+.\update.ps1 -Mode Verify
+```
+
+Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
+
+---
+
+## Installer ou qualifier OpenClaw / OpenRouter
+
+Cette intégration est optionnelle.
+
+Elle utilise l'espace :
+
+```text
+D:\AI\OpenClaw
+```
+
+Le dépôt Windows prépare l'environnement et les contrats d'intégration. Le fonctionnement détaillé d'OpenClaw/OpenRouter appartient au dépôt dédié.
+
+Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+
+---
+
+## Créer la sauvegarde de référence
+
+Ne considère pas la workstation terminée tant qu'elle n'est pas récupérable.
+
+Avec un disque USB NTFS séparé, par exemple `E:` :
 
 ```powershell
 .\install.ps1 -BackupAction Create -BackupTargetDrive E:
@@ -698,64 +629,111 @@ Puis :
 .\install.ps1 -BackupAction Verify -BackupTargetDrive E:
 ```
 
-N'utilise pas le SSD interne `D:` comme unique sauvegarde d'une machine dont `D:` fait lui-même partie des données à protéger.
+La cible externe doit être physiquement distincte des deux T705 internes.
 
-Guide : [`18_BACKUP_DISASTER_RECOVERY_V7.md`](18_BACKUP_DISASTER_RECOVERY_V7.md).
+Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-## 30. Maintenance après installation
+## Maintenance après installation
 
-Pour les mises à jour régulières :
+Pour auditer les mises à jour :
 
 ```powershell
 .\update.ps1 -Mode Audit
+```
+
+Pour appliquer les mises à jour autorisées :
+
+```powershell
 .\update.ps1 -Mode Apply
 ```
 
-ou choisis **3 — Mises à jour complètes** dans le menu.
+Le gestionnaire traite les couches qu'il connaît sans :
 
-V11 met à jour ce qu'il peut de manière contrôlée, mais ne flashe jamais le BIOS et n'installe pas les drivers Windows Update facultatifs par défaut.
+- flasher le BIOS ;
+- installer arbitrairement tous les drivers facultatifs ;
+- forcer un redémarrage ;
+- faire un changement majeur Ubuntu ;
+- remplacer les outils DevOps épinglés par `latest`.
+
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-## 31. Checklist finale d'une installation propre
+## Checklist finale
 
 ```text
-[ ] Windows 11 Pro activé
-[ ] C: = NTFS sur T705 système
-[ ] D: = NTFS sur deuxième T705
-[ ] UEFI / CSM off
-[ ] Secure Boot actif
-[ ] TPM 2.0 actif
-[ ] SVM actif
-[ ] Above 4G actif
-[ ] ReBAR actif
-[ ] Windows Update stabilisé
-[ ] AMD chipset installé
-[ ] Intel Arc driver installé
+[ ] Windows 11 Pro installé et activé
+[ ] UEFI / Secure Boot / TPM / SVM vérifiés
+[ ] Above 4G / ReBAR vérifiés
+[ ] chipset AMD installé
+[ ] pilote Intel Arc installé
 [ ] aucun périphérique inconnu
-[ ] écran à la résolution/fréquence attendue
+[ ] C: NTFS correct
+[ ] D: NTFS correct
+[ ] dépôt récupéré
 [ ] install.ps1 -Mode Audit exécuté
-[ ] installation complète exécutée
-[ ] WSL2/Ubuntu validé
+[ ] installation / convergence exécutée
+[ ] Ubuntu WSL2 validé
 [ ] stack DevOps validée
-[ ] terminal/VS Code validés
-[ ] sauvegarde V7 créée et vérifiée
+[ ] terminal / VS Code validés
+[ ] qualification matérielle traitée
+[ ] mises à jour vérifiées
+[ ] sauvegarde de référence créée et vérifiée
 ```
 
 ---
 
-## 32. Sources officielles à utiliser
+## Si quelque chose échoue
 
-Toujours préférer les sources constructeur :
+Ne recommence pas toute l'installation par réflexe.
 
-- Microsoft — Windows 11 : <https://www.microsoft.com/software-download/windows11>
-- Microsoft — exigences Windows 11 : <https://support.microsoft.com/windows/windows-11-system-requirements>
-- Microsoft — Secure Boot : <https://support.microsoft.com/windows/windows-11-and-secure-boot>
-- Microsoft — TPM 2.0 : <https://support.microsoft.com/windows/enable-tpm-2-0-on-your-pc>
-- MSI — MAG B850M Mortar WiFi : <https://www.msi.com/Motherboard/MAG-B850M-MORTAR-WIFI/support>
-- AMD — chipset B850 : <https://www.amd.com/en/support/downloads/drivers.html/chipsets/am5/b850.html>
-- Intel — Arc B580 : <https://www.intel.com/content/www/us/en/products/sku/241598/intel-arc-b580-graphics/downloads.html>
+Utilise d'abord :
 
-Les versions exactes de BIOS et drivers changent. Le principe du projet est donc de **documenter la source officielle et la méthode de validation**, pas de graver un ancien numéro de version dans le Runbook.
+```powershell
+.\install.ps1 -Mode Audit
+```
+
+Puis consulte :
+
+```text
+logs\
+reports\
+```
+
+L'orchestrateur est conçu pour corriger un delta plutôt que pour imposer une reconstruction complète à chaque erreur.
+
+Voir [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
+
+---
+
+## Si tu dois reconstruire après panne
+
+Utilise le Runbook :
+
+[`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md).
+
+Il couvre le choix entre restauration et réinstallation, le retour de Windows, WSL2, DevOps, les données et la nouvelle sauvegarde de référence.
+
+---
+
+## Règle de sortie
+
+L'installation est terminée lorsque la machine est :
+
+```text
+stable
++
+compréhensible
++
+conforme aux contrats du dépôt
++
+validée sur le matériel réel
++
+maintenable
++
+récupérable
+```
+
+Le but n'est pas d'obtenir le plus grand nombre de scripts exécutés, mais une **workstation réellement exploitable et reproductible**.

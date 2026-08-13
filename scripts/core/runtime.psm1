@@ -311,7 +311,7 @@ function Complete-WpcRun {
     $summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $latestDir 'latest-run.json') -Encoding UTF8
     Write-Host ''
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
-    Write-Host '  SYNTHÈSE V9' -ForegroundColor Cyan
+    Write-Host "  SYNTHÈSE D’EXÉCUTION" -ForegroundColor Cyan
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
     Write-Host ("  Déjà conformes : {0}" -f $summary.Counts.AlreadyOk) -ForegroundColor Green
     Write-Host ("  Modifiés/validés : {0}" -f $summary.Counts.Changed) -ForegroundColor Green

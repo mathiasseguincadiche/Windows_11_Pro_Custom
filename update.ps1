@@ -19,8 +19,8 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
 $policyPath = Join-Path $repoRoot 'config\updates\v11.json'
-if (-not (Test-Path $runtimeModule)) { throw "Runtime V9 absent: $runtimeModule" }
-if (-not (Test-Path $policyPath)) { throw "Politique V11 absente: $policyPath" }
+if (-not (Test-Path $runtimeModule)) { throw "Moteur d'orchestration absent: $runtimeModule" }
+if (-not (Test-Path $policyPath)) { throw "Politique de mises à jour absente: $policyPath" }
 Import-Module $runtimeModule -Force
 $policy = Get-Content -Raw $policyPath | ConvertFrom-Json
 $context = New-WpcRunContext -RepoRoot $repoRoot -Mode "Update-$Mode" -NonInteractive:$NonInteractive
@@ -33,7 +33,7 @@ $ubuntuUpdate = Join-Path $repoRoot 'scripts\updates\40_ubuntu_update.ps1'
 $devopsUpdate = Join-Path $repoRoot 'scripts\updates\50_devops_pinned.ps1'
 $vscodeUpdate = Join-Path $repoRoot 'scripts\updates\60_vscode_extensions_update.ps1'
 foreach ($path in @($windowsUpdate,$wingetUpdate,$wslUpdate,$ubuntuUpdate,$devopsUpdate,$vscodeUpdate)) {
-    if (-not (Test-Path $path)) { throw "Composant V11 absent: $path" }
+    if (-not (Test-Path $path)) { throw "Composant de mise à jour absent: $path" }
 }
 
 function Test-IsAdministrator {
@@ -86,7 +86,7 @@ $components = @(
     [pscustomobject]@{ Name='VS Code extensions'; Kind='VSCode'; Path=$vscodeUpdate; AlwaysConverge=$true }
 )
 
-Write-WpcBanner -Context $context -Title 'WINDOWS 11 CUSTOM - SYSTEM UPDATE MANAGER V11'
+Write-WpcBanner -Context $context -Title 'WINDOWS 11 CUSTOM - GESTIONNAIRE DE MISES À JOUR'
 Write-WpcStatus -Status 'INFO' -Message "Mode: $Mode" -Detail "Drivers=$([bool]$IncludeDrivers) Optional=$([bool]$IncludeOptionalUpdates) WinGetUnknown=$([bool]$IncludeUnknownPackages)" -Context $context
 Write-WpcStatus -Status 'INFO' -Message 'Politique de sécurité' -Detail 'Pas de BIOS/firmware, pas de dist-upgrade Ubuntu, pas dʼautoremove, pins WinGet respectés, versions DevOps pilotées par le dépôt.' -Context $context
 
@@ -111,7 +111,7 @@ if ($Mode -eq 'Audit') {
     }
 
     Write-Host ''
-    Write-Host 'PLAN FACTUEL V11' -ForegroundColor Cyan
+    Write-Host 'PLAN FACTUEL DES MISES À JOUR' -ForegroundColor Cyan
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
     $plan = New-Object System.Collections.Generic.List[object]
     foreach ($component in $components) {
