@@ -1,33 +1,29 @@
-# Troubleshooting — diagnostiquer sans casser la workstation
+# Troubleshooting — diagnostiquer la workstation par domaine
 
-Ce guide décrit la méthode de diagnostic du projet et les incidents les plus probables. Son principe est simple : **corriger la cause observée sans contourner les garde-fous**.
+Ce guide décrit **comment diagnostiquer un écart sans mélanger les responsabilités du projet**.
 
-Avant toute correction, lire [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md) pour savoir quel contrat fait autorité.
-
----
+Avant toute correction, identifier la source de vérité concernée avec [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
 
 ## Méthode générale
 
-Toujours procéder dans cet ordre :
-
 ```text
-1. reproduire ou observer
-2. identifier le composant
-3. lire le log correspondant
-4. lire le contrat/version attendue
-5. comparer avec l'état réel
-6. corriger la cause
-7. relancer le même Verify ou Apply ciblé
+1. observer le symptôme
+2. identifier le domaine propriétaire
+3. lire le log ou le rapport correspondant
+4. comparer l'état réel au contrat courant
+5. prévisualiser la correction lorsque c'est possible
+6. appliquer uniquement le delta compris
+7. relancer la même validation
 8. vérifier l'absence de régression
 ```
 
-Évite les corrections du type « désactiver Defender », « couper le firewall », « supprimer WSL et recommencer » ou « installer latest partout » simplement pour faire disparaître un message d'erreur.
+Un message d'erreur dans un terminal ne signifie pas automatiquement que le terminal est responsable. Il faut distinguer l'interface, le runtime et l'outil réellement en échec.
 
 ---
 
-# 1. Où chercher les preuves
+## Où chercher les preuves
 
-## Orchestration
+### Orchestration
 
 ```text
 logs\install.log
@@ -37,306 +33,339 @@ reports\orchestration\latest-run.json
 reports\orchestration\machine-state.json
 ```
 
-## Mises à jour
+### Mises à jour
 
 ```text
 logs\updates\system-update.log
 reports\updates\latest-run.json
 ```
 
-## Composants
+### Composants
 
-Les sous-scripts possèdent leur propre journal sous `logs\<catégorie>\` lorsqu'ils sont gérés par le moteur d'orchestration.
+Les sous-composants peuvent produire leurs propres journaux sous `logs\<catégorie>\` et leurs rapports sous `reports\`.
+
+Un ancien rapport explique une exécution passée ; il ne remplace pas une nouvelle observation de la machine.
 
 ---
 
-# 2. `Audit` fonctionne mais `Verify` échoue
+# Orchestration
 
-C'est possible et normal.
+## `Audit` fonctionne mais `Verify` échoue
 
-`Audit` observe et décrit. `Verify` exige la conformité.
+C'est possible :
 
-Action :
+```text
+Audit  -> observe et décrit
+Verify -> exige la conformité
+```
 
-1. repérer le composant en échec ;
-2. lire le détail du validateur ;
-3. vérifier le fichier de configuration correspondant ;
+Procédure :
+
+1. identifier le composant en échec ;
+2. lire son contrat ;
+3. comparer avec l'état réel ;
 4. lancer un `Apply` ciblé si le delta est compris ;
 5. relancer `Verify`.
 
-Ne transforme pas le mode Audit en critère de réussite.
+## Le même composant revient toujours dans le plan
+
+Symptôme : après convergence, `PlanOnly` repropose le même changement.
+
+Vérifier :
+
+- que `Verify` teste bien l'état produit par `Apply` ;
+- que le fichier ou réglage généré est stable ;
+- qu'une étape externe ne modifie pas l'état après convergence ;
+- qu'une nouvelle session ou un redémarrage de composant n'est pas explicitement requis.
+
+Comparer le probe, l'application et le post-verify du même `RunId`.
 
 ---
 
-# 3. Le plan veut modifier quelque chose à chaque exécution
+# WSL2
 
-Symptôme : après une convergence réussie, `PlanOnly` indique encore systématiquement le même composant en `À FAIRE`.
+## WSL n'est pas disponible
 
-Causes possibles :
+Commencer par :
 
-- `Verify` teste un état différent de celui produit par `Apply` ;
-- un fichier est réécrit avec un contenu non stable ;
-- une valeur dépend de l'environnement et change à chaque lecture ;
-- une action externe annule le changement ;
-- le composant a besoin d'un redémarrage avant la re-vérification.
+```powershell
+wsl --status
+wsl --version
+```
 
-Diagnostic : comparer le log du `Probe`, le log de l'`Apply` puis le log du `PostVerify`.
+Puis suivre [`06_WSL2.md`](06_WSL2.md) et relancer la validation ciblée :
 
-Le projet n'est pas considéré idempotent tant que cette boucle n'est pas comprise.
+```powershell
+.\install.ps1 -Mode Verify -ValidateWsl
+```
 
----
+## Ubuntu existe mais l'emplacement ne correspond pas
 
-# 4. WSL est absent
-
-Le bootstrap WSL exige que `wsl.exe` soit disponible.
-
-Si le message indique que le runtime WSL n'est pas disponible, vérifie la préparation Windows et suis le guide [`06_WSL2.md`](06_WSL2.md).
-
-Une fois WSL disponible, relance la même opération. Le moteur doit reprendre à partir de l'état réel et éviter de recommencer les composants déjà conformes.
-
----
-
-# 5. La distribution Ubuntu existe mais n'est pas au bon emplacement
-
-Le contrat attend :
+Le contrat courant attend :
 
 ```text
 D:\WSL\Ubuntu-DevOps
 ```
 
-Le script refuse de considérer conforme une distribution dont l'emplacement ne peut pas être prouvé ou ne correspond pas au contrat.
+Ne considérer la distribution conforme que lorsque son emplacement et sa release sont prouvés par le validateur.
 
-Important : le projet ne supprime pas automatiquement la distribution existante pour la recréer ailleurs.
+Si une migration ou une reconstruction devient nécessaire, utiliser les procédures dédiées au lieu de transformer un simple `Verify` en opération de reprise.
 
-Action :
+## Mauvaise release Ubuntu
 
-1. conserver les données ;
-2. déterminer pourquoi la distribution est ailleurs ;
-3. choisir explicitement une stratégie de migration ou de reconstruction ;
-4. revalider ensuite.
+Le contrat attend Ubuntu 26.04 / `resolute`.
 
-Pour une reconstruction complète, utiliser [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md).
+Une release différente doit être traitée comme un écart de contrat, pas comme une simple différence cosmétique.
 
----
+## `.wslconfig` ne correspond pas au profil
 
-# 6. Mauvaise release Ubuntu
+Vérifier le profil demandé et `%USERPROFILE%\.wslconfig`, puis utiliser le parcours normal de convergence du projet.
 
-Le contrat courant attend :
-
-```text
-VERSION_ID=26.04
-VERSION_CODENAME=resolute
-```
-
-Une autre release est refusée par le validateur.
-
-Le projet ne convertit pas automatiquement une distribution incompatible et ne lance pas une migration majeure d'Ubuntu pendant la maintenance ordinaire.
-
-Traite un changement de release comme une migration contrôlée, pas comme une simple mise à jour de paquet.
+Guide complet : [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md).
 
 ---
 
-# 7. `D:` n'est pas NTFS ou manque d'espace
+# Stack DevOps
 
-WSL2 et l'intégration OpenClaw sont conçus autour du second SSD `D:` en NTFS.
+## Certains outils sont absents ou à la mauvaise version
 
-Si le bootstrap refuse le volume :
-
-- vérifier la lettre réellement attribuée ;
-- vérifier le filesystem ;
-- vérifier l'espace libre ;
-- ne pas reformater un volume contenant des données pour satisfaire automatiquement le script.
-
-Le stockage est une frontière d'architecture, pas un détail d'installation.
-
-Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
-
----
-
-# 8. `.wslconfig` ne correspond pas au profil
-
-Le validateur compare le fichier utilisateur `%USERPROFILE%\.wslconfig` au profil versionné choisi.
-
-Si le fichier diffère :
-
-1. vérifier quel profil a été demandé ;
-2. vérifier si la modification locale était volontaire ;
-3. utiliser `Apply` pour converger vers le profil souhaité ;
-4. redémarrer le runtime WSL lorsque nécessaire ;
-5. relancer `Verify`.
-
-Le profil standard est celui du quotidien. Les autres profils sont des choix explicites.
-
----
-
-# 9. L'utilisateur WSL n'est pas détecté ou n'est pas prêt
-
-L'utilisateur Linux est une donnée de la distribution réelle.
-
-Le projet peut demander une action humaine lorsque l'utilisateur doit être créé ou confirmé.
-
-Ne place pas un mot de passe dans une option de commande, un fichier Git ou un log.
-
-Après correction, revalide WSL2 puis la stack DevOps.
-
----
-
-# 10. La stack DevOps est partiellement installée
-
-Symptôme : certains outils sont présents, d'autres non, ou une version ne correspond pas à la cible du dépôt.
-
-Le fichier de référence pour les outils épinglés est :
+La source de vérité est :
 
 ```text
 config/devops/tool-versions.env
 ```
 
-Action recommandée : utiliser la convergence DevOps du projet plutôt que d'installer manuellement une collection de versions différentes.
+Utiliser la convergence du projet :
 
-Ensuite, relancer la validation DevOps.
+```powershell
+.\install.ps1 -Mode Apply -InstallDevOps
+```
+
+puis :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateDevOps
+```
+
+## Docker fonctionne mais la validation DevOps échoue
+
+Docker n'est qu'un élément de la qualification. Vérifier également :
+
+- Compose et Buildx ;
+- service Docker ;
+- kubectl / Helm ;
+- Terraform / Ansible ;
+- AWS CLI / GitHub CLI ;
+- outils qualité ;
+- HOME Linux et racines de travail.
 
 Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-# 11. Docker est installé mais le validateur DevOps échoue
+# WezTerm et expérience terminal
 
-Docker n'est qu'une partie de la qualification.
+## La configuration WezTerm n'est pas conforme
 
-Vérifier :
+La source de vérité est :
 
-- Engine ;
-- Compose ;
-- Buildx ;
-- service systemd ;
-- utilisateur Linux ;
-- autres outils demandés par la validation ;
-- filesystem des projets.
+```text
+config/wezterm/wezterm.lua
+```
 
-Un `docker version` réussi ne suffit pas à déclarer la stack DevOps complète prête.
+Le contrat attendu contient :
+
+```text
+Ubuntu DevOps (WSL2)          <- défaut
+PowerShell 7
+OpenClaw / clawops (Windows)
+```
+
+Validation générale :
+
+```powershell
+.\install.ps1 -Mode Verify
+```
+
+Si `%USERPROFILE%\.wezterm.lua` diffère de la configuration versionnée, utiliser le parcours normal `Audit` / `Apply` / `Verify` plutôt que de modifier manuellement plusieurs copies.
+
+## Le mauvais profil est utilisé
+
+Utiliser :
+
+```text
+Ubuntu DevOps (WSL2) -> commandes et projets Linux
+PowerShell 7         -> administration Windows
+OpenClaw / clawops   -> CLI IA Windows-native
+```
+
+Le fait qu'une commande soit disponible depuis WezTerm ne change pas son runtime réel.
+
+## `OpenClaw / clawops (Windows)` indique une CLI absente
+
+Séparer le diagnostic :
+
+### 1. Vérifier WezTerm
+
+```powershell
+.\install.ps1 -Mode Verify
+```
+
+Cette étape prouve que le profil terminal attendu est bien déployé.
+
+### 2. Vérifier OpenClaw
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateOpenClawAI
+```
+
+Cette étape prouve que le runtime et les launchers existent réellement.
+
+### 3. Ouvrir une nouvelle session du profil
+
+Le profil relit lui-même les variables utilisateur OpenClaw et complète son `PATH` de session avec les emplacements gérés. Une relance complète de WezTerm n'est pas requise uniquement pour rafraîchir ces valeurs.
+
+Smoke test :
+
+```powershell
+openclaw --version
+clawops version
+clawops platform check
+```
+
+Si `Verify` WezTerm réussit mais `ValidateOpenClawAI` échoue, le problème appartient à l'intégration OpenClaw, pas au terminal.
 
 ---
 
-# 12. Qualification matérielle bloquée sur `ACTION REQUISE`
+# VS Code
 
-C'est un comportement voulu lorsque Windows ne peut pas prouver une information physique ou firmware.
+## Un projet WSL est ouvert comme un dossier Windows
 
-Exemples : ReBAR, Above 4G, stabilité mémoire, placement physique des SSD ou vérification d'une version stable de BIOS.
+Pour un projet Linux, vérifier que VS Code est relié à la distribution WSL et que le chemin actif est sous `/home/<user>/...`.
 
-Enregistre les preuves demandées de manière interactive, puis relance la validation matérielle.
-
-Ne modifie pas le validateur pour faire disparaître la preuve manuelle.
+L'objectif est que le terminal intégré, les extensions et les outils du projet utilisent le même environnement Linux.
 
 ---
 
-# 13. Defender signale un problème de performance
+# OpenClaw/OpenRouter
 
-Le projet utilise une politique d'exclusions deny-by-default.
+## Le control-plane ne correspond pas à la cible
 
-Ne crée pas immédiatement une exclusion large sur `D:`, les projets, le VHDX ou le répertoire Docker.
+La source de vérité côté workstation est :
 
-Commence par mesurer le hotspot réel, puis n'ajoute une exclusion que si elle est justifiée et explicitement approuvée.
+```text
+config/openclaw/control-plane.json
+```
 
-Guide : [`05_DEFENDER_PERFORMANCE.md`](05_DEFENDER_PERFORMANCE.md).
+La version et les contrats fonctionnels détaillés restent possédés par `openclaw_openrouter`.
 
----
+Une modification du control-plane doit être qualifiée dans son dépôt avant mise à jour volontaire du pin Windows.
 
-# 14. Une optimisation Windows a un effet indésirable
+## Le checkout local contient des changements
 
-Les optimisations sont conçues pour rester bornées et rollbackables lorsque l'état initial est connu.
+Commencer par comprendre ces changements avant toute synchronisation. Le dépôt Windows ne doit pas traiter un état local inconnu comme s'il était jetable.
 
-Commence par identifier le profil concerné et son état sauvegardé.
+## OpenClaw fonctionne dans PowerShell mais pas dans le profil WezTerm
 
-Le rollback global géré est exposé par l'orchestrateur, mais il ne remplace pas une restauration système complète.
+Vérifier dans cet ordre :
 
-Guide : [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md).
-
----
-
-# 15. Une mise à jour est seulement partiellement réussie
-
-`update.ps1` traite plusieurs catégories indépendantes. Une catégorie peut échouer alors que d'autres terminent correctement.
-
-Lire `reports\updates\latest-run.json` pour identifier les catégories en échec.
-
-Puis corriger uniquement la cause correspondante et relancer la vérification.
-
-Un besoin de redémarrage doit rester visible et n'est pas assimilé automatiquement à un échec.
-
-Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
-
----
-
-# 16. OpenClaw refuse la synchronisation du control-plane
-
-Le bootstrap refuse d'écraser un checkout avec des modifications locales.
-
-Si le dépôt de control-plane est marqué dirty :
-
-1. inspecter les modifications ;
-2. les conserver, commit ou sauvegarder selon leur nature ;
-3. revenir à un état Git compris ;
-4. relancer la synchronisation.
-
-Ne force pas le checkout au prix de données locales non examinées.
+1. `install.ps1 -Mode Verify` pour la configuration terminal ;
+2. `-ValidateOpenClawAI` pour le runtime ;
+3. le diagnostic affiché à l'ouverture du profil ;
+4. les chemins `D:\AI\OpenClaw\npm-global` et `D:\AI\OpenClaw\venv\Scripts` ;
+5. les variables utilisateur OpenClaw attendues.
 
 Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
-# 17. OpenClaw est présent mais le pin ne correspond pas
+# Matériel et stockage
 
-La source de vérité est `config/openclaw/control-plane.json`.
+## Qualification bloquée sur `ACTION REQUISE`
 
-Le validateur vérifie que le checkout correspond au ref approuvé lorsqu'il s'agit d'un commit explicite.
+Certaines preuves restent humaines lorsqu'elles ne peuvent pas être observées de manière fiable depuis Windows.
 
-Une mise à jour du control-plane doit être qualifiée dans son propre dépôt puis référencée volontairement ici.
+Compléter les preuves demandées puis relancer :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateHardware
+```
+
+## `D:` ou le stockage attendu ne correspond pas
+
+Vérifier la lettre du volume, le filesystem, l'espace disponible et les chemins réellement observés avant de poursuivre.
+
+Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
 ---
 
-# 18. La sauvegarde ne peut pas être créée ou validée
+# Maintenance
+
+## Une mise à jour est partiellement réussie
+
+`update.ps1` traite plusieurs catégories indépendantes.
+
+Lire :
+
+```text
+reports\updates\latest-run.json
+```
+
+puis revalider uniquement les domaines concernés.
+
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
+
+---
+
+# Sauvegarde
+
+## La sauvegarde n'est pas validée
 
 Vérifier :
 
-- support de sauvegarde réellement disponible ;
-- capacité suffisante ;
-- filesystem attendu ;
-- séparation physique par rapport aux deux SSD internes ;
-- état de WSL ;
-- journaux du composant backup.
+- le support attendu ;
+- sa capacité ;
+- la présence des données nécessaires ;
+- l'export WSL prévu ;
+- les rapports de validation du composant backup.
 
-Ne transforme pas un disque interne contenant les données de production en « sauvegarde » uniquement pour satisfaire le contrôle.
+Une sauvegarde non vérifiée ne compte pas comme critère d'acceptation rempli.
 
 Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-# 19. La CI documentation échoue
+# CI GitHub
 
-La CI documentaire vérifie notamment :
+## Le workflow `Documentation` échoue
 
-- présence des documents canoniques ;
-- absence d'anciens guides versionnés dans `docs/` ;
-- liens Markdown locaux ;
-- cohérence des éléments importants avec le projet actuel ;
-- profondeur minimale de plusieurs guides.
+Il vérifie notamment :
 
-Une erreur documentaire doit être corrigée dans la documentation ou dans son contrat CI, pas masquée en supprimant le contrôle.
+- la présence des documents canoniques ;
+- la cohérence de l'identité et des parcours ;
+- les contrats documentés ;
+- les paramètres publics ;
+- les liens Markdown locaux ;
+- l'absence de documentation active fondée sur d'anciennes versions.
+
+Corriger la divergence documentaire ou le contrat réellement devenu obsolète ; ne supprimer le contrôle que si sa responsabilité n'existe plus.
+
+## `quality` ou `DevOps terminal` échoue
+
+Identifier le job exact : PowerShell, Bash, configuration structurée, Lua WezTerm, actionlint, contrat terminal ou autre contrôle ciblé.
+
+Un échec CI du dépôt et un échec de qualification de la machine sont deux niveaux différents. Les deux doivent rester cohérents, mais ils ne se remplacent pas.
 
 ---
 
-# 20. La CI PowerShell échoue
+## Quand utiliser le Runbook de reconstruction
 
-Le workflow qualité vérifie le parsing des scripts et PSScriptAnalyzer.
+Tant que la workstation existe et qu'un composant est simplement incohérent, utiliser le parcours normal :
 
-Commence par la ligne exacte signalée par le job. Ne suppose pas qu'un échec PowerShell est lié à WSL, au matériel ou au runtime si le parser pointe un fichier précis.
+```text
+Audit -> Plan -> Apply ciblé -> Verify
+```
 
-La CI est un garde-fou du dépôt ; la validation réelle de la workstation reste une étape distincte exécutée sur la machine cible.
+Utiliser [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) lorsque le besoin est réellement une reconstruction ou une reprise complète.
 
----
-
-## Quand basculer vers le Runbook de reconstruction
-
-Utilise [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) lorsque le problème n'est plus une dérive de configuration mais un incident majeur : système à reconstruire, disque remplacé, installation Windows à refaire ou restauration de sauvegarde.
-
-Pour une workstation fonctionnelle mais incohérente, commence toujours par l'audit et la convergence normale décrits dans [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
+Le Runbook quotidien reste [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
