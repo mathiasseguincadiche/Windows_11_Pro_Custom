@@ -21,14 +21,14 @@ $ReportDirectory = Join-Path $RepoRoot 'reports\backup'
 $PlanPath = Join-Path $ReportDirectory 'restore-plan-v7.txt'
 
 if (-not (Test-Path $V7Root)) {
-    throw "V7 backup root not found: $V7Root"
+    throw "Racine de sauvegarde introuvable: $V7Root"
 }
 
 $ManifestFile = Get-ChildItem -Path $V7Root -Filter 'backup-manifest.json' -File -Recurse |
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 if (-not $ManifestFile) {
-    throw 'No V7 backup manifest was found.'
+    throw 'Aucun manifest de sauvegarde n’a été trouvé.'
 }
 
 $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
@@ -37,62 +37,62 @@ $WslFileName = Split-Path ([string]$Manifest.wsl.exportPath) -Leaf
 $WslBackupPath = Join-Path (Join-Path $SessionRoot 'WSL') $WslFileName
 
 if (-not (Test-Path $WslBackupPath)) {
-    throw "WSL VHDX backup is missing: $WslBackupPath"
+    throw "Sauvegarde WSL VHDX manquante: $WslBackupPath"
 }
 
 $ExpectedHash = ([string]$Manifest.wsl.sha256).ToUpperInvariant()
 $ActualHash = (Get-FileHash -Path $WslBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
 if ($ExpectedHash -ne $ActualHash) {
-    throw 'WSL backup hash mismatch. Restore plan generation is blocked.'
+    throw 'Hash de sauvegarde WSL incorrect. La génération du plan de restauration est bloquée.'
 }
 
 if ($RestoreDistribution -eq [string]$Manifest.wsl.distribution) {
-    throw 'The restore-test distribution name must differ from the protected production distribution.'
+    throw 'Le nom de la distribution de test restaurée doit différer de la distribution protégée.'
 }
 
 $Lines = [System.Collections.Generic.List[string]]::new()
-$Lines.Add('Windows_11_Pro_Custom - V7 RESTORE PLAN')
-$Lines.Add("Generated: $((Get-Date).ToString('o'))")
-$Lines.Add("Backup manifest: $($ManifestFile.FullName)")
-$Lines.Add("Backup target: $TargetDrive")
+$Lines.Add('Windows_11_Pro_Custom - PLAN DE RESTAURATION')
+$Lines.Add("Généré: $((Get-Date).ToString('o'))")
+$Lines.Add("Manifest de sauvegarde: $($ManifestFile.FullName)")
+$Lines.Add("Cible de sauvegarde: $TargetDrive")
 $Lines.Add('')
-$Lines.Add('SAFETY POLICY')
-$Lines.Add('- This script generates instructions only. It does not execute a restore.')
-$Lines.Add('- Never unregister the existing Ubuntu distribution before a restored copy has been validated.')
-$Lines.Add('- Never recreate or format disks automatically from the repository.')
+$Lines.Add('POLITIQUE DE SÉCURITÉ')
+$Lines.Add('- Ce script génère uniquement des instructions. Il n’exécute aucune restauration.')
+$Lines.Add('- Ne jamais désenregistrer Ubuntu avant d’avoir validé une copie restaurée.')
+$Lines.Add('- Ne jamais recréer ou formater automatiquement les disques depuis le dépôt.')
 $Lines.Add('')
 
 if ($Scenario -in @('All', 'WSL')) {
-    $Lines.Add('WSL2 RESTORE TEST')
-    $Lines.Add("1. Confirm SHA-256: $ActualHash")
-    $Lines.Add('2. Stop WSL:')
+    $Lines.Add('TEST DE RESTAURATION WSL2')
+    $Lines.Add("1. Confirmer SHA-256: $ActualHash")
+    $Lines.Add('2. Arrêter WSL:')
     $Lines.Add('   wsl --shutdown')
-    $Lines.Add('3. Import the backup beside the current distro, under a different name:')
+    $Lines.Add('3. Importer la sauvegarde à côté de la distribution actuelle, sous un nom différent:')
     $Lines.Add("   wsl --import $RestoreDistribution `"$RestoreLocation`" `"$WslBackupPath`" --vhd")
-    $Lines.Add('4. Verify both distributions are present:')
+    $Lines.Add('4. Vérifier que les deux distributions sont présentes:')
     $Lines.Add('   wsl -l -v')
-    $Lines.Add('5. Open only the restored copy:')
+    $Lines.Add('5. Ouvrir uniquement la copie restaurée:')
     $Lines.Add("   wsl -d $RestoreDistribution")
-    $Lines.Add('6. Validate HOME, ~/projects, packages, Docker and DevOps tooling before deciding anything about the old distro.')
+    $Lines.Add('6. Valider HOME, ~/projects, les paquets, Docker et les outils DevOps avant toute décision sur la distribution existante.')
     $Lines.Add('')
 }
 
 if ($Scenario -in @('All', 'Windows')) {
-    $Lines.Add('WINDOWS / BARE-METAL RESTORE')
-    $Lines.Add('1. Prefer System Restore first for a small Windows configuration regression.')
-    $Lines.Add('2. For a boot or disk disaster, boot into Windows Recovery Environment or the Recovery Drive.')
-    $Lines.Add("3. From WinRE, enumerate versions with: wbadmin get versions -backupTarget:$TargetDrive")
-    $Lines.Add('4. Select the intended Version identifier and review target disks before any recovery command.')
-    $Lines.Add("5. Bare-metal recovery command template, TO BE RUN MANUALLY FROM WINRE ONLY: wbadmin start sysrecovery -version:<VERSION_IDENTIFIER> -backupTarget:$TargetDrive -restoreAllVolumes")
-    $Lines.Add('6. Do not add -recreateDisks unless a human has explicitly verified the replacement-disk layout and accepts repartitioning risk.')
+    $Lines.Add('RESTAURATION WINDOWS / BARE-METAL')
+    $Lines.Add('1. Préférer System Restore pour une petite régression de configuration Windows.')
+    $Lines.Add('2. Pour un incident de boot ou de disque, démarrer dans Windows Recovery Environment ou sur le Recovery Drive.')
+    $Lines.Add("3. Depuis WinRE, énumérer les versions avec: wbadmin get versions -backupTarget:$TargetDrive")
+    $Lines.Add('4. Sélectionner l’identifiant de version voulu et vérifier les disques cibles avant toute récupération.')
+    $Lines.Add("5. Modèle de commande bare-metal, À EXÉCUTER MANUELLEMENT DEPUIS WINRE UNIQUEMENT: wbadmin start sysrecovery -version:<VERSION_IDENTIFIER> -backupTarget:$TargetDrive -restoreAllVolumes")
+    $Lines.Add('6. Ne pas ajouter -recreateDisks sans vérification humaine explicite du layout et acceptation du risque de repartitionnement.')
     $Lines.Add('')
-    $Lines.Add('RECOVERY MEDIA')
-    $Lines.Add('Create or refresh the Recovery Drive interactively with recoverydrive.exe. The USB selected in that UI is erased by Windows.')
+    $Lines.Add('MÉDIA DE RÉCUPÉRATION')
+    $Lines.Add('Créer ou actualiser le Recovery Drive avec recoverydrive.exe. La clé USB choisie dans cette interface est effacée par Windows.')
     $Lines.Add('')
 }
 
-$Lines.Add('VERDICT: V7 RESTORE PLAN GENERATED - NO RESTORE EXECUTED')
+$Lines.Add('VERDICT: RESTORE PLAN READY - NO RESTORE EXECUTED')
 New-Item -ItemType Directory -Force -Path $ReportDirectory | Out-Null
 $Lines | Set-Content -Encoding UTF8 $PlanPath
 $Lines | ForEach-Object { Write-Host $_ }
-Write-Host "[OK] Restore plan saved to: $PlanPath" -ForegroundColor Green
+Write-Host "[OK] Plan de restauration enregistré: $PlanPath" -ForegroundColor Green
