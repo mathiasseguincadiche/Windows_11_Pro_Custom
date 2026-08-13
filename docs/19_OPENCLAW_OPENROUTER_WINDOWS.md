@@ -2,7 +2,7 @@
 
 Cette documentation explique **la place d'OpenClaw/OpenRouter dans la workstation Windows**.
 
-Elle ne remplace pas la documentation fonctionnelle du dépôt `mathiasseguincadiche/openclaw_openrouter`. Le dépôt Windows prépare l'environnement, les emplacements, les frontières avec WSL2 et la validation d'intégration.
+Elle ne remplace pas la documentation fonctionnelle du dépôt `mathiasseguincadiche/openclaw_openrouter`. Le dépôt Windows prépare l'environnement, les emplacements, les frontières avec WSL2, l'accès terminal et la validation d'intégration.
 
 OpenClaw est une **capacité optionnelle** de la workstation, pas son identité principale.
 
@@ -42,6 +42,8 @@ Ubuntu WSL2
 └── backend Linux DevOps
 ```
 
+WezTerm donne accès aux deux univers sans changer cette frontière.
+
 ---
 
 ## Frontière avec les projets Linux
@@ -75,7 +77,7 @@ Le bootstrap :
 1. récupère le ref approuvé ;
 2. vérifie le checkout ;
 3. refuse d'écraser des modifications locales non prévues ;
-4. utilise le contrôle-plane validé pour installer et qualifier la pile.
+4. utilise le control-plane validé pour installer et qualifier la pile.
 
 Une mise à jour OpenClaw doit donc être testée dans le dépôt IA, puis le pin Windows est mis à jour explicitement.
 
@@ -140,7 +142,7 @@ Le dépôt Windows ne doit pas remplacer ce contrat par un `openclaw@latest` arb
 
 ---
 
-## Variables d'environnement
+## Variables d'environnement et CLI
 
 Architecture attendue :
 
@@ -154,7 +156,75 @@ CLAWOPS_DEPLOYMENT_MODE=windows-native
 CLAWOPS_WSL_DISTRIBUTION=Ubuntu
 ```
 
-Ces chemins séparent clairement l'état IA des projets Linux DevOps.
+L'installateur du control-plane ajoute aussi au `PATH` utilisateur les emplacements contenant les launchers `openclaw` et `clawops`.
+
+Cela permet, dans un nouveau PowerShell 7 Windows :
+
+```powershell
+openclaw --version
+clawops version
+clawops platform check
+```
+
+Ces chemins et variables séparent clairement l'état IA des projets Linux DevOps.
+
+---
+
+## Utilisation CLI via WezTerm
+
+La configuration versionnée `config/wezterm/wezterm.lua` expose trois profils :
+
+```text
+Ubuntu DevOps (WSL2)
+PowerShell 7
+OpenClaw / clawops (Windows)
+```
+
+Le profil **OpenClaw / clawops** lance PowerShell 7 sous Windows et non Bash sous WSL2.
+
+Son rôle est volontairement limité :
+
+1. se placer dans `D:\AI\OpenClaw` lorsque la racine existe ;
+2. vérifier si `openclaw` est visible dans la session ;
+3. vérifier si `clawops` est visible dans la session ;
+4. afficher un diagnostic court ;
+5. laisser la session interactive ouverte.
+
+Il ne remplace pas `scripts/bootstrap/15_openclaw_ai.ps1` et n'installe rien. Il ne déclenche pas automatiquement de déploiement d'agents, de Gateway, d'onboarding ou d'autre opération métier.
+
+### Pourquoi ce choix ?
+
+WezTerm doit rester une **interface terminal**, pas devenir un second orchestrateur OpenClaw.
+
+La chaîne de responsabilité reste donc :
+
+```text
+WezTerm
+   ↓
+session PowerShell 7 Windows-native
+   ↓
+openclaw / clawops déjà installés
+   ↓
+control-plane openclaw_openrouter
+```
+
+Cette organisation permet d'utiliser OpenClaw en CLI dans le même terminal que les outils DevOps tout en conservant la bonne frontière runtime.
+
+### Après une première installation
+
+Une instance WezTerm déjà ouverte peut avoir été lancée avant la mise à jour du `PATH` utilisateur par l'installateur OpenClaw.
+
+Après la première installation ou une modification des launchers :
+
+```text
+fermer WezTerm
+↓
+relancer WezTerm
+↓
+ouvrir « OpenClaw / clawops (Windows) »
+```
+
+Le profil doit alors afficher `openclaw` et `clawops` comme disponibles.
 
 ---
 
@@ -208,6 +278,8 @@ La chaîne de validation doit démontrer :
 ```text
 Windows 11 + D: NTFS
         ↓
+configuration WezTerm conforme
+        ↓
 control-plane approuvé
         ↓
 OpenClaw Windows + Node.js + clawops
@@ -221,7 +293,7 @@ Docker / Terraform / Ansible / AWS / Kubernetes
 frontière Windows/Linux respectée
 ```
 
-Les sorties internes de certains validateurs peuvent conserver des identifiants techniques historiques tant que les scripts n'ont pas été refactorés, mais **la documentation utilisateur ne les présente plus comme des versions actives de la workstation**.
+`install.ps1 -Mode Verify` vérifie la configuration WezTerm via le composant workstation. `-ValidateOpenClawAI` vérifie l'installation OpenClaw elle-même. Les deux contrôles sont complémentaires : le premier prouve que le profil terminal attendu est déployé, le second que les CLI derrière ce profil existent réellement.
 
 ---
 
@@ -264,7 +336,7 @@ Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 ```text
 Windows_11_Pro_Custom
         ↓
-prépare la workstation
+prépare la workstation et le terminal
         ↓
 Windows + D:\AI + WSL2 backend
         ↓
@@ -275,7 +347,7 @@ configuration IA, modèles, agents, clawops, Gateway
 
 Le dépôt Windows ne doit pas dupliquer la documentation fonctionnelle de l'équipe IA.
 
-Son rôle est de garantir que la plateforme locale est correctement installée, isolée, validée et sauvegardable.
+Son rôle est de garantir que la plateforme locale est correctement installée, accessible, isolée, validée et sauvegardable.
 
 ---
 
@@ -285,6 +357,10 @@ L'intégration est considérée prête lorsque :
 
 ```text
 workstation Windows conforme
++
+configuration WezTerm conforme
++
+profil OpenClaw / clawops disponible
 +
 WSL2 DevOps conforme
 +
@@ -297,4 +373,4 @@ frontières de stockage respectées
 secrets hors de Git
 ```
 
-OpenClaw reste alors une **extension propre de la workstation**, sans transformer le projet Windows en simple installateur IA.
+OpenClaw reste alors une **extension propre de la workstation**, accessible en CLI sans transformer le projet Windows en simple installateur IA.
