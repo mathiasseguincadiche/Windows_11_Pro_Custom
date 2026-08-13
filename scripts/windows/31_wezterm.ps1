@@ -16,11 +16,41 @@ $backup = Join-Path $stateDir 'wezterm.before.lua'
 
 if (-not (Test-Path $source)) { throw "Configuration WezTerm absente: $source" }
 
+function Assert-WezTermSourceContract {
+    $content = Get-Content -Raw -LiteralPath $source
+    $required = @(
+        'config.default_prog = ubuntu_devops',
+        "label = 'Ubuntu DevOps (WSL2)'",
+        "label = 'PowerShell 7'",
+        "label = 'OpenClaw / clawops (Windows)'",
+        'Get-Command openclaw',
+        'Get-Command clawops'
+    )
+
+    foreach ($needle in $required) {
+        if (-not $content.Contains($needle)) {
+            throw "Contrat WezTerm incomplet: élément requis absent: $needle"
+        }
+    }
+
+    $forbiddenAutoActions = @(
+        'openclaw gateway install',
+        'openclaw onboard',
+        'clawops team deploy'
+    )
+    foreach ($needle in $forbiddenAutoActions) {
+        if ($content.Contains($needle)) {
+            throw "Contrat WezTerm non sûr: action automatique interdite détectée: $needle"
+        }
+    }
+}
+
 function Test-WezTermConfigMatch {
     if (-not (Test-Path $target)) { return $false }
     return (Get-FileHash $source -Algorithm SHA256).Hash -eq (Get-FileHash $target -Algorithm SHA256).Hash
 }
 
+Assert-WezTermSourceContract
 $wezterm = Get-Command wezterm.exe -ErrorAction SilentlyContinue
 $match = Test-WezTermConfigMatch
 
@@ -28,6 +58,7 @@ if ($Mode -eq 'Audit') {
     Write-Host "WezTerm CLI: $(if ($wezterm) { $wezterm.Source } else { 'ABSENT' })"
     Write-Host "Configuration cible: $target"
     Write-Host "Configuration conforme: $match"
+    Write-Host 'Profils: Ubuntu DevOps (défaut) | PowerShell 7 | OpenClaw / clawops (Windows)'
     if ($wezterm -and $match) {
         Write-Host '[DÉJÀ OK] WezTerm est installé et sa configuration est conforme.' -ForegroundColor Green
     } else {
@@ -39,7 +70,7 @@ if ($Mode -eq 'Audit') {
 if ($Mode -eq 'Verify') {
     if (-not $wezterm) { throw 'WezTerm est absent ou wezterm.exe est introuvable.' }
     if (-not $match) { throw '.wezterm.lua est absent ou différent de la configuration du dépôt.' }
-    Write-Host '[OK] WezTerm validé: application présente et configuration conforme.' -ForegroundColor Green
+    Write-Host '[OK] WezTerm validé: application présente, trois profils conformes et Ubuntu reste le défaut.' -ForegroundColor Green
     return
 }
 
