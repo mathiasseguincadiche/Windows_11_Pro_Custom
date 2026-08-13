@@ -174,7 +174,7 @@ jobs:
           grep -Fq '19_OPENCLAW_OPENROUTER_WINDOWS.md' docs/README.md
 
           if grep -Fq 'fermer une ancienne instance WezTerm' docs/20_RUNBOOK_OPERATIONNEL.md; then
-            echo 'Le Runbook contient encore l’ancienne procédure de relance WezTerm.' >&2
+            echo "Le Runbook contient encore l'ancienne procédure de relance WezTerm." >&2
             exit 1
           fi
           if grep -Fq 'openclaw onboard --auth-choice' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md || grep -Fq 'openclaw gateway install' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md; then
