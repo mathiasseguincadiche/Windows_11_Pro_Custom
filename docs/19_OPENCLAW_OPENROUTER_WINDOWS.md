@@ -158,7 +158,7 @@ CLAWOPS_WSL_DISTRIBUTION=Ubuntu
 
 L'installateur du control-plane ajoute aussi au `PATH` utilisateur les emplacements contenant les launchers `openclaw` et `clawops`.
 
-Cela permet, dans un nouveau PowerShell 7 Windows :
+Cela permet dans PowerShell 7 Windows :
 
 ```powershell
 openclaw --version
@@ -182,21 +182,24 @@ OpenClaw / clawops (Windows)
 
 Le profil **OpenClaw / clawops** lance PowerShell 7 sous Windows et non Bash sous WSL2.
 
-Son rôle est volontairement limité :
+Pour être fiable même si WezTerm a été démarré avant une installation récente d'OpenClaw, le profil prépare **sa session uniquement** :
 
-1. se placer dans `D:\AI\OpenClaw` lorsque la racine existe ;
-2. vérifier si `openclaw` est visible dans la session ;
-3. vérifier si `clawops` est visible dans la session ;
-4. afficher un diagnostic court ;
-5. laisser la session interactive ouverte.
+1. il relit les variables OpenClaw enregistrées au niveau utilisateur ;
+2. il ajoute à son `PATH` de session `D:\AI\OpenClaw\npm-global` et `D:\AI\OpenClaw\venv\Scripts` lorsqu'ils existent ;
+3. il privilégie explicitement `openclaw.cmd` et `clawops.exe` comme launchers Windows ;
+4. il se place dans `D:\AI\OpenClaw` lorsque la racine existe ;
+5. il vérifie la disponibilité des deux CLI ;
+6. il affiche un diagnostic court puis laisse PowerShell interactif.
 
-Il ne remplace pas `scripts/bootstrap/15_openclaw_ai.ps1` et n'installe rien. Il ne déclenche pas automatiquement de déploiement d'agents, de Gateway, d'onboarding ou d'autre opération métier.
+Ces ajustements ne réécrivent pas le `PATH` utilisateur et ne remplacent pas le bootstrap OpenClaw.
+
+Le profil ne déclenche automatiquement ni installation, ni onboarding, ni déploiement d'agents, ni Gateway, ni autre opération métier.
 
 ### Pourquoi ce choix ?
 
 WezTerm doit rester une **interface terminal**, pas devenir un second orchestrateur OpenClaw.
 
-La chaîne de responsabilité reste donc :
+La chaîne de responsabilité reste :
 
 ```text
 WezTerm
@@ -208,23 +211,7 @@ openclaw / clawops déjà installés
 control-plane openclaw_openrouter
 ```
 
-Cette organisation permet d'utiliser OpenClaw en CLI dans le même terminal que les outils DevOps tout en conservant la bonne frontière runtime.
-
-### Après une première installation
-
-Une instance WezTerm déjà ouverte peut avoir été lancée avant la mise à jour du `PATH` utilisateur par l'installateur OpenClaw.
-
-Après la première installation ou une modification des launchers :
-
-```text
-fermer WezTerm
-↓
-relancer WezTerm
-↓
-ouvrir « OpenClaw / clawops (Windows) »
-```
-
-Le profil doit alors afficher `openclaw` et `clawops` comme disponibles.
+Cette organisation permet d'utiliser OpenClaw en CLI dans le même terminal que les outils DevOps tout en conservant la bonne frontière runtime. Aucune relance de WezTerm n'est requise uniquement pour rafraîchir les variables ou les chemins gérés par ce profil.
 
 ---
 
