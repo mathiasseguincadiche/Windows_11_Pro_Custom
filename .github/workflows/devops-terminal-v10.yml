@@ -1,0 +1,117 @@
+name: DevOps terminal V10
+
+on:
+  push:
+    paths:
+      - 'config/wezterm/**'
+      - 'config/vscode/**'
+      - 'config/wsl/bashrc.d/**'
+      - 'config/wsl/starship.toml'
+      - 'scripts/wsl/manage-shell-profile.sh'
+      - 'scripts/wsl/manage-devops-terminal.sh'
+      - 'scripts/wsl/validate-devops-terminal.sh'
+      - 'scripts/bootstrap/08_devops.ps1'
+      - 'scripts/bootstrap/09_validate_devops.ps1'
+      - 'manifests/windows-apps.json'
+      - 'manifests/winget/apps-core.json'
+      - '.github/workflows/devops-terminal-v10.yml'
+  pull_request:
+    paths:
+      - 'config/wezterm/**'
+      - 'config/vscode/**'
+      - 'config/wsl/bashrc.d/**'
+      - 'config/wsl/starship.toml'
+      - 'scripts/wsl/manage-shell-profile.sh'
+      - 'scripts/wsl/manage-devops-terminal.sh'
+      - 'scripts/wsl/validate-devops-terminal.sh'
+      - 'scripts/bootstrap/08_devops.ps1'
+      - 'scripts/bootstrap/09_validate_devops.ps1'
+      - 'manifests/windows-apps.json'
+      - 'manifests/winget/apps-core.json'
+      - '.github/workflows/devops-terminal-v10.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install validation tools from Ubuntu 26.04
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            bash bash-completion shellcheck lua5.4 python3 \
+            starship fzf zoxide eza ripgrep fd-find bat tree
+
+      - name: Parse and lint shell profile
+        run: |
+          bash -n config/wsl/bashrc.d/devops.sh
+          bash -n scripts/wsl/manage-shell-profile.sh
+          bash -n scripts/wsl/manage-devops-terminal.sh
+          bash -n scripts/wsl/validate-devops-terminal.sh
+          shellcheck \
+            config/wsl/bashrc.d/devops.sh \
+            scripts/wsl/manage-shell-profile.sh \
+            scripts/wsl/manage-devops-terminal.sh \
+            scripts/wsl/validate-devops-terminal.sh
+
+      - name: Parse WezTerm Lua
+        run: luac -p config/wezterm/wezterm.lua
+
+      - name: Validate JSON and V10 contract
+        run: |
+          python3 -m json.tool config/vscode/settings.json >/dev/null
+          python3 -m json.tool manifests/windows-apps.json >/dev/null
+          python3 -m json.tool manifests/winget/apps-core.json >/dev/null
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          apps = json.loads(Path('manifests/winget/apps-core.json').read_text())['apps']
+          assert any(a['wingetId'] == 'DEVCOM.JetBrainsMonoNerdFont' and a['autoInstall'] for a in apps)
+
+          settings = json.loads(Path('config/vscode/settings.json').read_text())
+          assert settings['terminal.integrated.defaultProfile.windows'] == 'Ubuntu WSL'
+          assert 'JetBrainsMono Nerd Font' in settings['terminal.integrated.fontFamily']
+          assert settings['terminal.integrated.shellIntegration.enabled'] is True
+
+          wezterm = Path('config/wezterm/wezterm.lua').read_text()
+          for needle in ['Ubuntu DevOps (WSL2)', 'PowerShell 7', 'JetBrainsMono Nerd Font', 'config.default_prog']:
+              assert needle in wezterm, needle
+
+          profile = Path('config/wsl/bashrc.d/devops.sh').read_text()
+          for needle in ['starship init bash', 'zoxide init bash', 'fzf --bash', "alias tf='terraform'", "alias k='kubectl'"]:
+              assert needle in profile, needle
+          PY
+
+      - name: Validate Starship configuration
+        run: |
+          STARSHIP_CONFIG="$PWD/config/wsl/starship.toml" starship prompt >/dev/null
+
+      - name: Prove profile idempotence and rollback
+        run: |
+          export HOME="$(mktemp -d)"
+          printf '# user bashrc\n' > "$HOME/.bashrc"
+          cp "$HOME/.bashrc" "$HOME/original.bashrc"
+
+          bash scripts/wsl/manage-shell-profile.sh apply
+          first_hash="$(sha256sum "$HOME/.bashrc" | awk '{print $1}')"
+          bash scripts/wsl/manage-shell-profile.sh verify
+
+          bash scripts/wsl/manage-shell-profile.sh apply
+          second_hash="$(sha256sum "$HOME/.bashrc" | awk '{print $1}')"
+          test "$first_hash" = "$second_hash"
+          test "$(grep -Fc '# BEGIN windows11-pro-custom' "$HOME/.bashrc")" -eq 1
+          test "$(grep -Fc '# END windows11-pro-custom' "$HOME/.bashrc")" -eq 1
+
+          HOME="$HOME" bash --noprofile --rcfile "$HOME/.bashrc" -ic \
+            'command -v starship >/dev/null; command -v fzf >/dev/null; command -v zoxide >/dev/null; type k >/dev/null; type tf >/dev/null; type ll >/dev/null; type fd >/dev/null; type bat >/dev/null'
+
+          bash scripts/wsl/manage-shell-profile.sh rollback
+          cmp -s "$HOME/.bashrc" "$HOME/original.bashrc"
+          test ! -e "$HOME/.config/windows11-pro-custom/devops.sh"
+          test ! -e "$HOME/.config/windows11-pro-custom/starship.toml"
