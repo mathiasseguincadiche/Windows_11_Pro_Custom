@@ -32,7 +32,7 @@ if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer lʼutilisateur WSL par défaut.' }
 }
 if ($LinuxUser -eq 'root') {
-    throw 'Le bootstrap DevOps refuse root. Exécute dʼabord la préparation utilisateur WSL V9; elle crée/configure un utilisateur normal de façon guidée.'
+    throw 'Le bootstrap DevOps refuse root. Exécute dʼabord la préparation utilisateur WSL; elle crée/configure un utilisateur normal de façon guidée.'
 }
 
 & wsl.exe -d $Distribution -u root -- sh -lc "getent passwd '$LinuxUser' >/dev/null"
@@ -50,11 +50,11 @@ $global:LASTEXITCODE = 0
 if ($convertCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxScript)) { throw 'Impossible de convertir le chemin du bootstrap DevOps avec wslpath.' }
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxScript) -LogIdentity 'scripts/wsl/install-devops.sh' -DisplayName 'install-devops.sh'
 
-Write-Host '[3/4] Terminal Bash DevOps V10' -ForegroundColor Cyan
+Write-Host '[3/4] Terminal Bash DevOps' -ForegroundColor Cyan
 $linuxTerminalScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $terminalScript).Trim()
 $convertTerminal = $LASTEXITCODE
 $global:LASTEXITCODE = 0
-if ($convertTerminal -ne 0 -or [string]::IsNullOrWhiteSpace($linuxTerminalScript)) { throw 'Impossible de convertir le chemin du gestionnaire Terminal V10 avec wslpath.' }
+if ($convertTerminal -ne 0 -or [string]::IsNullOrWhiteSpace($linuxTerminalScript)) { throw 'Impossible de convertir le chemin du gestionnaire Terminal DevOps avec wslpath.' }
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxTerminalScript, 'apply') -LogIdentity 'scripts/wsl/manage-devops-terminal.sh' -DisplayName 'manage-devops-terminal.sh'
 
 Write-Host '[4/4] Extensions VS Code dans WSL' -ForegroundColor Cyan
@@ -64,5 +64,5 @@ $global:LASTEXITCODE = 0
 if ($convertVsCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxVsCodeScript)) { throw 'Impossible de convertir le chemin du gestionnaire VS Code WSL avec wslpath.' }
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxVsCodeScript, 'apply') -LogIdentity 'scripts/wsl/manage-vscode-extensions.sh' -DisplayName 'manage-vscode-extensions.sh'
 
-Write-Host '[FAIT] Stack DevOps + Terminal V10 exécutés; chaque sous-script possède son journal dédié.' -ForegroundColor Green
+Write-Host '[FAIT] Stack DevOps + terminal exécutés; chaque sous-script possède son journal dédié.' -ForegroundColor Green
 Write-Host '[ACTION REQUISE] Si Docker vient dʼajouter ton utilisateur au groupe docker, exécute « wsl --shutdown » avant le premier usage Docker.' -ForegroundColor Magenta
