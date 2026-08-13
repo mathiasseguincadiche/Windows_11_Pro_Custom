@@ -80,7 +80,6 @@ jobs:
             printf '  %s\n' "${stale[@]}" >&2
             exit 1
           fi
-
           if grep -RniE '(^|[^[:alnum:]_])V(3|4|5|6|7|8|9|10|11|12|13)([^[:alnum:]_]|$)' README.md docs/*.md; then
             echo 'La documentation active ne doit pas raconter le projet par anciennes versions.' >&2
             exit 1
@@ -91,7 +90,6 @@ jobs:
         run: |
           from pathlib import Path
           import re
-
           legacy = re.compile(r'\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I)
           patterns = (
               re.compile(r'VERDICT:\s*V\d+', re.I),
@@ -129,11 +127,9 @@ jobs:
           grep -Fq '8 threads' README.md
           grep -Fq '20_RUNBOOK_OPERATIONNEL.md' README.md
           grep -Fq '24_CRITERES_ACCEPTATION.md' README.md
-
           for file in 20_RUNBOOK_OPERATIONNEL.md 21_REFERENCE_COMMANDES.md 22_TROUBLESHOOTING.md 23_SOURCES_DE_VERITE.md 24_CRITERES_ACCEPTATION.md; do
             grep -Fq "$file" docs/README.md
           done
-
           grep -Fq 'vue consolidée' docs/18_GUIDE_MAITRE.md
           grep -Fq '20_RUNBOOK_OPERATIONNEL.md' docs/18_GUIDE_MAITRE.md
 
@@ -149,21 +145,17 @@ jobs:
           grep -Fq 'FullInstall' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'InstallOpenClawAI' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fqi 'idempotence' docs/20_RUNBOOK_OPERATIONNEL.md
-
-          # FullInstall doit être documenté conformément au code actuel.
           grep -Fq '$InstallOpenClawAI = $true' install.ps1
           grep -Fq '$ValidateOpenClawAI = $true' install.ps1
-          grep -Fq 'OpenClaw/OpenRouter inclus' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'OpenClaw inclus' docs/20_RUNBOOK_OPERATIONNEL.md
 
       - name: Vérifier la référence des paramètres publics
         shell: python
         run: |
           from pathlib import Path
-
           install = Path('install.ps1').read_text(encoding='utf-8')
           update = Path('update.ps1').read_text(encoding='utf-8')
           reference = Path('docs/21_REFERENCE_COMMANDES.md').read_text(encoding='utf-8')
-
           install_params = [
               'Mode', 'WslProfile', 'OptimizationProfiles', 'Distribution',
               'WslInstallLocation', 'WslUser', 'InstallDevOps', 'ValidateDevOps',
@@ -178,7 +170,6 @@ jobs:
               'IncludeUnknownPackages', 'Distribution', 'LinuxUser', 'PlanOnly',
               'NonInteractive', 'Yes', 'NoRestartPrompt'
           ]
-
           missing = []
           for name in install_params:
               if f'${name}' not in install:
@@ -221,7 +212,6 @@ jobs:
           from urllib.parse import unquote
           import re
           import sys
-
           root = Path.cwd().resolve()
           files = [root / 'README.md', root / 'CHANGELOG.md'] + sorted((root / 'docs').glob('*.md'))
           link_re = re.compile(r'(?<!!)\[[^\]]*\]\(([^)]+)\)')
