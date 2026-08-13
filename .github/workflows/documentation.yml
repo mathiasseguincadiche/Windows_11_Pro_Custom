@@ -160,9 +160,8 @@ jobs:
 
           grep -Fq 'Machine-first' docs/18_GUIDE_MAITRE.md
           grep -Fq 'Recovery-first' docs/18_GUIDE_MAITRE.md
-          grep -Fq 'workstation-as-code' docs/18_GUIDE_MAITRE.md
-          grep -Fq 'Windows reste l’hôte' docs/18_GUIDE_MAITRE.md || \
-            grep -Fq 'Windows reste l'"'"'hôte' docs/18_GUIDE_MAITRE.md
+          grep -Fq 'Workstation-as-code' docs/18_GUIDE_MAITRE.md
+          grep -Fq "Windows gère l'expérience Windows" docs/18_GUIDE_MAITRE.md
 
       - name: Vérifier le contrat WSL2 courant
         shell: bash
