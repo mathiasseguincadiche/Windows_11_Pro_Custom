@@ -81,7 +81,7 @@ if (( remaining > 0 )); then
 fi
 
 if [[ -e /var/run/reboot-required ]]; then
-  echo '[ACTION REQUISE] Ubuntu signale un redémarrage requis. Aucun shutdown automatique n’est effectué par ce script.'
+  echo "[ACTION REQUISE] Ubuntu signale un redémarrage requis. Aucun shutdown automatique n'est effectué par ce script."
 fi
 
 echo '[FAIT] Paquets Ubuntu 26.04 mis à jour et revalidés.'
