@@ -67,6 +67,22 @@ Les fichiers `config/wsl/*.wslconfig` définissent les profils de ressources et 
 
 Une release plus récente disponible sur Internet n’annule pas automatiquement cette cible.
 
+## Terminal WezTerm
+
+`config/wezterm/wezterm.lua` est la source de vérité du terminal géré par le projet.
+
+Le contrat courant impose :
+
+```text
+Ubuntu DevOps (WSL2)          -> profil par défaut
+PowerShell 7                  -> administration Windows
+OpenClaw / clawops (Windows)  -> CLI IA Windows-native
+```
+
+`scripts/windows/31_wezterm.ps1` valide ce contrat puis compare par SHA256 la configuration versionnée avec `%USERPROFILE%\.wezterm.lua`.
+
+La présence du profil OpenClaw dans WezTerm ne signifie pas qu’OpenClaw est installé : l’installation et la qualification du runtime restent la responsabilité de l’intégration OpenClaw.
+
 ## Matériel
 
 `config/hardware/` décrit la machine cible et les critères de qualification. Ces fichiers servent à **observer et valider**, pas à deviner un état physique absent.
@@ -82,6 +98,8 @@ Une release plus récente disponible sur Internet n’annule pas automatiquement
 ## OpenClaw
 
 `config/openclaw/control-plane.json` définit le dépôt et le ref approuvé du control-plane consommé par l’intégration Windows.
+
+Le runtime OpenClaw, `clawops`, leurs versions et leur logique fonctionnelle restent gouvernés par le control-plane `openclaw_openrouter`. Le dépôt Windows ne doit pas recopier ces contrats dans WezTerm.
 
 Les noms de certains fichiers internes conservent des identifiants techniques hérités lorsqu’ils font partie du contrat actuel. La documentation active, elle, reste organisée par responsabilité et non par ancienne version du projet.
 
@@ -159,7 +177,7 @@ L’historique appartient à `CHANGELOG.md` et à Git.
 Les workflows du dépôt contrôlent notamment :
 
 - PowerShell et Bash ;
-- configuration structurée ;
+- configuration structurée et syntaxe WezTerm ;
 - frontières de sécurité ;
 - runtime WSL ;
 - orchestration et idempotence ;

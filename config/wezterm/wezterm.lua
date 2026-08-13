@@ -3,16 +3,83 @@ local act = wezterm.action
 
 local config = wezterm.config_builder()
 
+local ubuntu_devops = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~', '--exec', 'bash', '-l' }
+local powershell7 = { 'pwsh.exe', '-NoLogo' }
+local openclaw_cli = {
+  'pwsh.exe',
+  '-NoLogo',
+  '-NoExit',
+  '-Command',
+  [[
+$root = 'D:\AI\OpenClaw'
+$environmentNames = @(
+  'OPENCLAW_HOME',
+  'OPENCLAW_STATE_DIR',
+  'OPENCLAW_CONFIG_PATH',
+  'OPENCLAW_WORKSPACE_DIR',
+  'CLAWOPS_HOME',
+  'CLAWOPS_DEPLOYMENT_MODE',
+  'CLAWOPS_WSL_DISTRIBUTION'
+)
+foreach ($name in $environmentNames) {
+  $value = [Environment]::GetEnvironmentVariable($name, 'User')
+  if (-not [string]::IsNullOrWhiteSpace($value)) {
+    Set-Item -Path "Env:$name" -Value $value
+  }
+}
+$managedPaths = @(
+  (Join-Path $root 'npm-global'),
+  (Join-Path $root 'venv\Scripts')
+) | Where-Object { Test-Path -LiteralPath $_ }
+$currentPath = @($env:Path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$env:Path = (@($managedPaths + $currentPath) | Select-Object -Unique) -join ';'
+if (Test-Path -LiteralPath (Join-Path $root 'npm-global\openclaw.cmd')) {
+  Set-Alias -Name openclaw -Value openclaw.cmd -Scope Global
+}
+if (Test-Path -LiteralPath (Join-Path $root 'venv\Scripts\clawops.exe')) {
+  Set-Alias -Name clawops -Value clawops.exe -Scope Global
+}
+if (Test-Path -LiteralPath $root) {
+  Set-Location -LiteralPath $root
+}
+$openclaw = Get-Command openclaw -ErrorAction SilentlyContinue
+$clawops = Get-Command clawops -ErrorAction SilentlyContinue
+Write-Host ''
+Write-Host '=== OpenClaw / clawops ===' -ForegroundColor Cyan
+Write-Host "Racine : $root"
+if ($openclaw) {
+  Write-Host "[OK] openclaw : $($openclaw.Definition)" -ForegroundColor Green
+} else {
+  Write-Host '[À FAIRE] openclaw introuvable. Installe ou valide l’intégration OpenClaw.' -ForegroundColor Yellow
+}
+if ($clawops) {
+  Write-Host "[OK] clawops  : $($clawops.Definition)" -ForegroundColor Green
+} else {
+  Write-Host '[À FAIRE] clawops introuvable. Installe ou valide l’intégration OpenClaw.' -ForegroundColor Yellow
+}
+if ($openclaw -and $clawops) {
+  Write-Host '[PRÊT] Session CLI Windows-native prête.' -ForegroundColor Green
+  Write-Host 'Exemples : openclaw --version | clawops version | clawops platform check'
+}
+Write-Host ''
+  ]],
+}
+
 -- Windows 11 host -> Ubuntu WSL2 -> Bash DevOps.
-config.default_prog = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~', '--exec', 'bash', '-l' }
+-- Ubuntu reste le profil quotidien par défaut ; OpenClaw/clawops restent Windows-native.
+config.default_prog = ubuntu_devops
 config.launch_menu = {
   {
     label = 'Ubuntu DevOps (WSL2)',
-    args = { 'wsl.exe', '-d', 'Ubuntu', '--cd', '~', '--exec', 'bash', '-l' },
+    args = ubuntu_devops,
   },
   {
     label = 'PowerShell 7',
-    args = { 'pwsh.exe', '-NoLogo' },
+    args = powershell7,
+  },
+  {
+    label = 'OpenClaw / clawops (Windows)',
+    args = openclaw_cli,
   },
 }
 

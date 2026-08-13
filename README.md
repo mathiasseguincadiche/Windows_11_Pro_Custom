@@ -16,6 +16,10 @@ Ce dépôt est une **workstation-as-code** : l'état attendu est versionné, l'�
 Windows 11 Pro
 ├── desktop / gaming / pilotes / sécurité
 ├── PowerShell 7 / VS Code / WezTerm
+│   └── profils terminal
+│       ├── Ubuntu DevOps (WSL2)        <- défaut
+│       ├── PowerShell 7                <- administration Windows
+│       └── OpenClaw / clawops          <- CLI IA Windows-native
 ├── Windows Update / WinGet / sauvegarde
 └── WSL2
     └── Ubuntu 26.04
@@ -26,14 +30,16 @@ Windows 11 Pro
         └── outils qualité
 
 D:\AI\OpenClaw
-└── intégration IA Windows-native
+├── OpenClaw Windows-native
+├── clawops
+└── état / workspace / control-plane
 ```
 
 La règle structurante est :
 
 ```text
-Windows gère l'expérience Windows.
-Linux gère les workloads Linux.
+Windows gère l'expérience Windows et le runtime OpenClaw.
+Linux gère les workloads Linux DevOps.
 ```
 
 Les projets Linux actifs vivent sur ext4 dans `~/projects`, `~/labs` ou `~/repositories`.
@@ -64,6 +70,22 @@ Réseau       : mirrored
 ### DevOps
 
 Ubuntu fournit Docker, Kubernetes, Terraform, Ansible, AWS CLI, GitHub CLI et les outils qualité définis par les contrats du dépôt.
+
+### Terminal / WezTerm
+
+WezTerm est le point d'accès quotidien aux trois contextes sans les mélanger :
+
+```text
+Ubuntu DevOps (WSL2)          -> Bash et outils Linux
+PowerShell 7                  -> administration Windows
+OpenClaw / clawops (Windows)  -> CLI IA native Windows
+```
+
+Le profil OpenClaw **ne lance automatiquement ni agent, ni Gateway, ni onboarding, ni action sensible**. Il ouvre une session PowerShell 7, recharge dans cette session les variables utilisateur OpenClaw, ajoute uniquement à son `PATH` les répertoires CLI gérés sous `D:\AI\OpenClaw`, puis vérifie si `openclaw` et `clawops` sont disponibles.
+
+Ces ajustements restent limités à la session terminal : WezTerm ne remplace ni l'installation ni la validation OpenClaw et ne modifie pas les contrats persistants du control-plane.
+
+Documentation : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) et [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ## Fonctionnement de l'orchestration
 
@@ -168,7 +190,7 @@ preuves exploitables
 sauvegarde vérifiée
 ```
 
-OpenClaw s'ajoute à ces critères lorsque le périmètre choisi l'inclut.
+OpenClaw s'ajoute à ces critères lorsque le périmètre choisi l'inclut, avec une session CLI WezTerm Windows-native cohérente avec le runtime installé.
 
 Checklist : [`docs/24_CRITERES_ACCEPTATION.md`](docs/24_CRITERES_ACCEPTATION.md).
 
@@ -188,7 +210,7 @@ Le README est volontairement synthétique. Le portail complet est [`docs/README.
 | Installation Windows | [`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md) |
 | WSL2 | [`docs/06_WSL2.md`](docs/06_WSL2.md) |
 | Guide WSL2 pédagogique | [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) |
-| Stack DevOps | [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) |
+| Stack DevOps et terminal WezTerm | [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) |
 | Orchestration | [`docs/14_ORCHESTRATION.md`](docs/14_ORCHESTRATION.md) |
 | Vue consolidée | [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md) |
 | Runbook opérationnel | [`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md) |
@@ -198,7 +220,7 @@ Le README est volontairement synthétique. Le portail complet est [`docs/README.
 | Critères d'acceptation | [`docs/24_CRITERES_ACCEPTATION.md`](docs/24_CRITERES_ACCEPTATION.md) |
 | Backup / restore | [`docs/10_BACKUP_RESTORE.md`](docs/10_BACKUP_RESTORE.md) |
 | Reconstruction après incident | [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md) |
-| OpenClaw/OpenRouter | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+| OpenClaw/OpenRouter et CLI WezTerm | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
 
 La documentation active décrit **l'état actuel**. `CHANGELOG.md` et Git conservent l'historique.
 
