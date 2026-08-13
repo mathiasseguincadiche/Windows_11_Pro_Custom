@@ -132,4 +132,4 @@ fi
 
 cp "$backup_bashrc" "$HOME/.bashrc"
 rm -f "$target_profile" "$target_starship"
-echo '[FAIT] Profil Bash/Starship restauré à l’état initial enregistré.'
+echo "[FAIT] Profil Bash/Starship restauré à l'état initial enregistré."
