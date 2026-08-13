@@ -69,7 +69,7 @@ jobs:
           $choices = @('1','2','3','4.1','4.2','5.1','5.2','6','7','8.1','8.2','8.3','9.1','9.2','10')
           foreach ($choice in $choices) {
             Write-Host "--- Choice $choice ---"
-            $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear 2>&1 | Out-String
+            $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
             if ($LASTEXITCODE -ne 0) { throw "DryRun choice $choice failed." }
             if ($choice -ne '10' -and -not $output.Contains('[DRY-RUN]')) {
               throw "Choice $choice did not prove DryRun routing."
@@ -79,16 +79,16 @@ jobs:
       - name: Assert exact primary routes
         shell: pwsh
         run: |
-          $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($full.Contains('install.ps1') -and $full.Contains('-FullInstall'))) { throw 'Full install route incorrect.' }
 
-          $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($apps.Contains('03_apps.ps1') -and $apps.Contains("-Mode 'Apply'"))) { throw 'Apps-only route incorrect.' }
 
-          $updates = & ./menu.ps1 -Choice 3 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          $updates = & ./menu.ps1 -Choice 3 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($updates.Contains('update.ps1') -and $updates.Contains("-Mode 'Apply'"))) { throw 'Update route incorrect.' }
 
-          $restore = & ./menu.ps1 -Choice 5.1 -DryRun -NoPause -NoClear 2>&1 | Out-String
+          $restore = & ./menu.ps1 -Choice 5.1 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not $restore.Contains('RestorePlan')) { throw 'Restore plan route incorrect.' }
           if (-not $restore.Contains('ne restaure rien automatiquement')) { throw 'Restore safety message missing.' }
 
