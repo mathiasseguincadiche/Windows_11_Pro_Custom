@@ -43,7 +43,7 @@ $ManifestFile = Get-ChildItem -Path $V7Root -Filter 'backup-manifest.json' -File
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 if (-not $ManifestFile) {
-    throw 'Aucun manifest de sauvegarde n’a été trouvé.'
+    throw "Aucun manifest de sauvegarde n’a été trouvé."
 }
 
 $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
@@ -77,7 +77,7 @@ $WinReExitCode = $LASTEXITCODE
 $WinReText = $WinReOutput -join [Environment]::NewLine
 $WinReEnabled = $WinReExitCode -eq 0 -and $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw 'Windows Recovery Environment n’est pas confirmé comme actif.'
+    throw "Windows Recovery Environment n’est pas confirmé comme actif."
 }
 
 $SafetyValid = ($Manifest.safety.destructiveRestoreAutomation -eq $false) -and
