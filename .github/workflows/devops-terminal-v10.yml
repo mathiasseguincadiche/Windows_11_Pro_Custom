@@ -41,6 +41,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install validation tools from Ubuntu 26.04
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
@@ -94,7 +96,8 @@ jobs:
 
       - name: Prove profile idempotence and rollback
         run: |
-          export HOME="$(mktemp -d)"
+          temp_home="$(mktemp -d)"
+          export HOME="$temp_home"
           printf '# user bashrc\n' > "$HOME/.bashrc"
           cp "$HOME/.bashrc" "$HOME/original.bashrc"
 
@@ -108,7 +111,7 @@ jobs:
           test "$(grep -Fc '# BEGIN windows11-pro-custom' "$HOME/.bashrc")" -eq 1
           test "$(grep -Fc '# END windows11-pro-custom' "$HOME/.bashrc")" -eq 1
 
-          HOME="$HOME" bash --noprofile --rcfile "$HOME/.bashrc" -ic \
+          bash --noprofile --rcfile "$HOME/.bashrc" -ic \
             'command -v starship >/dev/null; command -v fzf >/dev/null; command -v zoxide >/dev/null; type k >/dev/null; type tf >/dev/null; type ll >/dev/null; type fd >/dev/null; type bat >/dev/null'
 
           bash scripts/wsl/manage-shell-profile.sh rollback
