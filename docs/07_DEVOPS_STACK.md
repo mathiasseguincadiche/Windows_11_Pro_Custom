@@ -2,7 +2,7 @@
 
 ## Principe
 
-Windows héberge l'interface graphique, les applications desktop et l'administration de l'hôte. Ubuntu WSL2 héberge la chaîne Linux DevOps.
+Windows héberge l'interface graphique, les applications desktop et l'administration de l'hôte. Ubuntu WSL2 héberge la chaîne Linux DevOps. OpenClaw et `clawops`, lorsqu'ils sont utilisés, restent Windows-native.
 
 Docker Desktop n'est pas requis : Docker Engine tourne directement dans Ubuntu.
 
@@ -96,21 +96,31 @@ L'appartenance au groupe `docker` donne un niveau de privilège élevé dans Lin
 
 ## Terminal quotidien
 
-WezTerm est configuré pour offrir deux environnements clairement séparés :
+WezTerm expose trois contextes clairement séparés :
 
 ```text
 WezTerm
-├── Ubuntu / Bash DevOps   <- profil principal
-└── PowerShell 7           <- administration Windows
+├── Ubuntu DevOps (WSL2)          <- profil principal et défaut
+├── PowerShell 7                  <- administration Windows
+└── OpenClaw / clawops (Windows)  <- CLI IA Windows-native
 ```
 
-Le but est d'éviter les ambiguïtés du type :
+Le profil Ubuntu reste le défaut pour Docker, Kubernetes, Terraform, Ansible, AWS et les projets Linux. Le profil PowerShell 7 reste destiné à Windows.
+
+Le profil OpenClaw ouvre lui aussi PowerShell 7 sous Windows. Il se place sous `D:\AI\OpenClaw` lorsque cette racine existe, vérifie simplement si `openclaw` et `clawops` sont visibles dans la session, puis laisse le terminal interactif à l'utilisateur. Il ne déclenche aucune opération OpenClaw automatiquement.
+
+Après une première installation OpenClaw, relancer WezTerm est recommandé afin que le nouveau processus hérite du `PATH` utilisateur mis à jour par l'installateur.
+
+Cette organisation évite les ambiguïtés suivantes :
 
 ```text
 commande Linux lancée dans PowerShell
 commande Windows lancée comme si elle était native Linux
+OpenClaw déplacé dans WSL2 uniquement pour l'ergonomie du terminal
 projet Linux ouvert depuis un filesystem Windows inadapté
 ```
+
+Le détail de l'intégration OpenClaw est dans [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
@@ -245,6 +255,8 @@ La validation peut contrôler :
 - actionlint ;
 - smoke tests IaC.
 
+La configuration WezTerm appartient au composant « poste de travail » vérifié par `install.ps1 -Mode Verify`. Lorsque OpenClaw fait partie du périmètre, sa disponibilité réelle est validée séparément avec `-ValidateOpenClawAI`.
+
 Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ---
@@ -262,10 +274,10 @@ Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 ## Règle à retenir
 
 ```text
-Windows = hôte / UI / administration Windows
+Windows = hôte / UI / administration Windows / OpenClaw
 Ubuntu  = Linux DevOps
-VS Code = pont entre les deux
-WezTerm = accès quotidien aux deux univers
+VS Code = pont entre Windows et les projets WSL2
+WezTerm = accès quotidien aux contextes séparés
 ```
 
-Cette séparation donne à Windows les avantages d'un vrai poste desktop tout en conservant un environnement Linux natif pour les workflows DevOps.
+Une interface terminal unique ne signifie pas un runtime unique. Chaque outil reste dans l'environnement défini par l'architecture du projet.
