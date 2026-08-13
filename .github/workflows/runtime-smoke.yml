@@ -60,7 +60,7 @@ jobs:
           grep -q '02_validate_wsl_backend.ps1' scripts/bootstrap/15_openclaw_ai.ps1
           grep -q 'WslBackendValidatorPresent' scripts/bootstrap/15_openclaw_ai.ps1
           grep -q 'Qualification backend DevOps WSL2' scripts/bootstrap/15_openclaw_ai.ps1
-      - name: Validate V7 capacity policy wiring
+      - name: Validate backup capacity policy wiring
         shell: bash
         run: |
           set -euo pipefail
@@ -72,7 +72,7 @@ jobs:
           ' config/backup/v7-policy.json >/dev/null
           grep -q 'capacity-preflight.json' scripts/backup/60_create_backup_v7.ps1
           grep -q 'RequiredTargetFreeGB' scripts/backup/60_create_backup_v7.ps1
-      - name: Validate V8 responsiveness wiring through V9
+      - name: Validate responsiveness wiring through orchestrator
         shell: bash
         run: |
           set -euo pipefail
@@ -88,7 +88,7 @@ jobs:
             (.startup.automaticDisable == false) and
             (.backgroundApps.globalDisable == false)
           ' config/windows/v8/responsiveness.json >/dev/null
-          grep -Fq "Add-PlanItem -Name 'Réactivité Windows V8'" install.ps1
+          grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
           grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
           grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
 
@@ -117,10 +117,10 @@ jobs:
           }
           $responsiveness = Get-Content -Raw .\reports\windows\v8-responsiveness.json | ConvertFrom-Json
           if ($responsiveness.Version -ne 'V8' -or $null -eq $responsiveness.State) {
-            throw 'V8 responsiveness report is incomplete.'
+            throw 'Internal responsiveness report is incomplete.'
           }
           if ($responsiveness.StartupAutomaticDisable -ne $false -or $responsiveness.BackgroundGlobalDisable -ne $false) {
-            throw 'V8 must not automatically disable startup or background apps.'
+            throw 'Responsiveness policy must not automatically disable startup or background apps.'
           }
           $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json
           if ($null -eq $benchmark.Timestamp -or $null -eq $benchmark.AutomaticManagedPagefile) {
