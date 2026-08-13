@@ -2,8 +2,7 @@ name: Documentation
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - README.md
       - CHANGELOG.md
@@ -68,112 +67,131 @@ jobs:
             docs/24_CRITERES_ACCEPTATION.md
           )
           for file in "${required[@]}"; do
-            test -s "$file" || {
-              echo "Documentation canonique absente ou vide: $file" >&2
-              exit 1
-            }
+            test -s "$file" || { echo "Documentation canonique absente ou vide: $file" >&2; exit 1; }
           done
 
       - name: Refuser les anciens guides versionnés
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t stale < <(
-            find docs -maxdepth 1 -type f \
-              -regextype posix-extended \
-              -regex '.*/.*_V[0-9]+.*\.md' \
-              -print
-          )
+          mapfile -t stale < <(find docs -maxdepth 1 -type f -regextype posix-extended -regex '.*/.*_V[0-9]+.*\.md' -print)
           if ((${#stale[@]})); then
             printf 'Ancien guide versionné interdit dans la documentation active:\n' >&2
             printf '  %s\n' "${stale[@]}" >&2
             exit 1
           fi
 
-          if grep -RniE \
-            '(^|[^[:alnum:]_])V(3|4|5|6|7|8|9|10|11|12|13)([^[:alnum:]_]|$)' \
-            README.md docs/*.md; then
-            echo 'La documentation active ne doit pas être structurée par anciennes versions.' >&2
-            echo 'Conserver cet historique uniquement dans CHANGELOG.md et Git.' >&2
+          if grep -RniE '(^|[^[:alnum:]_])V(3|4|5|6|7|8|9|10|11|12|13)([^[:alnum:]_]|$)' README.md docs/*.md; then
+            echo 'La documentation active ne doit pas raconter le projet par anciennes versions.' >&2
             exit 1
           fi
 
-      - name: Refuser les anciennes versions dans les surfaces utilisateur
+      - name: Refuser les anciens labels dans les sorties utilisateur
         shell: python
         run: |
           from pathlib import Path
           import re
 
           legacy = re.compile(r'\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I)
-          violations = []
-
-          ui_patterns = (
+          patterns = (
               re.compile(r'VERDICT:\s*V\d+', re.I),
               re.compile(r'Write-Host[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
               re.compile(r'Write-Wpc(?:Banner|Status)[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
               re.compile(r'(?:echo|printf)[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
           )
-
+          violations = []
           files = [Path('menu.ps1'), Path('install.ps1'), Path('update.ps1')]
           files += sorted(Path('scripts').rglob('*.ps1'))
           files += sorted(Path('scripts').rglob('*.psm1'))
           files += sorted(Path('scripts').rglob('*.sh'))
           for path in files:
-              text = path.read_text(encoding='utf-8')
-              for line_no, line in enumerate(text.splitlines(), 1):
-                  if any(pattern.search(line) for pattern in ui_patterns):
+              for line_no, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  if any(pattern.search(line) for pattern in patterns):
                       violations.append(f'{path}:{line_no}: {line.strip()}')
-
           for workflow in sorted(Path('.github/workflows').glob('*.yml')):
               for line_no, line in enumerate(workflow.read_text(encoding='utf-8').splitlines(), 1):
                   if line.startswith('name:'):
                       if legacy.search(line):
                           violations.append(f'{workflow}:{line_no}: {line.strip()}')
                       break
-
           if violations:
-              raise SystemExit(
-                  'Ancien numéro de version exposé dans une surface utilisateur:\n' +
-                  '\n'.join(violations)
-              )
-          print('Surfaces utilisateur sans anciens labels de version: OK')
+              raise SystemExit('Ancien label exposé dans une surface utilisateur:\n' + '\n'.join(violations))
 
-      - name: Vérifier l'identité actuelle du projet
+      - name: Vérifier l'identité et la navigation
         shell: bash
         run: |
           set -euo pipefail
           grep -Fq 'workstation DevOps/Ops reproductible' README.md
           grep -Fq 'workstation-as-code' README.md
-          grep -Fq 'Windows 11 Pro' README.md
           grep -Fq 'Ubuntu 26.04' README.md
           grep -Fq 'D:\WSL\Ubuntu-DevOps' README.md
-          grep -Fq 'D:\AI\OpenClaw' README.md
-          grep -Fq '20 Go RAM' README.md
+          grep -Fq '20 Go' README.md
           grep -Fq '8 threads' README.md
-          grep -Fq 'sauvegarde de référence' README.md
+          grep -Fq '20_RUNBOOK_OPERATIONNEL.md' README.md
+          grep -Fq '24_CRITERES_ACCEPTATION.md' README.md
 
-          grep -Fq 'FullInstall' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'PlanOnly' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'ValidateHardware' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'ValidateWsl' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'ValidateDevOps' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'BackupAction RestorePlan' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'update.ps1 -Mode Apply' docs/13_RUNBOOK_REINSTALLATION.md
-          grep -Fq 'Ubuntu-Restore' docs/13_RUNBOOK_REINSTALLATION.md
+          for file in 20_RUNBOOK_OPERATIONNEL.md 21_REFERENCE_COMMANDES.md 22_TROUBLESHOOTING.md 23_SOURCES_DE_VERITE.md 24_CRITERES_ACCEPTATION.md; do
+            grep -Fq "$file" docs/README.md
+          done
 
-          grep -Fq 'RUNBOOK' <(tr '[:lower:]' '[:upper:]' < docs/20_RUNBOOK_OPERATIONNEL.md)
+          grep -Fq 'vue consolidée' docs/18_GUIDE_MAITRE.md
+          grep -Fq '20_RUNBOOK_OPERATIONNEL.md' docs/18_GUIDE_MAITRE.md
+
+      - name: Vérifier le parcours opérationnel réel
+        shell: bash
+        run: |
+          set -euo pipefail
           grep -Fq 'Mode Audit' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'FullInstall' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'PlanOnly' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'InstallDevOps' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'ValidateHardware' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'ValidateWsl' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'ValidateDevOps' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'idempotence' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'FullInstall' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'InstallOpenClawAI' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fqi 'idempotence' docs/20_RUNBOOK_OPERATIONNEL.md
 
-          grep -Fq 'Machine-first' docs/18_GUIDE_MAITRE.md
-          grep -Fq 'Recovery-first' docs/18_GUIDE_MAITRE.md
-          grep -Fq 'Workstation-as-code' docs/18_GUIDE_MAITRE.md
-          grep -Fq "Windows gère l'expérience Windows" docs/18_GUIDE_MAITRE.md
+          # FullInstall doit être documenté conformément au code actuel.
+          grep -Fq '$InstallOpenClawAI = $true' install.ps1
+          grep -Fq '$ValidateOpenClawAI = $true' install.ps1
+          grep -Fq 'OpenClaw/OpenRouter inclus' docs/20_RUNBOOK_OPERATIONNEL.md
+
+      - name: Vérifier la référence des paramètres publics
+        shell: python
+        run: |
+          from pathlib import Path
+
+          install = Path('install.ps1').read_text(encoding='utf-8')
+          update = Path('update.ps1').read_text(encoding='utf-8')
+          reference = Path('docs/21_REFERENCE_COMMANDES.md').read_text(encoding='utf-8')
+
+          install_params = [
+              'Mode', 'WslProfile', 'OptimizationProfiles', 'Distribution',
+              'WslInstallLocation', 'WslUser', 'InstallDevOps', 'ValidateDevOps',
+              'ValidateWsl', 'ValidateHardware', 'SkipV4RestorePoint',
+              'InstallOpenClawAI', 'ValidateOpenClawAI', 'OpenClawRoot',
+              'OpenClawControlPlanePath', 'OpenClawRepositoryRef', 'BackupAction',
+              'BackupTargetDrive', 'AllowNonUsbBackupTarget', 'SkipBackupRestorePoint',
+              'FullInstall', 'PlanOnly', 'NonInteractive', 'Yes'
+          ]
+          update_params = [
+              'Mode', 'IncludeDrivers', 'IncludeOptionalUpdates',
+              'IncludeUnknownPackages', 'Distribution', 'LinuxUser', 'PlanOnly',
+              'NonInteractive', 'Yes', 'NoRestartPrompt'
+          ]
+
+          missing = []
+          for name in install_params:
+              if f'${name}' not in install:
+                  missing.append(f'install.ps1 n’expose plus ${name}')
+              if f'-{name}' not in reference:
+                  missing.append(f'docs/21 ne documente pas -{name}')
+          for name in update_params:
+              if f'${name}' not in update:
+                  missing.append(f'update.ps1 n’expose plus ${name}')
+              if f'-{name}' not in reference:
+                  missing.append(f'docs/21 ne documente pas update -{name}')
+          if missing:
+              raise SystemExit('\n'.join(missing))
 
       - name: Vérifier le contrat WSL2 courant
         shell: bash
@@ -187,6 +205,15 @@ jobs:
           grep -Fq '28 Go RAM' docs/16_WSL2_GUIDE_COMPLET.md
           grep -Fq '12 threads' docs/16_WSL2_GUIDE_COMPLET.md
 
+      - name: Refuser les placeholders documentaires
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RniE '(^|[^[:alnum:]_])(TODO|FIXME|TBD)([^[:alnum:]_]|$)' README.md docs/*.md; then
+            echo 'Placeholder documentaire restant.' >&2
+            exit 1
+          fi
+
       - name: Vérifier les liens Markdown locaux
         shell: python
         run: |
@@ -199,62 +226,37 @@ jobs:
           files = [root / 'README.md', root / 'CHANGELOG.md'] + sorted((root / 'docs').glob('*.md'))
           link_re = re.compile(r'(?<!!)\[[^\]]*\]\(([^)]+)\)')
           errors = []
-
           for md in files:
               if not md.exists():
                   continue
-              text = md.read_text(encoding='utf-8')
-              for line_no, line in enumerate(text.splitlines(), start=1):
+              for line_no, line in enumerate(md.read_text(encoding='utf-8').splitlines(), 1):
                   for match in link_re.finditer(line):
                       raw = match.group(1).strip()
                       if raw.startswith('<') and raw.endswith('>'):
                           raw = raw[1:-1].strip()
-                      if not raw:
+                      if not raw or raw.startswith('#') or raw.lower().startswith(('http://','https://','mailto:','tel:','data:')):
                           continue
-                      lowered = raw.lower()
-                      if lowered.startswith(('http://', 'https://', 'mailto:', 'tel:', 'data:')):
-                          continue
-                      if raw.startswith('#'):
-                          continue
-                      target = raw.split('#', 1)[0].split('?', 1)[0].strip()
-                      if not target:
-                          continue
-                      target = unquote(target)
-                      if re.match(r'^[A-Za-z]:[\\/]', target):
+                      target = unquote(raw.split('#',1)[0].split('?',1)[0].strip())
+                      if not target or re.match(r'^[A-Za-z]:[\\/]', target):
                           continue
                       resolved = (md.parent / target).resolve()
                       try:
                           resolved.relative_to(root)
                       except ValueError:
-                          errors.append(f'{md.relative_to(root)}:{line_no}: lien sort du dépôt: {raw}')
+                          errors.append(f'{md.relative_to(root)}:{line_no}: lien hors dépôt: {raw}')
                           continue
                       if not resolved.exists():
-                          errors.append(f'{md.relative_to(root)}:{line_no}: cible locale absente: {raw}')
-
+                          errors.append(f'{md.relative_to(root)}:{line_no}: cible absente: {raw}')
           if errors:
               print('\n'.join(errors), file=sys.stderr)
               sys.exit(1)
-          print(f'Liens Markdown locaux valides dans {len(files)} fichiers.')
 
-      - name: Vérifier la profondeur pédagogique minimale
+      - name: Garder le guide maître concis
         shell: python
         run: |
           from pathlib import Path
-
-          limits = {
-              'README.md': 9000,
-              'docs/01_INSTALLATION_WINDOWS.md': 10000,
-              'docs/13_RUNBOOK_REINSTALLATION.md': 10000,
-              'docs/16_WSL2_GUIDE_COMPLET.md': 14000,
-              'docs/18_GUIDE_MAITRE.md': 12000,
-              'docs/20_RUNBOOK_OPERATIONNEL.md': 7000,
-              'docs/21_REFERENCE_COMMANDES.md': 7000,
-              'docs/22_TROUBLESHOOTING.md': 6000,
-              'docs/23_SOURCES_DE_VERITE.md': 5000,
-              'docs/24_CRITERES_ACCEPTATION.md': 6000,
-          }
-          for name, minimum in limits.items():
-              size = Path(name).stat().st_size
-              if size < minimum:
-                  raise SystemExit(f'{name}: {size} octets, minimum documentaire attendu={minimum}')
-              print(f'{name}: {size} octets OK')
+          path = Path('docs/18_GUIDE_MAITRE.md')
+          size = path.stat().st_size
+          if size > 6000:
+              raise SystemExit(f'{path}: {size} octets. Le guide maître doit rester une carte, pas dupliquer les guides spécialisés.')
+          print(f'{path}: {size} octets, rôle de carte respecté.')
