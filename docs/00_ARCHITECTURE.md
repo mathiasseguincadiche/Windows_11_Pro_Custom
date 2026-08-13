@@ -1,154 +1,61 @@
 # Architecture — Windows 11 Pro Custom
 
-Ce document décrit **où vit chaque composant, qui en est responsable et quelles frontières ne doivent pas être mélangées**.
+Ce document définit l'architecture active de la workstation : **où vit chaque composant, quel environnement l'exécute et quelles frontières doivent rester stables**.
 
-Pour la vision consolidée du projet : [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md).
-
----
+Pour une vue courte : [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md). Pour le parcours d'exécution : [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 
 ## Vue d'ensemble
 
 ```text
-                         WINDOWS 11 PRO
-┌─────────────────────────────────────────────────────────────────┐
-│ Interface / applications / drivers / sécurité                  │
-│                                                                 │
-│  PowerShell 7        VS Code                 WezTerm             │
-│       │                 │                       │                │
-│       │                 └──── WSL Remote ──────┤                │
-│       │                                         │                │
-│       ├── install.ps1 / update.ps1              │                │
-│       └── menu.ps1                              │                │
-│                                                 ▼                │
-│                                         Ubuntu WSL2              │
-│                                    ┌───────────────────────┐     │
-│                                    │ Bash DevOps           │     │
-│                                    │ Docker Engine         │     │
-│                                    │ kubectl / Helm        │     │
-│                                    │ Terraform / Ansible   │     │
-│                                    │ AWS / gh / qualité    │     │
-│                                    └───────────────────────┘     │
-└─────────────────────────────────────────────────────────────────┘
+                         Windows 11 Pro
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+ desktop / pilotes       VS Code Windows          WezTerm
+ PowerShell / WinGet            │                    │
+ Windows Update                 │            ┌───────┼────────┐
+                               │            │       │        │
+                               ▼            ▼       ▼        ▼
+                              WSL2        Ubuntu   PS7    OpenClaw
+                               │          DevOps          / clawops
+                               │            │                │
+                               └────────────┤                │
+                                            ▼                ▼
+                                      Linux DevOps     D:\AI\OpenClaw
+                                      Docker / K8s     Windows-native
+                                      Terraform        control-plane
+                                      Ansible / AWS
 ```
 
-Le projet utilise Windows comme **hôte principal** et WSL2 comme **backend Linux DevOps**.
-
----
-
-## Architecture physique du stockage
+La séparation de responsabilités est :
 
 ```text
-Crucial T705 #1
-└── C: NTFS
-    ├── Windows 11 Pro
-    ├── applications Windows
-    ├── drivers
-    └── profil utilisateur
-
-Crucial T705 #2
-└── D: NTFS
-    ├── données
-    ├── D:\WSL\Ubuntu-DevOps
-    ├── D:\WSL\swap\wsl-swap.vhdx
-    ├── D:\AI\OpenClaw
-    ├── ISO
-    └── exports
-
-Disque USB séparé
-└── sauvegarde de référence
+Windows  -> hôte, applications, pilotes, administration et runtime WSL
+Ubuntu   -> backend Linux DevOps et workspaces Linux
+WezTerm  -> point d'entrée vers les contextes appropriés
+OpenClaw -> extension IA Windows-native, optionnelle
 ```
 
-### Invariant
+Une interface terminal commune ne transforme pas ces environnements en un runtime unique.
 
-Il n'existe **aucune partition EXT4 physique** prévue par le projet.
-
-Le filesystem ext4 Ubuntu se trouve dans le VHDX WSL2, lui-même stocké sur `D:` NTFS.
-
----
-
-## Pourquoi deux SSD ?
-
-### `C:` — système
-
-Responsabilités :
-
-- Windows 11 Pro ;
-- applications Windows ;
-- drivers ;
-- profil utilisateur ;
-- composants directement liés à l'OS.
-
-### `D:` — données et environnements lourds
-
-Responsabilités :
-
-- données ;
-- WSL2 ;
-- OpenClaw ;
-- ISO ;
-- exports et artefacts volumineux.
-
-Cette séparation limite la pression sur le volume système tout en conservant les deux SSD dans une architecture Windows cohérente et sauvegardable.
-
----
-
-## Windows reste l'hôte
-
-Windows est responsable de :
+## Stockage
 
 ```text
-matériel / drivers
-sécurité Windows
-Windows Update
-WinGet
-PowerShell
-applications graphiques
-VS Code UI
-WezTerm
-gaming
-runtime WSL
-backup Windows
+C: NTFS
+└── Windows 11 Pro et applications système
+
+D: NTFS
+├── données
+├── D:\WSL\Ubuntu-DevOps
+├── D:\AI\OpenClaw
+├── ISO
+└── exports
 ```
 
-Le dépôt ne cherche pas à déléguer ces responsabilités à Linux.
+Ubuntu utilise ext4 dans son VHDX WSL2 stocké sous `D:\WSL\Ubuntu-DevOps`.
 
----
-
-## WSL2 reste la plateforme Linux DevOps
-
-Ubuntu est responsable de :
-
-```text
-Bash
-Git des projets Linux
-Docker Engine
-Compose / Buildx
-kubectl
-Helm
-Minikube
-kind
-Terraform
-Ansible
-AWS CLI
-GitHub CLI
-Trivy
-outils qualité
-```
-
-Contrat actuel :
-
-```text
-Ubuntu 26.04
-D:\WSL\Ubuntu-DevOps
-```
-
-Guide : [`06_WSL2.md`](06_WSL2.md).
-
----
-
-## Frontière des fichiers
-
-Pour un projet Linux :
+Les projets Linux actifs restent dans :
 
 ```text
 ~/projects
@@ -156,205 +63,125 @@ Pour un projet Linux :
 ~/repositories
 ```
 
-Les chemins suivants ne doivent pas devenir les racines de travail principales :
+`/mnt/c` et `/mnt/d` servent d'accès aux fichiers Windows, pas de racines quotidiennes aux projets Linux.
+
+Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
+
+## Windows et Ubuntu
+
+Windows reste l'hôte pour l'expérience desktop, PowerShell 7, VS Code, WezTerm, les applications Windows et le runtime WSL.
+
+Ubuntu 26.04 reste le backend Linux DevOps pour :
 
 ```text
-/mnt/c
-/mnt/d
+Bash / Git
+Docker / Compose / Buildx
+kubectl / Helm / Minikube / kind
+Terraform / Ansible
+AWS CLI / GitHub CLI
+outils qualité
 ```
 
-Un build Linux, Git, Docker ou un gestionnaire de dépendances peut manipuler des milliers de petits fichiers. Le filesystem Linux du VHDX fournit la sémantique et les performances attendues.
+Guide : [`06_WSL2.md`](06_WSL2.md).
 
-Cela n'empêche pas d'accéder ponctuellement aux fichiers Windows depuis WSL.
+## WezTerm : un point d'entrée, trois contextes
 
----
-
-## Terminal et éditeur
+La source versionnée est `config/wezterm/wezterm.lua`.
 
 ```text
 WezTerm
-├── Ubuntu / Bash DevOps  <- principal pour Linux
-└── PowerShell 7          <- administration Windows
-
-VS Code Windows
-└── extension WSL
-    └── Ubuntu
-        └── Bash / outils Linux
+├── Ubuntu DevOps (WSL2)          <- profil par défaut
+├── PowerShell 7                  <- administration Windows
+└── OpenClaw / clawops (Windows)  <- CLI IA Windows-native
 ```
 
-Le profil shell géré est chargé depuis :
+Le profil Ubuntu exécute les outils Linux dans WSL2. Le profil PowerShell reste le contexte Windows général.
 
-```text
-~/.config/windows11-pro-custom/devops.sh
-```
+Le profil OpenClaw ouvre PowerShell 7 sous Windows, prépare uniquement la session terminal avec les chemins et variables OpenClaw déjà gérés par la workstation, puis vérifie la disponibilité de `openclaw` et `clawops`.
 
-Une personnalisation locale non versionnée peut vivre dans :
-
-```text
-~/.config/windows11-pro-custom/local.sh
-```
+Il ne remplace ni l'installation ni la validation OpenClaw. `scripts/windows/31_wezterm.ps1` vérifie le contrat des trois profils et la conformité de la configuration utilisateur.
 
 Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
----
+## VS Code
 
-## OpenClaw
+```text
+VS Code Windows
+      ↓
+extension WSL
+      ↓
+Ubuntu
+      ↓
+projet sous /home/<user>/...
+      ↓
+outils Linux du projet
+```
 
-L'intégration optionnelle est isolée sous :
+VS Code reste une application Windows tandis que le runtime des projets Linux reste dans Ubuntu.
+
+## OpenClaw/OpenRouter
+
+L'intégration optionnelle vit sous :
 
 ```text
 D:\AI\OpenClaw
 ```
 
-Le projet Windows prépare l'environnement et la qualification ; le dépôt OpenClaw/OpenRouter reste responsable de la logique métier IA.
+Répartition des responsabilités :
+
+```text
+Windows_11_Pro_Custom
+└── hôte + stockage + WSL2 + WezTerm + validation d'intégration
+
+openclaw_openrouter
+└── runtime OpenClaw + clawops + logique fonctionnelle IA
+```
+
+Le profil WezTerm OpenClaw fournit un accès CLI au runtime déjà installé sans déplacer OpenClaw vers WSL2.
 
 Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
-
----
 
 ## Orchestration
 
 ```text
 état réel
    ↓
-Verify
+Audit / Verify
    ↓
-plan complet
+plan factuel
    ↓
-Apply uniquement sur les écarts
+Apply sur les écarts
    ↓
 re-Verify
    ↓
 logs / rapports / verdict
 ```
 
-Le point d'entrée technique principal est `install.ps1`.
-
-Le point d'entrée humain est `menu.ps1`.
+`install.ps1` est le point d'entrée technique principal. `menu.ps1` est le point d'entrée humain.
 
 Guides : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) et [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
-
----
-
-## Mises à jour
-
-```text
-update.ps1
-├── Windows Update
-├── WinGet
-├── WSL runtime
-├── Ubuntu / APT
-├── outils DevOps épinglés
-└── extensions VS Code
-```
-
-Les couches restent séparées : APT ne met pas à jour Windows, WinGet ne choisit pas arbitrairement les versions Terraform, et Windows Update ne doit pas imposer tous les drivers facultatifs.
-
-Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
-
----
-
-## Sauvegarde
-
-```text
-État réel de la workstation
-│
-├── System Restore
-│   └── rollback Windows léger
-│
-├── WindowsImageBackup
-│   └── C: + D: + volumes critiques
-│
-├── export WSL VHDX
-│   └── SHA-256
-│
-└── GitHub
-    └── reconstruction du socle versionné
-```
-
-La création et la validation peuvent être automatisées. La restauration destructive reste une décision humaine.
-
-Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
-
----
-
-## Sécurité
-
-### Automatisable
-
-- vérifier Secure Boot / TPM / virtualisation ;
-- mesurer Defender ;
-- appliquer uniquement des exclusions explicitement approuvées ;
-- contrôler les versions ;
-- créer et vérifier des sauvegardes ;
-- vérifier des hashes ;
-- produire des plans de reprise.
-
-### Non automatisé par sécurité
-
-- formatage des SSD ;
-- flash BIOS ;
-- PBO/overclocking ;
-- fréquence mémoire forcée ;
-- restauration bare-metal ;
-- suppression destructive d'une distribution WSL ;
-- suppression de données utilisateur/OpenClaw.
-
----
-
-## Architecture du dépôt
-
-```text
-Windows_11_Pro_Custom/
-├── README.md
-├── START_MENU.cmd
-├── menu.ps1
-├── install.ps1
-├── update.ps1
-├── config/
-├── manifests/
-├── scripts/
-│   ├── backup/
-│   ├── bootstrap/
-│   ├── core/
-│   ├── defender/
-│   ├── updates/
-│   ├── windows/
-│   └── wsl/
-├── docs/
-├── logs/
-├── reports/          # créé/alimenté à l'exécution
-└── .github/workflows/
-```
-
----
 
 ## Sources de vérité
 
 | Besoin | Source principale |
 | --- | --- |
-| Matériel attendu | politiques de `config/hardware/` |
 | WSL version/emplacement | `config/wsl/runtime-contract.json` |
 | Ressources WSL | `config/wsl/*.wslconfig` |
 | Versions DevOps | `config/devops/tool-versions.env` |
-| Logiciels Windows | `manifests/winget/apps-core.json` |
-| OpenClaw | `config/openclaw/control-plane.json` |
-| Sauvegarde | politique sous `config/backup/` |
-| Mises à jour | politique sous `config/updates/` |
+| Terminal WezTerm | `config/wezterm/wezterm.lua` |
+| Déploiement WezTerm | `scripts/windows/31_wezterm.ps1` |
+| Applications Windows | `manifests/winget/apps-core.json` |
+| Pin OpenClaw | `config/openclaw/control-plane.json` |
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
-| Utilisation humaine | `menu.ps1` |
+| Interface humaine | `menu.ps1` |
 
-Les suffixes historiques éventuellement présents dans certains noms de fichiers internes sont des détails d'implémentation ; la documentation active décrit **le contrat courant**.
-
----
+La hiérarchie complète est définie dans [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
 
 ## Objectifs architecturaux
 
-1. **Reproductibilité** — reconstruire sans mémoire implicite.
-2. **Performance I/O** — Linux travaille sur ext4 dans WSL2.
-3. **Sécurité conservée** — pas de debloat destructif.
-4. **Idempotence** — ne pas réinstaller ce qui est déjà correct.
-5. **Réversibilité** — rollback lorsque l'état initial est fiable.
-6. **Observabilité** — logs et rapports persistants.
-7. **Disaster recovery** — sauvegarde réelle distincte de Git.
-8. **Pédagogie** — comprendre le présent sans devoir apprendre l'historique du dépôt.
+1. **Reproductibilité** — reconstruire la workstation sans mémoire implicite.
+2. **Séparation des responsabilités** — Windows, WSL2, terminal et OpenClaw gardent leurs rôles.
+3. **Performance I/O** — les projets Linux travaillent sur ext4 dans WSL2.
+4. **Idempotence** — un composant conforme ne doit pas être réinstallé sans raison.
+5. **Observabilité** — l'état et les validations restent explicables.
+6. **Pédagogie** — la documentation décrit l'état courant plutôt que l'historique du dépôt.

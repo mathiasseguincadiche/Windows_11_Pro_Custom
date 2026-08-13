@@ -183,21 +183,29 @@ Voir [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-# Étape 6 — vérifier la stack DevOps
+# Étape 6 — vérifier la stack DevOps et le terminal
 
-Installation/réparation ciblée :
+Installation/réparation DevOps ciblée :
 
 ```powershell
 .\install.ps1 -Mode Apply -InstallDevOps
 ```
 
-Validation :
+Validation DevOps :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
 ```
 
-Les versions reproductibles sont définies dans `config/devops/tool-versions.env`.
+La configuration WezTerm appartient à la workstation elle-même et est vérifiée par :
+
+```powershell
+.\install.ps1 -Mode Verify
+```
+
+Le résultat attendu conserve les trois contextes : Ubuntu DevOps par défaut, PowerShell 7 Windows et OpenClaw/clawops Windows lorsque l'intégration IA est utilisée.
+
+Les versions reproductibles DevOps sont définies dans `config/devops/tool-versions.env`.
 
 Voir [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
@@ -231,13 +239,12 @@ Puis validée :
 
 Si `-FullInstall` a été utilisé, ces deux intentions ont déjà été activées par le raccourci.
 
-Une fois l'installation validée :
+Une fois l'intégration validée :
 
-1. fermer une ancienne instance WezTerm si elle était ouverte avant l'installation ;
-2. relancer WezTerm ;
-3. choisir le profil `OpenClaw / clawops (Windows)` ;
-4. confirmer que le profil indique les deux CLI disponibles ;
-5. effectuer un smoke test non mutatif.
+1. ouvrir WezTerm ;
+2. choisir `OpenClaw / clawops (Windows)` ;
+3. confirmer que le profil indique les deux CLI disponibles ;
+4. effectuer le smoke test CLI.
 
 ```powershell
 openclaw --version
@@ -245,7 +252,9 @@ clawops version
 clawops platform check
 ```
 
-Ce smoke test ergonomique ne remplace pas `-ValidateOpenClawAI`. Il démontre que l'utilisateur peut réellement exploiter les CLI depuis le terminal prévu par le projet.
+Le profil recharge lui-même dans sa session les variables et chemins gérés nécessaires ; une relance préalable de WezTerm n'est pas requise uniquement pour rafraîchir cet environnement.
+
+Ce smoke test prouve l'accès utilisateur aux CLI depuis le terminal prévu. Il ne remplace pas `-ValidateOpenClawAI`.
 
 Les secrets restent hors de Git.
 
@@ -343,6 +352,7 @@ Le projet peut être déclaré prêt lorsque :
 - Windows et le matériel sont qualifiés ;
 - WSL2 respecte son contrat ;
 - la stack DevOps est qualifiée ;
+- WezTerm respecte le contrat des trois contextes ;
 - OpenClaw est qualifié si le périmètre l'inclut ;
 - le profil WezTerm OpenClaw est exploitable si OpenClaw est utilisé ;
 - les frontières Windows/Linux sont respectées ;

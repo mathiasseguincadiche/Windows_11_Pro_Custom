@@ -1,6 +1,6 @@
 # Guide maître — vue consolidée du projet
 
-Ce document n'est plus une encyclopédie du dépôt. Son rôle est de donner **une vue unique du projet et d'orienter vers le document qui fait réellement référence pour chaque sujet**.
+Ce document donne **une vue unique du projet** et oriente vers le guide qui fait réellement référence pour chaque sujet. Il reste volontairement court afin de ne pas dupliquer les procédures spécialisées.
 
 Pour découvrir le projet, lire d'abord le [`README.md`](../README.md). Pour le réaliser, suivre [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 
@@ -13,7 +13,10 @@ Windows 11 Pro
    ↓
 configuration versionnée
    ↓
-WSL2 Ubuntu / stack DevOps
+WezTerm / VS Code
+   ├── Ubuntu WSL2 -> Linux DevOps
+   ├── PowerShell 7 -> Windows
+   └── OpenClaw / clawops -> Windows-native, si utilisé
    ↓
 audit et convergence
    ↓
@@ -30,19 +33,24 @@ Le principe central est celui d'une **workstation-as-code** : l'état réel est 
 
 ```text
 Windows
-└── desktop / pilotes / sécurité / PowerShell / VS Code / WSL runtime
+└── desktop / pilotes / PowerShell / VS Code / WezTerm / runtime WSL
 
 WSL2 Ubuntu
 └── Bash / Git / Docker / Kubernetes / Terraform / Ansible / AWS
+
+WezTerm
+├── Ubuntu DevOps (WSL2)          <- défaut
+├── PowerShell 7                  <- Windows
+└── OpenClaw / clawops (Windows)  <- IA Windows-native
+
+OpenClaw, si utilisé
+└── D:\AI\OpenClaw + control-plane épinglé
 
 Orchestration
 └── install.ps1 / update.ps1 / menu.ps1
 
 Preuves
 └── logs / reports / validateurs
-
-Recovery
-└── sauvegarde Windows + export WSL + runbook de reprise
 ```
 
 Les projets Linux actifs restent sur le filesystem ext4 de WSL2, sous `~/projects`, `~/labs` ou `~/repositories`.
@@ -69,11 +77,11 @@ Une exécution réussie d'`Apply` ne suffit pas : la conformité vient de l'éta
 
 | Sujet | Référence |
 | --- | --- |
-| Architecture | [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) |
+| Architecture et frontières | [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) |
 | Installation Windows | [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) |
 | Stockage | [`03_STOCKAGE.md`](03_STOCKAGE.md) |
 | WSL2 | [`06_WSL2.md`](06_WSL2.md) |
-| Stack DevOps | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
+| Stack DevOps et WezTerm | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
 | Backup / restore | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) |
 | Validation | [`11_VALIDATION.md`](11_VALIDATION.md) |
 | Matériel | [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) |
@@ -89,6 +97,6 @@ Une exécution réussie d'`Apply` ne suffit pas : la conformité vient de l'éta
 
 ## Règle de lecture
 
-Ne chercher le détail ici que pour comprendre **comment les grandes briques s'enchaînent**. Les valeurs, commandes, procédures et critères précis appartiennent aux guides spécialisés afin d'éviter les copies divergentes.
+Le guide maître explique **comment les briques s'enchaînent**. Les valeurs, commandes, procédures et critères précis appartiennent aux guides spécialisés.
 
 La documentation active décrit l'état courant ; `CHANGELOG.md` et Git conservent l'historique.
