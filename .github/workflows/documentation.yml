@@ -1,0 +1,194 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - README.md
+      - CHANGELOG.md
+      - docs/**
+      - .github/workflows/documentation.yml
+  pull_request:
+    paths:
+      - README.md
+      - CHANGELOG.md
+      - docs/**
+      - .github/workflows/documentation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  documentation-contract:
+    name: Documentation canonique
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Vérifier les documents canoniques
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            README.md
+            docs/README.md
+            docs/00_ARCHITECTURE.md
+            docs/01_INSTALLATION_WINDOWS.md
+            docs/02_BIOS_DRIVERS.md
+            docs/03_STOCKAGE.md
+            docs/04_OPTIMISATION_WINDOWS.md
+            docs/05_DEFENDER_PERFORMANCE.md
+            docs/06_WSL2.md
+            docs/07_DEVOPS_STACK.md
+            docs/08_APPLICATIONS.md
+            docs/09_GAMING_OLED.md
+            docs/10_BACKUP_RESTORE.md
+            docs/11_VALIDATION.md
+            docs/12_HARDWARE_QUALIFICATION.md
+            docs/13_RUNBOOK_REINSTALLATION.md
+            docs/14_ORCHESTRATION.md
+            docs/15_MISES_A_JOUR.md
+            docs/16_WSL2_GUIDE_COMPLET.md
+            docs/17_CONTROL_CENTER.md
+            docs/18_GUIDE_MAITRE.md
+            docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+          )
+          for file in "${required[@]}"; do
+            test -s "$file" || {
+              echo "Documentation canonique absente ou vide: $file" >&2
+              exit 1
+            }
+          done
+
+      - name: Refuser les anciens guides versionnés
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t stale < <(
+            find docs -maxdepth 1 -type f \
+              -regextype posix-extended \
+              -regex '.*/.*_V[0-9]+.*\.md' \
+              -print
+          )
+          if ((${#stale[@]})); then
+            printf 'Ancien guide versionné interdit dans la documentation active:\n' >&2
+            printf '  %s\n' "${stale[@]}" >&2
+            exit 1
+          fi
+
+          if grep -RniE \
+            '(^|[^[:alnum:]_])V(3|4|5|6|7|8|9|10|11|12|13)([^[:alnum:]_]|$)' \
+            README.md docs/*.md; then
+            echo 'La documentation active ne doit pas être structurée par anciennes versions.' >&2
+            echo 'Conserver cet historique uniquement dans CHANGELOG.md et Git.' >&2
+            exit 1
+          fi
+
+      - name: Vérifier l'identité actuelle du projet
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'workstation DevOps/Ops reproductible' README.md
+          grep -Fq 'workstation-as-code' README.md
+          grep -Fq 'Windows 11 Pro' README.md
+          grep -Fq 'Ubuntu 26.04' README.md
+          grep -Fq 'D:\WSL\Ubuntu-DevOps' README.md
+          grep -Fq 'D:\AI\OpenClaw' README.md
+          grep -Fq '20 Go RAM' README.md
+          grep -Fq '8 threads' README.md
+          grep -Fq 'sauvegarde de référence' README.md
+
+          grep -Fq 'FullInstall' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'PlanOnly' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'ValidateHardware' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'ValidateWsl' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'ValidateDevOps' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'BackupAction RestorePlan' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'update.ps1 -Mode Apply' docs/13_RUNBOOK_REINSTALLATION.md
+          grep -Fq 'Ubuntu-Restore' docs/13_RUNBOOK_REINSTALLATION.md
+
+          grep -Fq 'Machine-first' docs/18_GUIDE_MAITRE.md
+          grep -Fq 'Recovery-first' docs/18_GUIDE_MAITRE.md
+          grep -Fq 'workstation-as-code' docs/18_GUIDE_MAITRE.md
+          grep -Fq 'Windows reste l’hôte' docs/18_GUIDE_MAITRE.md || \
+            grep -Fq 'Windows reste l'"'"'hôte' docs/18_GUIDE_MAITRE.md
+
+      - name: Vérifier le contrat WSL2 courant
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'memory=20GB' docs/06_WSL2.md
+          grep -Fq 'processors=8' docs/06_WSL2.md
+          grep -Fq 'swap=8GB' docs/06_WSL2.md
+          grep -Fq 'memory=20GB' docs/16_WSL2_GUIDE_COMPLET.md
+          grep -Fq 'processors=8' docs/16_WSL2_GUIDE_COMPLET.md
+          grep -Fq '28 Go RAM' docs/16_WSL2_GUIDE_COMPLET.md
+          grep -Fq '12 threads' docs/16_WSL2_GUIDE_COMPLET.md
+
+      - name: Vérifier les liens Markdown locaux
+        shell: python
+        run: |
+          from pathlib import Path
+          from urllib.parse import unquote
+          import re
+          import sys
+
+          root = Path.cwd().resolve()
+          files = [root / 'README.md', root / 'CHANGELOG.md'] + sorted((root / 'docs').glob('*.md'))
+          link_re = re.compile(r'(?<!!)\[[^\]]*\]\(([^)]+)\)')
+          errors = []
+
+          for md in files:
+              if not md.exists():
+                  continue
+              text = md.read_text(encoding='utf-8')
+              for line_no, line in enumerate(text.splitlines(), start=1):
+                  for match in link_re.finditer(line):
+                      raw = match.group(1).strip()
+                      if raw.startswith('<') and raw.endswith('>'):
+                          raw = raw[1:-1].strip()
+                      if not raw:
+                          continue
+                      lowered = raw.lower()
+                      if lowered.startswith(('http://', 'https://', 'mailto:', 'tel:', 'data:')):
+                          continue
+                      if raw.startswith('#'):
+                          continue
+                      target = raw.split('#', 1)[0].split('?', 1)[0].strip()
+                      if not target:
+                          continue
+                      target = unquote(target)
+                      if re.match(r'^[A-Za-z]:[\\/]', target):
+                          continue
+                      resolved = (md.parent / target).resolve()
+                      try:
+                          resolved.relative_to(root)
+                      except ValueError:
+                          errors.append(f'{md.relative_to(root)}:{line_no}: lien sort du dépôt: {raw}')
+                          continue
+                      if not resolved.exists():
+                          errors.append(f'{md.relative_to(root)}:{line_no}: cible locale absente: {raw}')
+
+          if errors:
+              print('\n'.join(errors), file=sys.stderr)
+              sys.exit(1)
+          print(f'Liens Markdown locaux valides dans {len(files)} fichiers.')
+
+      - name: Vérifier la profondeur pédagogique minimale
+        shell: python
+        run: |
+          from pathlib import Path
+
+          limits = {
+              'README.md': 9000,
+              'docs/01_INSTALLATION_WINDOWS.md': 10000,
+              'docs/13_RUNBOOK_REINSTALLATION.md': 10000,
+              'docs/16_WSL2_GUIDE_COMPLET.md': 14000,
+              'docs/18_GUIDE_MAITRE.md': 12000,
+          }
+          for name, minimum in limits.items():
+              size = Path(name).stat().st_size
+              if size < minimum:
+                  raise SystemExit(f'{name}: {size} octets, minimum documentaire attendu={minimum}')
+              print(f'{name}: {size} octets OK')
