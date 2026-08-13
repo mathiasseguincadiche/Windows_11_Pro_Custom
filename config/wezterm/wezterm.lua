@@ -12,6 +12,33 @@ local openclaw_cli = {
   '-Command',
   [[
 $root = 'D:\AI\OpenClaw'
+$environmentNames = @(
+  'OPENCLAW_HOME',
+  'OPENCLAW_STATE_DIR',
+  'OPENCLAW_CONFIG_PATH',
+  'OPENCLAW_WORKSPACE_DIR',
+  'CLAWOPS_HOME',
+  'CLAWOPS_DEPLOYMENT_MODE',
+  'CLAWOPS_WSL_DISTRIBUTION'
+)
+foreach ($name in $environmentNames) {
+  $value = [Environment]::GetEnvironmentVariable($name, 'User')
+  if (-not [string]::IsNullOrWhiteSpace($value)) {
+    Set-Item -Path "Env:$name" -Value $value
+  }
+}
+$managedPaths = @(
+  (Join-Path $root 'npm-global'),
+  (Join-Path $root 'venv\Scripts')
+) | Where-Object { Test-Path -LiteralPath $_ }
+$currentPath = @($env:Path -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+$env:Path = (@($managedPaths + $currentPath) | Select-Object -Unique) -join ';'
+if (Test-Path -LiteralPath (Join-Path $root 'npm-global\openclaw.cmd')) {
+  Set-Alias -Name openclaw -Value openclaw.cmd -Scope Global
+}
+if (Test-Path -LiteralPath (Join-Path $root 'venv\Scripts\clawops.exe')) {
+  Set-Alias -Name clawops -Value clawops.exe -Scope Global
+}
 if (Test-Path -LiteralPath $root) {
   Set-Location -LiteralPath $root
 }
@@ -21,14 +48,14 @@ Write-Host ''
 Write-Host '=== OpenClaw / clawops ===' -ForegroundColor Cyan
 Write-Host "Racine : $root"
 if ($openclaw) {
-  Write-Host "[OK] openclaw : $($openclaw.Source)" -ForegroundColor Green
+  Write-Host "[OK] openclaw : $($openclaw.Definition)" -ForegroundColor Green
 } else {
-  Write-Host '[À FAIRE] openclaw introuvable. Installe/valide OpenClaw puis relance WezTerm.' -ForegroundColor Yellow
+  Write-Host '[À FAIRE] openclaw introuvable. Installe ou valide l’intégration OpenClaw.' -ForegroundColor Yellow
 }
 if ($clawops) {
-  Write-Host "[OK] clawops  : $($clawops.Source)" -ForegroundColor Green
+  Write-Host "[OK] clawops  : $($clawops.Definition)" -ForegroundColor Green
 } else {
-  Write-Host '[À FAIRE] clawops introuvable. Installe/valide OpenClaw puis relance WezTerm.' -ForegroundColor Yellow
+  Write-Host '[À FAIRE] clawops introuvable. Installe ou valide l’intégration OpenClaw.' -ForegroundColor Yellow
 }
 if ($openclaw -and $clawops) {
   Write-Host '[PRÊT] Session CLI Windows-native prête.' -ForegroundColor Green
