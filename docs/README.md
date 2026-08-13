@@ -10,7 +10,7 @@ Le [`README.md`](../README.md) racine est la vitrine du projet. Ici, l'objectif 
 
 | Objectif | Parcours recommandé |
 | --- | --- |
-| Découvrir le projet | [`../README.md`](../README.md) → [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) |
+| Découvrir le projet | [`../README.md`](../README.md) → [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) → [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md) |
 | Réaliser le projet de A à Z | [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) |
 | Installer Windows depuis zéro | [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) → [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) |
 | Comprendre l'orchestration | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |
@@ -32,7 +32,8 @@ Le **parcours opérationnel principal** est `20_RUNBOOK_OPERATIONNEL.md`. Le Run
 
 | Document | Responsabilité |
 | --- | --- |
-| [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) | Architecture globale, frontières Windows/WSL2, stockage, dépôt et sources de vérité |
+| [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) | Architecture globale, frontières Windows/WSL2 et stockage |
+| [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md) | Vue consolidée courte et orientation vers les guides de référence |
 | [`03_STOCKAGE.md`](03_STOCKAGE.md) | Rôle de `C:`, `D:`, VHDX WSL2, ext4 et placement des données |
 | [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md) | Hiérarchie entre état réel, contrats, scripts, rapports et documentation |
 
@@ -96,8 +97,6 @@ Le **parcours opérationnel principal** est `20_RUNBOOK_OPERATIONNEL.md`. Le Run
 
 ## Les quatre documents opérationnels à connaître
 
-Pour travailler réellement sur la machine, quatre documents couvrent la majorité des besoins :
-
 1. [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) — **quoi faire et dans quel ordre** ;
 2. [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md) — **quelle commande et quel paramètre utiliser** ;
 3. [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md) — **quoi vérifier lorsqu'une étape échoue** ;
@@ -109,33 +108,24 @@ Pour travailler réellement sur la machine, quatre documents couvrent la majorit
 
 ## Règles documentaires
 
-La documentation officielle suit ces règles :
-
 - **un document = une responsabilité principale** ;
 - le README explique le projet sans recopier toute la documentation ;
-- le Runbook opérationnel donne l'ordre des opérations sans devenir une encyclopédie ;
-- la référence de commandes documente les interfaces réelles du code ;
+- le guide maître reste une carte courte, pas une seconde documentation complète ;
+- le Runbook opérationnel donne l'ordre des opérations ;
+- la référence de commandes décrit les interfaces réelles du code ;
 - le troubleshooting explique le diagnostic, pas une succession de contournements ;
 - l'historique de versions n'est pas mélangé à la documentation active ;
-- un ancien nom technique reste mentionné uniquement s'il existe encore réellement dans le code ou dans un contrat ;
-- en cas de divergence, la documentation doit être corrigée pour refléter l'implémentation et les contrats actuels.
+- un ancien identifiant technique reste mentionné uniquement s'il existe encore réellement dans le code ;
+- en cas de divergence, la documentation est corrigée pour refléter l'implémentation et les contrats actuels.
 
-La hiérarchie détaillée des sources de vérité est définie dans [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
+Voir [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
 
 ---
 
 ## Point de départ recommandé
 
-Pour une machine existante :
-
 ```powershell
 .\install.ps1 -Mode Audit
 ```
 
-Pour voir ce que la convergence complète ferait sans modifier la machine :
-
-```powershell
-.\install.ps1 -Mode Apply -FullInstall -PlanOnly
-```
-
-Ensuite, suivre [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) jusqu'à la validation et à la sauvegarde de référence.
+Puis construire un plan correspondant au périmètre voulu avant toute convergence. Le détail exact, y compris la différence entre workstation core et `-FullInstall`, est dans [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
