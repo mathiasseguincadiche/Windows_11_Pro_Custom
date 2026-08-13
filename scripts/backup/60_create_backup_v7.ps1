@@ -148,7 +148,7 @@ if ($WinReExitCode -ne 0) {
 
 $WinReEnabled = $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw 'Windows Recovery Environment n’est pas confirmé comme actif. La sauvegarde de référence exige un WinRE utilisable.'
+    throw "Windows Recovery Environment n’est pas confirmé comme actif. La sauvegarde de référence exige un WinRE utilisable."
 }
 
 $RestorePointAttempted = $false
@@ -161,7 +161,7 @@ if (-not $SkipRestorePoint) {
     'Restore point explicitly skipped by operator.' | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
 }
 
-Write-Host '[INFO] Arrêt de WSL avant l’image de C: et D:.' -ForegroundColor Yellow
+Write-Host "[INFO] Arrêt de WSL avant l’image de C: et D:." -ForegroundColor Yellow
 & wsl.exe --shutdown
 if ($LASTEXITCODE -ne 0) {
     throw "wsl --shutdown a échoué avec le code $LASTEXITCODE."
@@ -188,7 +188,7 @@ $VersionsOutput = @(& wbadmin.exe get versions "-backupTarget:$TargetDrive" 2>&1
 $VersionsExitCode = $LASTEXITCODE
 $VersionsOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'wbadmin-get-versions.txt')
 if ($VersionsExitCode -ne 0 -or $VersionsOutput.Count -eq 0) {
-    throw 'L’image Windows est terminée mais wbadmin ne peut pas énumérer de version récupérable.'
+    throw "L’image Windows est terminée mais wbadmin ne peut pas énumérer de version récupérable."
 }
 
 $WslBackupPath = Join-Path $WslBackupDirectory "$Distribution-GOLDEN-V7.vhdx"
@@ -199,7 +199,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not (Test-Path $WslBackupPath)) {
-    throw 'L’export WSL a retourné un succès mais le fichier VHDX est absent.'
+    throw "L’export WSL a retourné un succès mais le fichier VHDX est absent."
 }
 
 $WslHash = Get-FileHash -Path $WslBackupPath -Algorithm SHA256
