@@ -84,7 +84,7 @@ $result = Invoke-Capture -Arguments @('--update')
 $result.Lines | ForEach-Object { if ($_){ Write-Host ("  {0}" -f $_) } }
 if ($result.Code -ne 0) { throw "wsl --update a échoué (code=$($result.Code))." }
 
-if (-not (Test-DistributionPresent)) { throw "Après mise à jour WSL, la distribution $distribution n’est plus visible." }
+if (-not (Test-DistributionPresent)) { throw "Après mise à jour WSL, la distribution $distribution nʼest plus visible." }
 $after = Get-WslUpgradeSignal
 if ($after.Pending) { throw 'wsl --update a terminé mais WinGet signale encore une mise à jour Microsoft.WSL.' }
 Write-Host '[FAIT] Runtime WSL vérifié/mis à jour sans modifier la distribution Ubuntu.' -ForegroundColor Green
