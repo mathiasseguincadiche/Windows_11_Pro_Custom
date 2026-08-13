@@ -71,7 +71,7 @@ jobs:
             Write-Host "--- Choice $choice ---"
             $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear 2>&1 | Out-String
             if ($LASTEXITCODE -ne 0) { throw "DryRun choice $choice failed." }
-            if ($choice -ne '10' -and $output -notmatch '\[DRY-RUN\]') {
+            if ($choice -ne '10' -and -not $output.Contains('[DRY-RUN]')) {
               throw "Choice $choice did not prove DryRun routing."
             }
           }
@@ -80,17 +80,17 @@ jobs:
         shell: pwsh
         run: |
           $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear 2>&1 | Out-String
-          if ($full -notmatch 'install\.ps1.*-FullInstall') { throw 'Full install route incorrect.' }
+          if (-not ($full.Contains('install.ps1') -and $full.Contains('-FullInstall'))) { throw 'Full install route incorrect.' }
 
           $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear 2>&1 | Out-String
-          if ($apps -notmatch '03_apps\.ps1.*-Mode.*Apply') { throw 'Apps-only route incorrect.' }
+          if (-not ($apps.Contains('03_apps.ps1') -and $apps.Contains("-Mode 'Apply'"))) { throw 'Apps-only route incorrect.' }
 
           $updates = & ./menu.ps1 -Choice 3 -DryRun -NoPause -NoClear 2>&1 | Out-String
-          if ($updates -notmatch 'update\.ps1.*-Mode.*Apply') { throw 'Update route incorrect.' }
+          if (-not ($updates.Contains('update.ps1') -and $updates.Contains("-Mode 'Apply'"))) { throw 'Update route incorrect.' }
 
           $restore = & ./menu.ps1 -Choice 5.1 -DryRun -NoPause -NoClear 2>&1 | Out-String
-          if ($restore -notmatch 'RestorePlan') { throw 'Restore plan route incorrect.' }
-          if ($restore -notmatch 'ne restaure rien automatiquement') { throw 'Restore safety message missing.' }
+          if (-not $restore.Contains('RestorePlan')) { throw 'Restore plan route incorrect.' }
+          if (-not $restore.Contains('ne restaure rien automatiquement')) { throw 'Restore safety message missing.' }
 
   launcher-contract:
     runs-on: ubuntu-latest
