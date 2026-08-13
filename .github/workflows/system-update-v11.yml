@@ -126,7 +126,7 @@ jobs:
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors)
             foreach ($error in @($errors)) {
-              Write-Host "$file:$($error.Extent.StartLineNumber):$($error.Extent.StartColumnNumber): $($error.Message)"
+              Write-Host "${file}:$($error.Extent.StartLineNumber):$($error.Extent.StartColumnNumber): $($error.Message)"
               $failed = $true
             }
           }
