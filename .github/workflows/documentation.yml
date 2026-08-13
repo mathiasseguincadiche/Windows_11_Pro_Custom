@@ -61,6 +61,11 @@ jobs:
             docs/17_CONTROL_CENTER.md
             docs/18_GUIDE_MAITRE.md
             docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+            docs/20_RUNBOOK_OPERATIONNEL.md
+            docs/21_REFERENCE_COMMANDES.md
+            docs/22_TROUBLESHOOTING.md
+            docs/23_SOURCES_DE_VERITE.md
+            docs/24_CRITERES_ACCEPTATION.md
           )
           for file in "${required[@]}"; do
             test -s "$file" || {
@@ -102,8 +107,6 @@ jobs:
           legacy = re.compile(r'\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I)
           violations = []
 
-          # Les schémas/chemins internes peuvent garder leur numéro historique.
-          # Ce contrôle vise uniquement les chaînes réellement affichées à l'utilisateur.
           ui_patterns = (
               re.compile(r'VERDICT:\s*V\d+', re.I),
               re.compile(r'Write-Host[^\n]*\bV(?:3|4|5|6|7|8|9|10|11|12|13)\b', re.I),
@@ -157,6 +160,15 @@ jobs:
           grep -Fq 'BackupAction RestorePlan' docs/13_RUNBOOK_REINSTALLATION.md
           grep -Fq 'update.ps1 -Mode Apply' docs/13_RUNBOOK_REINSTALLATION.md
           grep -Fq 'Ubuntu-Restore' docs/13_RUNBOOK_REINSTALLATION.md
+
+          grep -Fq 'RUNBOOK' <(tr '[:lower:]' '[:upper:]' < docs/20_RUNBOOK_OPERATIONNEL.md)
+          grep -Fq 'Mode Audit' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'FullInstall' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'PlanOnly' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'ValidateHardware' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'ValidateWsl' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'ValidateDevOps' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq 'idempotence' docs/20_RUNBOOK_OPERATIONNEL.md
 
           grep -Fq 'Machine-first' docs/18_GUIDE_MAITRE.md
           grep -Fq 'Recovery-first' docs/18_GUIDE_MAITRE.md
@@ -235,6 +247,11 @@ jobs:
               'docs/13_RUNBOOK_REINSTALLATION.md': 10000,
               'docs/16_WSL2_GUIDE_COMPLET.md': 14000,
               'docs/18_GUIDE_MAITRE.md': 12000,
+              'docs/20_RUNBOOK_OPERATIONNEL.md': 7000,
+              'docs/21_REFERENCE_COMMANDES.md': 7000,
+              'docs/22_TROUBLESHOOTING.md': 6000,
+              'docs/23_SOURCES_DE_VERITE.md': 5000,
+              'docs/24_CRITERES_ACCEPTATION.md': 6000,
           }
           for name, minimum in limits.items():
               size = Path(name).stat().st_size

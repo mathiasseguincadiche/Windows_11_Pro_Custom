@@ -1,75 +1,22 @@
-# Documentation — Windows 11 Pro Custom
+# Documentation officielle — Windows 11 Pro Custom
 
-Ce dossier contient la documentation actuelle de **Windows 11 Pro Custom**.
+Ce dossier contient la **documentation technique officielle** de `Windows_11_Pro_Custom`.
 
-Le projet décrit une workstation Windows 11 Pro personnelle, reproductible et orientée **DevOps/Ops**, capable de rester performante pour les usages desktop/gaming tout en fournissant un backend Linux complet via WSL2.
+Le [`README.md`](../README.md) racine est la vitrine : il explique rapidement ce qu'est le projet, pourquoi il existe, son architecture et comment commencer.
 
-La documentation est organisée par **responsabilité fonctionnelle**, pas par ancienne version du projet.
+Le dossier `docs/` va plus loin : il explique **comment construire la workstation, pourquoi chaque choix existe, comment l'exploiter, comment la valider, comment la maintenir et comment la reconstruire**.
 
-> Les numéros de version et l'historique des évolutions appartiennent à [`../CHANGELOG.md`](../CHANGELOG.md). Les guides ci-dessous décrivent uniquement **l'état actuel de la workstation**.
-
----
-
-## Comprendre le projet en quelques minutes
-
-Lire dans cet ordre :
-
-1. [`../README.md`](../README.md) — ce qu'est la workstation et pourquoi elle existe ;
-2. [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) — comment Windows, WSL2, les SSD et les outils sont séparés ;
-3. [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md) — vision complète et exploitation du projet.
-
-Le modèle mental est :
-
-```text
-matériel cible
-   ↓
-Windows 11 Pro
-   ├── desktop / gaming / drivers / sécurité
-   ├── PowerShell / VS Code / WezTerm
-   ├── mises à jour / sauvegarde
-   └── WSL2
-       └── Ubuntu 26.04
-           ├── Bash
-           ├── Docker / Kubernetes
-           ├── Terraform / Ansible
-           ├── AWS / GitHub CLI
-           └── outils qualité
-```
-
-Windows reste l'hôte. WSL2 fournit le backend Linux DevOps.
+> La documentation active décrit l'état actuel du projet. L'historique des évolutions appartient à [`CHANGELOG.md`](../CHANGELOG.md) et à Git.
 
 ---
 
-## Quel document lire ?
+## Comment utiliser cette documentation
 
-| Besoin | Document |
-| --- | --- |
-| Comprendre le projet | [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md) |
-| Comprendre l'architecture | [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) |
-| Installer Windows depuis zéro | [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) |
-| Vérifier BIOS / pilotes | [`02_BIOS_DRIVERS.md`](02_BIOS_DRIVERS.md) |
-| Comprendre les deux SSD | [`03_STOCKAGE.md`](03_STOCKAGE.md) |
-| Comprendre les optimisations Windows | [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md) |
-| Comprendre Defender et les performances | [`05_DEFENDER_PERFORMANCE.md`](05_DEFENDER_PERFORMANCE.md) |
-| Configurer et exploiter WSL2 | [`06_WSL2.md`](06_WSL2.md) |
-| Comprendre la stack DevOps | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
-| Voir les applications Windows | [`08_APPLICATIONS.md`](08_APPLICATIONS.md) |
-| Gaming / affichage | [`09_GAMING_OLED.md`](09_GAMING_OLED.md) |
-| Sauvegarder et restaurer | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) |
-| Vérifier que la machine est conforme | [`11_VALIDATION.md`](11_VALIDATION.md) |
-| Qualifier le matériel | [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) |
-| Reconstruire toute la machine | [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) |
-| Comprendre la convergence | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |
-| Gérer les mises à jour | [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md) |
-| Apprendre WSL2 depuis zéro | [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md) |
-| Utiliser le menu interactif | [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md) |
-| Intégrer OpenClaw/OpenRouter | [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+Il existe plusieurs parcours selon ton objectif.
 
----
+### Je découvre le projet
 
-## Parcours 1 — Je découvre le dépôt
-
-Commence par comprendre **ce que la workstation cherche à obtenir**, avant de lancer un script.
+Lire :
 
 ```text
 README racine
@@ -77,277 +24,346 @@ README racine
 00_ARCHITECTURE
    ↓
 18_GUIDE_MAITRE
-   ↓
-document du composant qui t'intéresse
 ```
 
-À retenir :
+Tu comprendras ce que construit la workstation, les frontières Windows/WSL2, le stockage, la stack DevOps, l'orchestration, la sécurité et la reprise.
 
-- `C:` contient Windows et les applications ;
-- `D:` contient les données, WSL2 et les intégrations lourdes ;
-- WSL2 possède son filesystem ext4 dans un VHDX ;
-- les projets Linux restent dans `/home/<user>/...` ;
-- Windows et Linux ont des responsabilités distinctes ;
-- les réglages gérés doivent être vérifiables et réversibles lorsque c'est possible ;
-- une vraie sauvegarde est distincte du dépôt Git.
+### Je veux réaliser le projet de A à Z
 
----
+Lire et suivre :
 
-## Parcours 2 — J'installe la workstation depuis zéro
+1. [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) — ordre officiel des opérations ;
+2. [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md) — paramètres et commandes ;
+3. [`11_VALIDATION.md`](11_VALIDATION.md) — preuves de conformité ;
+4. [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) — checklist finale.
 
-Suivre :
+C'est le **parcours opérationnel principal**.
+
+### Je pars d'un Windows vierge
 
 1. [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) ;
 2. [`02_BIOS_DRIVERS.md`](02_BIOS_DRIVERS.md) ;
-3. [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) ;
-4. [`11_VALIDATION.md`](11_VALIDATION.md) ;
-5. [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
+3. [`03_STOCKAGE.md`](03_STOCKAGE.md) ;
+4. [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 
-Le guide d'installation couvre la préparation de Windows, les pilotes, le stockage et la récupération du dépôt.
+L'installation de Windows prépare le terrain. La réalisation du projet commence ensuite par l'audit, le plan, la convergence et la validation.
 
-Une fois la base disponible, le centre de contrôle peut guider les opérations automatisées :
+### Je reconstruis après une panne
 
-```text
-START_MENU.cmd
-```
-
-ou :
-
-```powershell
-.\menu.ps1
-```
-
-Le menu est une interface ; la logique reste dans les orchestrateurs documentés dans [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
-
----
-
-## Parcours 3 — Je veux apprendre WSL2 correctement
-
-Lire :
-
-1. [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md) — cours débutant → avancé ;
-2. [`06_WSL2.md`](06_WSL2.md) — configuration actuelle de cette machine ;
-3. [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) — outils DevOps et terminal.
-
-Règle fondamentale :
-
-```text
-Projet Linux / DevOps
-        ↓
-/home/<user>/projects
-```
-
-`/mnt/c` et `/mnt/d` restent des ponts vers Windows, pas les racines de travail principales pour Docker, Terraform, Ansible ou des builds Linux.
-
----
-
-## Parcours 4 — Je veux exploiter la machine au quotidien
-
-Les points d'entrée humains principaux sont :
-
-```text
-menu.ps1    -> choisir une action
-install.ps1 -> audit / convergence / validation
-update.ps1  -> maintenance
-```
-
-Lire :
-
-- [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md) ;
-- [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) ;
-- [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md) ;
-- [`11_VALIDATION.md`](11_VALIDATION.md).
-
----
-
-## Parcours 5 — Je prépare une sauvegarde ou une reprise
-
-Lire :
+Utiliser :
 
 1. [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) ;
 2. [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md).
 
-La stratégie distingue :
+Le Runbook de réinstallation est volontairement séparé du Runbook opérationnel : **reconstruire après incident n'est pas la même chose que réaliser normalement le projet**.
 
-```text
-GitHub
-   -> protège le socle versionné
+### Je veux apprendre WSL2
 
-System Restore
-   -> rollback Windows léger
+1. [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md) — cours pédagogique ;
+2. [`06_WSL2.md`](06_WSL2.md) — contrat réel de cette workstation ;
+3. [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) — environnement DevOps.
 
-Image Windows
-   -> protège C: + D: + volumes critiques
+### Quelque chose ne fonctionne pas
 
-Export WSL VHDX
-   -> protège Ubuntu indépendamment
-```
-
-La restauration bare-metal reste volontairement manuelle.
+Commencer par [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md), puis utiliser [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md) pour identifier le contrat qui fait autorité.
 
 ---
 
-## Documentation complète
+# Carte du projet
 
-### 00 — Architecture
+```text
+MATÉRIEL
+   ↓
+Windows 11 Pro
+   ├── applications / pilotes / sécurité
+   ├── PowerShell 7 / VS Code / WezTerm
+   ├── Windows Update / WinGet
+   ├── sauvegarde Windows
+   └── WSL2
+       └── Ubuntu 26.04
+           ├── Bash / Git
+           ├── Docker / Kubernetes
+           ├── Terraform / Ansible
+           ├── AWS / GitHub CLI
+           └── outils qualité
+
+D:\AI\OpenClaw
+   └── intégration IA optionnelle Windows-native
+```
+
+La règle structurante reste :
+
+```text
+Windows gère l'expérience Windows
+Linux gère les workloads Linux
+```
+
+Les projets DevOps Linux vivent sous `~/projects`, `~/labs` ou `~/repositories` sur le filesystem ext4 de WSL2.
+
+---
+
+# Documentation par responsabilité
+
+## 00 — Architecture
 
 [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md)
 
 Explique :
 
-- architecture logique Windows/WSL2 ;
-- stockage physique ;
-- frontières de responsabilité ;
-- terminal, VS Code et OpenClaw ;
-- organisation du dépôt.
+- l'identité du projet ;
+- l'architecture logique ;
+- Windows vs WSL2 ;
+- les deux SSD ;
+- la place d'OpenClaw ;
+- les frontières de responsabilité.
 
-### 01 — Installation Windows
+À lire avant toute modification structurante.
+
+## 01 — Installation Windows
 
 [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md)
 
-Procédure depuis un PC à installer jusqu'à une base Windows exploitable.
+Guide depuis un PC à installer jusqu'à une base Windows 11 Pro exploitable.
 
-### 02 — BIOS et pilotes
+Il couvre le média d'installation, l'UEFI, le stockage, les pilotes, Windows Update, la récupération du dépôt et le passage vers l'orchestration.
+
+## 02 — BIOS et pilotes
 
 [`02_BIOS_DRIVERS.md`](02_BIOS_DRIVERS.md)
 
-UEFI, Secure Boot, TPM, virtualisation, ReBAR et stratégie de drivers.
+Explique les attentes UEFI, Secure Boot, TPM, virtualisation, ReBAR et la stratégie de pilotes AMD / Intel / MSI.
 
-### 03 — Stockage
+Le dépôt qualifie ces éléments sans les modifier aveuglément.
+
+## 03 — Stockage
 
 [`03_STOCKAGE.md`](03_STOCKAGE.md)
 
-Organisation `C:` / `D:`, WSL2, VHDX, TRIM et règles de placement.
+Explique :
 
-### 04 — Optimisation Windows
+```text
+C: -> Windows
+D: -> données + WSL2 + intégrations lourdes
+```
+
+et pourquoi Ubuntu utilise ext4 **dans son VHDX** sans nécessiter de partition EXT4 physique.
+
+## 04 — Optimisation Windows
 
 [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md)
 
-Réactivité, confidentialité, gaming, mesures avant/après et limites de sécurité.
+Décrit les profils gérés, les mesures avant/après, les limites de sécurité et le rollback possible.
 
-### 05 — Defender
+L'objectif est la réactivité, pas un debloat destructif.
+
+## 05 — Defender et performances
 
 [`05_DEFENDER_PERFORMANCE.md`](05_DEFENDER_PERFORMANCE.md)
 
-Mesure de performance et politique d'exclusions deny-by-default.
+Explique la politique d'exclusions deny-by-default et la méthode de mesure avant toute exception.
 
-### 06 — WSL2
+## 06 — WSL2
 
 [`06_WSL2.md`](06_WSL2.md)
 
-Contrat Ubuntu, profils de ressources, réseau, stockage et exploitation.
+Référence de la configuration WSL2 réelle : Ubuntu 26.04, stockage sous `D:\WSL\Ubuntu-DevOps`, profils de ressources, réseau, systemd et filesystem.
 
-### 07 — Stack DevOps
+## 07 — Stack DevOps
 
 [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md)
 
-Docker, Kubernetes, Terraform, Ansible, AWS, terminal Bash et VS Code WSL.
+Explique Docker, Kubernetes, Terraform, Ansible, AWS, GitHub CLI, les outils qualité, le terminal Bash et VS Code WSL.
 
-### 08 — Applications
+## 08 — Applications Windows
 
 [`08_APPLICATIONS.md`](08_APPLICATIONS.md)
 
-Socle WinGet et logiciels conservés manuels.
+Catalogue applicatif, automatisation WinGet et logiciels volontairement laissés manuels quand l'installation n'est pas assez fiable.
 
-### 09 — Gaming / affichage
+## 09 — Gaming et affichage
 
 [`09_GAMING_OLED.md`](09_GAMING_OLED.md)
 
-Choix liés au gaming et à l'affichage.
+Explique les choix liés à l'usage gaming/affichage sans mélanger cette couche avec le backend DevOps.
 
-### 10 — Backup / restore
+## 10 — Backup et restore
 
 [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md)
 
-Protection de Windows, `D:`, WSL2 et reconstruction.
+Décrit la stratégie de protection de `C:`, `D:`, Ubuntu WSL2 et la préparation d'une reprise après incident.
 
-### 11 — Validation
+La sauvegarde est une partie du projet, pas une tâche annexe.
+
+## 11 — Validation
 
 [`11_VALIDATION.md`](11_VALIDATION.md)
 
-Comment prouver qu'un composant est réellement prêt.
+Explique comment passer de « le script s'est exécuté » à « la machine est réellement conforme ».
 
-### 12 — Qualification matérielle
+C'est le document de référence pour les preuves, les validateurs et les verdicts.
+
+## 12 — Qualification matérielle
 
 [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md)
 
-Contrôles automatiques et preuves manuelles du matériel réel.
+Distingue les contrôles automatisables des preuves physiques/firmware qui restent manuelles.
 
-### 13 — Runbook de réinstallation
+## 13 — Runbook de réinstallation
 
 [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md)
 
-Procédure opérationnelle complète de reconstruction.
+Procédure de reconstruction après panne, remplacement de disque ou réinstallation complète.
 
-### 14 — Orchestration
+**Ce n'est pas le Runbook normal de réalisation du projet.** Pour le parcours quotidien de construction et validation, utiliser `20_RUNBOOK_OPERATIONNEL.md`.
+
+## 14 — Orchestration
 
 [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md)
 
-Machine-first, plan, idempotence, Apply ciblé, Verify et logs.
+Explique machine-first, Verify avant Apply, plan factuel, idempotence, re-vérification, logs, actions humaines et rollback géré.
 
-### 15 — Mises à jour
+## 15 — Mises à jour
 
 [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md)
 
-Windows Update, WinGet, WSL, Ubuntu, DevOps épinglé et VS Code.
+Explique la maintenance séparée de Windows Update, WinGet, WSL, Ubuntu/APT, outils DevOps épinglés et extensions VS Code.
 
-### 16 — Guide WSL2 complet
+## 16 — Guide WSL2 complet
 
 [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md)
 
-Guide pédagogique pour apprendre WSL2 depuis zéro.
+Cours progressif pour apprendre WSL2, Linux, filesystems, systemd, réseau, Docker et les commandes utiles à cette workstation.
 
-### 17 — Centre de contrôle
+## 17 — Centre de contrôle
 
 [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md)
 
-Utilisation de `menu.ps1` et routage vers les orchestrateurs.
+Explique `START_MENU.cmd` et `menu.ps1`, leur rôle d'interface et le routage vers les vrais orchestrateurs.
 
-### 18 — Guide maître
+## 18 — Guide maître
 
 [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md)
 
-Vision consolidée de toute la workstation.
+Vision consolidée de l'ensemble du projet.
 
-### 19 — OpenClaw / OpenRouter
+## 19 — OpenClaw / OpenRouter Windows
 
 [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md)
 
-Intégration de la plateforme IA dans l'architecture Windows.
+Explique l'intégration IA optionnelle sous `D:\AI\OpenClaw` et sa relation avec le backend DevOps WSL2.
+
+## 20 — Runbook opérationnel
+
+[`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md)
+
+**Parcours officiel pour réaliser le projet de A à Z** : audit, plan, convergence, WSL2, DevOps, matériel, validation, idempotence et sauvegarde.
+
+## 21 — Référence des commandes
+
+[`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md)
+
+Décrit `menu.ps1`, `install.ps1`, `update.ps1`, leurs modes, options et résultats attendus.
+
+## 22 — Troubleshooting
+
+[`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md)
+
+Méthode de diagnostic et incidents courants : WSL2, stockage, utilisateur Linux, DevOps, matériel, Defender, maintenance, OpenClaw et CI.
+
+## 23 — Sources de vérité
+
+[`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md)
+
+Explique la hiérarchie entre machine réelle, `config/`, `manifests/`, scripts, `Verify`, logs, rapports, documentation et historique Git.
+
+## 24 — Critères d'acceptation
+
+[`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md)
+
+Checklist finale pour décider objectivement si la workstation est réellement prête.
 
 ---
 
-## Ce que la documentation ne doit plus faire
+# Parcours opérationnel résumé
 
-La documentation active ne doit plus être structurée comme :
+```powershell
+# 1. Observer l'état réel
+.\install.ps1 -Mode Audit
 
-```text
-ancienne couche A
-ancienne couche B
-ancienne couche C
-...
+# 2. Prévisualiser la convergence complète
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+
+# 3. Faire converger
+.\install.ps1 -Mode Apply -FullInstall
+
+# 4. Valider les domaines principaux
+.\install.ps1 `
+  -Mode Verify `
+  -ValidateHardware `
+  -ValidateWsl `
+  -ValidateDevOps
+
+# 5. Contrôler la maintenance
+.\update.ps1 -Mode Audit
+
+# 6. Recalculer le plan pour prouver l'idempotence
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-Ce modèle raconte l'histoire du dépôt mais oblige un lecteur à comprendre le passé avant de comprendre le présent.
+Les détails, précautions et actions humaines se trouvent dans [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 
-Le principe actuel est :
+---
+
+# Sources de vérité
+
+Le modèle à retenir est :
 
 ```text
-README/docs = état actuel
-CHANGELOG   = historique
-Git         = détail complet des évolutions
+machine réelle
+   +
+configurations / manifests
+   ↓
+scripts / validateurs
+   ↓
+Verify
+   ↓
+logs / rapports
+   ↓
+documentation explicative
+```
+
+Les fichiers `state/` servent au rollback de certains composants et ne deviennent pas une preuve de conformité actuelle.
+
+En cas de divergence, suivre [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md).
+
+---
+
+# Ce que la documentation active ne doit pas faire
+
+Elle ne doit pas :
+
+- obliger un débutant à comprendre l'historique avant l'état actuel ;
+- dupliquer des anciens guides versionnés ;
+- documenter des commandes inexistantes ;
+- promettre une automatisation que le code ne fournit pas ;
+- masquer une action humaine obligatoire ;
+- confondre une CI verte avec la qualification physique de la workstation ;
+- confondre réalisation normale et disaster recovery.
+
+Le principe est :
+
+```text
+README / docs = présent
+CHANGELOG     = historique
+Git           = détail complet des évolutions
 ```
 
 ---
 
-## Source de vérité
+## Point de départ recommandé
 
-En cas de divergence :
+Si tu veux **comprendre**, commence par [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md).
 
-1. état réel de la machine ;
-2. configurations et manifests actuels ;
-3. scripts actuels ;
-4. documentation actuelle ;
-5. changelog / historique Git.
+Si tu veux **réaliser le projet**, commence par [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 
-Pour Windows, BIOS et drivers qui évoluent avec le temps, la source officielle du constructeur ou de Microsoft doit toujours être vérifiée avant une installation réelle.
+Si tu veux **prouver qu'il est terminé**, utilise [`11_VALIDATION.md`](11_VALIDATION.md) puis [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).

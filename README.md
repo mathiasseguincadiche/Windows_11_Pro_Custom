@@ -2,114 +2,128 @@
 
 [![Qualité](https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom/actions/workflows/quality.yml/badge.svg)](https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom/actions/workflows/quality.yml)
 [![Runtime WSL](https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom/actions/workflows/wsl-runtime-contract.yml/badge.svg)](https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom/actions/workflows/wsl-runtime-contract.yml)
+[![Documentation](https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom/actions/workflows/documentation.yml/badge.svg)](https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom/actions/workflows/documentation.yml)
 
-**Windows 11 Pro Custom** est la configuration versionnée de ma workstation personnelle : un poste Windows 11 Pro pensé pour **DevOps/Ops**, WSL2, administration système, développement d'infrastructure, usage desktop quotidien et gaming.
+`Windows_11_Pro_Custom` est le projet qui définit, automatise, vérifie et documente **ma workstation Windows 11 Pro de référence** pour un usage **DevOps/Ops**, administration système, Linux via WSL2, desktop quotidien et gaming.
 
-Le but n'est pas d'empiler des scripts ou de transformer Windows en Linux. Le but est de construire une machine **cohérente, performante, vérifiable, maintenable et récupérable** dont les choix importants sont documentés et reproductibles.
+Ce dépôt n'est pas une collection de tweaks Windows ni un simple script d'installation. Il transforme la configuration de la machine en un **projet reproductible** : les choix importants sont versionnés, l'état réel est observé avant modification, les écarts sont corrigés de manière ciblée, le résultat est re-vérifié et la reprise après incident est prévue.
 
-> **L'essence du projet :** pouvoir repartir d'un Windows propre, retrouver la même architecture, les mêmes outils et les mêmes garde-fous, vérifier l'état réel de la machine, corriger uniquement ce qui manque, puis conserver une stratégie de sauvegarde et de reprise exploitable.
+> **Objectif du projet :** pouvoir partir d'un Windows propre ou d'une machine déjà utilisée, retrouver la même architecture, les mêmes outils et les mêmes garde-fous, comprendre ce qui est déjà conforme, corriger uniquement ce qui manque, valider le résultat puis conserver une sauvegarde de référence exploitable.
 
-Les scripts sont le **moyen d'automatiser cette workstation**. Ils ne sont pas le sujet principal du README.
+Si tu découvres le dépôt, ce README doit te permettre de répondre immédiatement à cinq questions :
+
+1. **Qu'est-ce que ce projet construit ?**
+2. **Pourquoi l'architecture est-elle organisée ainsi ?**
+3. **Comment le projet agit-il sur la machine ?**
+4. **Dans quel ordre faut-il l'exécuter ?**
+5. **Comment savoir que le résultat final est réellement valide ?**
+
+La documentation détaillée se trouve dans [`docs/`](docs/README.md).
 
 ---
 
-## Ce que construit le projet
+## 1. Ce que construit réellement le projet
 
-La workstation combine plusieurs usages sans mélanger leurs responsabilités :
+Le résultat final est une workstation cohérente qui combine plusieurs usages sans mélanger leurs responsabilités :
 
 ```text
-                    MATÉRIEL CIBLE
-                         │
-                         ▼
-                   Windows 11 Pro
-          ┌──────────────┼──────────────┐
-          │              │              │
-          ▼              ▼              ▼
-     Desktop/gaming   Administration   WSL2 / Ubuntu
-     applications     PowerShell 7       │
-     pilotes          Windows Update     ▼
-     VS Code UI       sécurité       Linux DevOps
-     WezTerm          sauvegarde     Docker / K8s
-          │                           Terraform
-          │                           Ansible / AWS
-          └──────────────┬──────────────┘
-                         ▼
-                workstation cohérente
-                         │
-        audit → convergence → validation
-                         │
-                         ▼
-                 sauvegarde / reprise
+                         MATÉRIEL CIBLE
+                              │
+                              ▼
+                        Windows 11 Pro
+               ┌──────────────┼──────────────┐
+               │              │              │
+               ▼              ▼              ▼
+         Desktop/gaming   Administration   WSL2 / Ubuntu
+         applications     PowerShell 7          │
+         pilotes          sécurité              ▼
+         VS Code UI       maintenance       Linux DevOps
+         WezTerm          sauvegarde        Docker / K8s
+               │                           Terraform
+               │                           Ansible / AWS
+               └──────────────┬──────────────┘
+                              ▼
+                     workstation cohérente
+                              │
+                  audit → plan → convergence
+                              │
+                              ▼
+                    validation → sauvegarde
 ```
 
-Concrètement, le dépôt gère ou documente :
+Le dépôt couvre ou documente notamment :
 
-- l'architecture Windows 11 Pro et des deux SSD ;
+- Windows 11 Pro et son organisation ;
 - le matériel cible et sa qualification ;
-- les applications Windows ;
+- les deux SSD et leur rôle ;
 - PowerShell 7, VS Code, WezTerm et OpenSSH Client ;
+- les applications Windows gérées ;
 - WSL2 avec Ubuntu 26.04 ;
 - Docker, Kubernetes, Terraform, Ansible, AWS CLI et outils qualité ;
-- les réglages Windows mesurés et réversibles ;
-- Microsoft Defender sans exclusions agressives ;
+- les réglages Windows maîtrisés et mesurables ;
+- Microsoft Defender et les limites d'exclusion ;
 - les mises à jour de la workstation ;
-- les journaux, audits et validations ;
+- l'audit, les logs, les rapports et la validation ;
 - la sauvegarde Windows + WSL2 et le plan de reprise ;
-- l'intégration optionnelle d'OpenClaw/OpenRouter sur `D:`.
+- l'intégration optionnelle d'OpenClaw/OpenRouter sous `D:\AI\OpenClaw`.
+
+Les scripts sont le **moyen** d'obtenir cette workstation. Le projet, lui, est l'ensemble cohérent formé par l'architecture, les contrats, l'automatisation, la validation, la documentation et la reprise.
 
 ---
 
-## Philosophie : une workstation-as-code
+## 2. Le principe central : une workstation-as-code
 
-Le dépôt applique à un poste personnel des principes proches de l'Infrastructure as Code :
+Le dépôt applique à une machine personnelle des principes proches de l'Infrastructure as Code :
 
 ```text
-configuration versionnée
+état attendu versionné
         +
-état réel de la machine
-        ↓
-observation
+état réel observé
         ↓
 comparaison
+        ↓
+plan factuel
         ↓
 action minimale
         ↓
 re-vérification
         ↓
-preuve / journal / rapport
+preuve / rapport / verdict
 ```
-
-Cela implique plusieurs règles importantes.
 
 ### Machine-first
 
-La machine est inspectée avant de décider qu'une action est nécessaire.
+La machine réelle est inspectée avant de décider qu'une action est nécessaire.
 
 ### Idempotence
 
-Si un composant est déjà conforme, il ne doit pas être réinstallé ou modifié inutilement.
+Un composant déjà conforme doit être signalé comme `DÉJÀ OK` et ne pas être réinstallé inutilement.
 
 ### Réversibilité
 
-Lorsqu'un état initial fiable peut être capturé, les réglages gérés disposent d'un rollback.
+Lorsqu'un état initial fiable peut être capturé, les réglages gérés peuvent disposer d'un rollback.
 
 ### Sécurité conservée
 
-La performance ne justifie pas de désactiver Defender, Windows Update, le firewall, Secure Boot, TPM, WSL/Hyper-V ou d'autres briques nécessaires au système.
+La performance ne justifie pas de désactiver Defender, Windows Update, le firewall, Secure Boot, TPM, WSL ou d'autres briques nécessaires au système.
 
 ### Matériel-aware
 
-La configuration tient compte du matériel réel au lieu d'appliquer des valeurs génériques prévues pour n'importe quel PC.
+Le dépôt connaît la machine cible et valide son état au lieu d'appliquer des valeurs génériques prévues pour n'importe quel PC.
 
 ### Recovery-first
 
-Une configuration parfaite n'est pas suffisante si elle ne peut pas être restaurée après une panne ou une réinstallation.
+Une workstation bien configurée mais impossible à restaurer n'est pas considérée comme totalement terminée.
+
+Ces principes sont implémentés dans `install.ps1`, `scripts/core/` et les validateurs spécialisés. Le détail est dans [`docs/14_ORCHESTRATION.md`](docs/14_ORCHESTRATION.md).
 
 ---
 
-## Matériel cible
+## 3. Architecture de la machine cible
 
-| Composant | Configuration |
+### Matériel
+
+| Composant | Cible |
 | --- | --- |
 | CPU | AMD Ryzen 7 7700 — 8 cœurs / 16 threads |
 | Carte mère | MSI MAG B850M Mortar WiFi |
@@ -122,22 +136,18 @@ Une configuration parfaite n'est pas suffisante si elle ne peut pas être restau
 | Boîtier | ASUS Prime AP201 |
 | Affichage | 2560×1440 à haut taux de rafraîchissement |
 
-Le dépôt **qualifie** ce matériel mais ne modifie jamais automatiquement le BIOS, PBO, Curve Optimizer, la fréquence mémoire, ReBAR, les slots M.2 ou le firmware SSD.
+Le dépôt **qualifie** ce matériel. Il ne modifie pas automatiquement les réglages firmware ou d'overclocking qui nécessitent une décision humaine.
 
-Guide : [`docs/12_HARDWARE_QUALIFICATION.md`](docs/12_HARDWARE_QUALIFICATION.md).
+Documentation : [`docs/12_HARDWARE_QUALIFICATION.md`](docs/12_HARDWARE_QUALIFICATION.md).
 
----
-
-## Architecture de stockage
-
-Les deux SSD restent sous contrôle de Windows :
+### Stockage
 
 ```text
 Crucial T705 #1
 └── C: NTFS
     ├── Windows 11 Pro
     ├── applications
-    ├── drivers
+    ├── pilotes
     └── profil utilisateur
 
 Crucial T705 #2
@@ -153,25 +163,21 @@ Disque USB NTFS séparé
 └── sauvegarde de référence
 ```
 
-Il n'y a **ni dual boot ni partition EXT4 physique** prévue par le projet.
+Il n'y a ni dual boot ni partition EXT4 physique prévue par le projet. Ubuntu possède bien un filesystem Linux ext4, mais il se trouve **dans son VHDX WSL2** stocké sur le second SSD NTFS.
 
-Ubuntu possède bien un filesystem Linux ext4, mais il se trouve **dans son VHDX WSL2**, stocké sur le second SSD NTFS.
-
-Guide : [`docs/03_STOCKAGE.md`](docs/03_STOCKAGE.md).
+Documentation : [`docs/03_STOCKAGE.md`](docs/03_STOCKAGE.md).
 
 ---
 
-## Windows reste l'hôte, WSL2 devient le backend Linux
+## 4. Windows reste l'hôte, WSL2 devient le backend Linux
 
-La séparation des rôles est volontaire.
+La séparation des responsabilités est volontaire.
 
-### Windows 11 Pro
-
-Windows reste responsable de :
+### Windows 11 Pro gère
 
 - l'interface graphique ;
 - les pilotes et périphériques ;
-- les navigateurs et logiciels desktop ;
+- les navigateurs et applications desktop ;
 - Steam et le gaming ;
 - PowerShell 7 ;
 - VS Code côté interface ;
@@ -179,14 +185,13 @@ Windows reste responsable de :
 - Windows Update et WinGet ;
 - Microsoft Defender ;
 - le runtime WSL ;
-- les sauvegardes Windows.
+- les sauvegardes Windows ;
+- OpenClaw Windows lorsque cette intégration est utilisée.
 
-### Ubuntu WSL2
-
-Ubuntu fournit l'environnement Linux DevOps :
+### Ubuntu WSL2 gère
 
 - Bash ;
-- Git ;
+- Git pour les projets Linux ;
 - Docker Engine, Compose et Buildx ;
 - kubectl et Helm ;
 - Minikube et kind ;
@@ -194,9 +199,10 @@ Ubuntu fournit l'environnement Linux DevOps :
 - Ansible ;
 - AWS CLI ;
 - GitHub CLI ;
-- Trivy et outils qualité IaC/shell.
+- Trivy ;
+- les outils qualité shell/IaC.
 
-La règle de travail est simple :
+La règle opérationnelle est :
 
 ```text
 outils Linux → fichiers Linux
@@ -212,13 +218,13 @@ Les projets DevOps actifs vivent donc dans :
 
 et non dans `/mnt/c` ou `/mnt/d` comme racine de travail quotidienne.
 
-Guides : [`docs/06_WSL2.md`](docs/06_WSL2.md) et [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md).
+Documentation : [`docs/06_WSL2.md`](docs/06_WSL2.md) et [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md).
 
 ---
 
-## WSL2 adapté au Ryzen 7 7700 et aux 48 Go de RAM
+## 5. Profil WSL2 de référence
 
-Le profil quotidien laisse volontairement une vraie réserve à Windows :
+Le profil quotidien est dimensionné pour garder une vraie réserve à Windows :
 
 ```text
 Ubuntu 26.04
@@ -227,21 +233,26 @@ Ubuntu 26.04
 8 Go swap
 réseau mirrored
 DNS tunneling
-firewall WSL/Hyper-V actif
+firewall actif
 autoMemoryReclaim progressif
 ```
 
-Un profil plus lourd est disponible pour les labs Kubernetes ou les builds exigeants, sans devenir le profil par défaut.
+Le projet fournit aussi un profil plus lourd pour certains labs et un profil réseau de repli.
 
-Cette approche évite qu'un cluster local ou une compilation monopolise la workstation alors que Windows, VS Code, les navigateurs ou les applications desktop ont encore besoin de ressources.
+Le contrat runtime exige actuellement `Ubuntu` sous `D:\WSL\Ubuntu-DevOps`, avec le HOME et les workspaces Linux sur ext4.
 
-Le guide pédagogique WSL2 complet est disponible dans [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md).
+Documentation détaillée :
+
+- [`docs/06_WSL2.md`](docs/06_WSL2.md) — configuration actuelle ;
+- [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) — guide pédagogique débutant → avancé.
 
 ---
 
-## Une vraie workstation DevOps, pas seulement WSL2 installé
+## 6. Une vraie plateforme DevOps/Ops
 
-La stack Linux est conçue pour travailler réellement :
+La couche Linux ne se limite pas à « WSL installé ».
+
+Elle fournit une stack de travail :
 
 ```text
 Docker Engine
@@ -257,114 +268,170 @@ ShellCheck / shfmt
 actionlint / TFLint / terraform-docs / yq
 ```
 
-Les composants sensibles à la reproductibilité sont épinglés par le dépôt au lieu d'être remplacés aveuglément par `latest`.
+Les versions sensibles à la reproductibilité sont pilotées par le dépôt via `config/devops/tool-versions.env`. Une version `latest` disponible sur Internet ne remplace pas automatiquement la cible approuvée.
 
-WezTerm ouvre Ubuntu/Bash comme terminal DevOps principal et conserve PowerShell 7 comme terminal Windows. VS Code utilise le même environnement WSL lorsque le projet est Linux.
+WezTerm ouvre l'environnement Linux DevOps, PowerShell 7 reste disponible pour Windows et VS Code utilise le contexte WSL lorsqu'un projet est Linux.
 
 ---
 
-## Windows optimisé sans « debloat » destructif
+## 7. Windows optimisé sans « debloat » destructif
 
-L'objectif est une machine réactive, propre et prévisible, pas un Windows amputé de composants critiques.
+Le projet cherche une machine réactive et prévisible, pas un Windows amputé de briques essentielles.
 
-Le dépôt peut gérer des réglages liés à :
+Il peut gérer des réglages liés à :
 
-- bruit et suggestions Windows ;
-- confidentialité ;
-- gaming ;
-- réactivité de l'interface ;
-- comportement de certains services ciblés ;
-- benchmark léger avant/après.
+- la réactivité de l'interface ;
+- certaines suggestions Windows ;
+- la confidentialité ;
+- le gaming ;
+- certains services ciblés ;
+- des mesures avant/après.
 
-Mais il refuse les recettes agressives du type :
+Il conserve les garde-fous structurants : Defender, firewall, Windows Update, pagefile, mémoire compressée, WSL et les composants nécessaires au système.
+
+Les exclusions Defender suivent une politique **deny-by-default**.
+
+Documentation :
+
+- [`docs/04_OPTIMISATION_WINDOWS.md`](docs/04_OPTIMISATION_WINDOWS.md) ;
+- [`docs/05_DEFENDER_PERFORMANCE.md`](docs/05_DEFENDER_PERFORMANCE.md).
+
+---
+
+## 8. Comment utiliser le projet
+
+Il existe trois points d'entrée humains/techniques :
 
 ```text
-Defender OFF
-Windows Update OFF
-pagefile OFF
-memory compression OFF
-services désactivés en masse
-HPET/BCD tweak aléatoire
-SSD benchmark d'écriture massif
+START_MENU.cmd / menu.ps1
+        ↓
+choisir une intention
+
+install.ps1
+        ↓
+audit / plan / convergence / validation / rollback géré / backup
+
+update.ps1
+        ↓
+maintenance multi-couches
 ```
 
-Les changements gérés sont bornés, vérifiables et rollbackables lorsque cela est raisonnable.
+### Première commande recommandée sur une machine existante
 
-Guide : [`docs/04_OPTIMISATION_WINDOWS.md`](docs/04_OPTIMISATION_WINDOWS.md).
+```powershell
+.\install.ps1 -Mode Audit
+```
+
+Elle établit l'état réel avant toute modification.
+
+### Voir ce que l'installation complète ferait
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Le plan distingue notamment `DÉJÀ OK`, `À FAIRE`, `ACTION REQUISE` et les erreurs réelles.
+
+### Faire converger le projet
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall
+```
+
+### Valider le résultat
+
+```powershell
+.\install.ps1 `
+  -Mode Verify `
+  -ValidateHardware `
+  -ValidateWsl `
+  -ValidateDevOps
+```
+
+Le fait d'avoir lancé `Apply` n'est pas une preuve suffisante. Le résultat vient de `Verify` et de l'état réellement observé.
+
+### Parcours complet de réalisation
+
+Le guide à suivre de A à Z est :
+
+[`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md).
+
+La référence détaillée des paramètres est :
+
+[`docs/21_REFERENCE_COMMANDES.md`](docs/21_REFERENCE_COMMANDES.md).
 
 ---
 
-## Defender reste actif
+## 9. Comment savoir que le projet est terminé
 
-Microsoft Defender est une partie normale de la workstation.
+Le projet peut être déclaré prêt lorsque :
 
-Les exclusions suivent une politique **deny-by-default** : aucune exclusion large n'est ajoutée simplement parce que Docker, WSL ou un projet génère beaucoup d'I/O.
+```text
+Audit compris
++
+Plan cohérent
++
+Convergence réussie
++
+Validation Windows
++
+Qualification matérielle
++
+Validation WSL2
++
+Validation DevOps
++
+Idempotence prouvée
++
+Logs/rapports exploitables
++
+Sauvegarde vérifiée
+```
 
-Si un hotspot réel est mesuré, une exclusion peut être évaluée et explicitement approuvée.
+OpenClaw est ajouté à cette chaîne seulement si l'intégration est utilisée.
 
-Guide : [`docs/05_DEFENDER_PERFORMANCE.md`](docs/05_DEFENDER_PERFORMANCE.md).
-
----
-
-## Applications Windows
-
-Le socle applicatif comprend notamment :
-
-- Visual Studio Code ;
-- PowerShell 7 ;
-- WezTerm ;
-- Firefox / Brave ;
-- VLC ;
-- Notion ;
-- FileZilla ;
-- LibreOffice ;
-- Steam ;
-- Notepad++ ;
-- draw.io ;
-- Bitwarden ;
-- JetBrainsMono Nerd Font.
-
-Les applications disposant d'un identifiant WinGet fiable peuvent être automatisées. Les logiciels dont l'installation n'est pas suffisamment fiable restent manuels plutôt que simulés par une automatisation fragile.
-
-Guide : [`docs/08_APPLICATIONS.md`](docs/08_APPLICATIONS.md).
+La checklist officielle est [`docs/24_CRITERES_ACCEPTATION.md`](docs/24_CRITERES_ACCEPTATION.md).
 
 ---
 
-## Sauvegarde et reprise après incident
+## 10. Sauvegarde et reprise
 
 GitHub protège le **socle versionné**, pas la machine réelle.
 
-La protection de la workstation repose sur plusieurs niveaux :
+La stratégie de protection distingue :
 
 ```text
 System Restore
         ↓
 rollback Windows léger
 
-WindowsImageBackup
+Image Windows
         ↓
 C: + D: + volumes critiques
 
-Export WSL VHDX + SHA-256
+Export WSL VHDX + intégrité
         ↓
 Ubuntu restaurable séparément
 
 GitHub
         ↓
-reconstruction du socle automatisé
+reconstruction du socle versionné
 ```
 
-La cible de sauvegarde de référence est un **disque USB NTFS séparé** des deux SSD internes.
+La restauration complète reste volontairement une opération humaine et contrôlée.
 
-Le dépôt peut créer, vérifier et préparer une restauration, mais **ne déclenche jamais automatiquement une restauration bare-metal destructive**.
+Documentation :
 
-Guide : [`docs/10_BACKUP_RESTORE.md`](docs/10_BACKUP_RESTORE.md).
+- [`docs/10_BACKUP_RESTORE.md`](docs/10_BACKUP_RESTORE.md) — stratégie de sauvegarde ;
+- [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md) — reconstruction après incident.
+
+Le Runbook de réinstallation n'est **pas** le parcours normal de réalisation du projet. Pour construire et valider la workstation, utiliser le Runbook opérationnel `20`.
 
 ---
 
-## Maintenance et mises à jour
+## 11. Maintenance
 
-La workstation possède plusieurs domaines de maintenance qui doivent rester distincts :
+Les domaines de maintenance restent séparés :
 
 ```text
 Windows Update
@@ -375,180 +442,125 @@ outils DevOps épinglés
 extensions VS Code
 ```
 
-Le dépôt coordonne ces couches sans forcer de reboot, de flash firmware, de changement majeur Ubuntu ou de mise à jour arbitraire d'un outil DevOps.
+Point d'entrée :
 
-Guide : [`docs/15_MISES_A_JOUR.md`](docs/15_MISES_A_JOUR.md).
+```powershell
+.\update.ps1 -Mode Audit
+```
+
+Puis `Apply` et `Verify` lorsque la maintenance est nécessaire.
+
+Drivers et mises à jour facultatives sont opt-in ; aucun changement majeur d'Ubuntu ni redémarrage n'est imposé silencieusement.
+
+Documentation : [`docs/15_MISES_A_JOUR.md`](docs/15_MISES_A_JOUR.md).
 
 ---
 
-## OpenClaw / OpenRouter
+## 12. OpenClaw/OpenRouter
 
-L'intégration OpenClaw est optionnelle et isolée sous :
+L'intégration IA est optionnelle et isolée sous :
 
 ```text
 D:\AI\OpenClaw
 ```
 
-Elle complète la workstation mais **ne définit pas le projet Windows**. Le dépôt `openclaw_openrouter` reste responsable du fonctionnement métier d'OpenClaw/OpenRouter ; ce dépôt Windows prépare uniquement l'environnement et les points d'intégration nécessaires.
+Le dépôt `Windows_11_Pro_Custom` prépare l'environnement, le stockage et la validation d'intégration. Le comportement métier d'OpenClaw/OpenRouter reste la responsabilité du dépôt dédié `openclaw_openrouter`.
 
-Guide : [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md).
+Le control-plane consommé par Windows est référencé explicitement dans `config/openclaw/control-plane.json`.
+
+Documentation : [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
-## Utiliser le dépôt
-
-### Pour comprendre avant d'installer
-
-Commencer par :
-
-1. [`docs/README.md`](docs/README.md) ;
-2. [`docs/00_ARCHITECTURE.md`](docs/00_ARCHITECTURE.md) ;
-3. [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md).
-
-### Pour installer Windows depuis zéro
-
-Le guide dédié est :
-
-[`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md).
-
-L'installation est volontairement **une section du projet**, pas le contenu principal de ce README.
-
-### Pour piloter une machine déjà installée
-
-L'interface humaine est :
+## 13. Structure du dépôt
 
 ```text
-START_MENU.cmd
+Windows_11_Pro_Custom/
+├── README.md
+├── CHANGELOG.md
+├── START_MENU.cmd
+├── menu.ps1
+├── install.ps1
+├── update.ps1
+├── config/          # contrats et politiques
+├── manifests/       # catalogues déclaratifs
+├── scripts/         # implémentation par responsabilité
+├── docs/            # documentation technique officielle
+├── logs/            # journaux d'exécution
+├── reports/         # rapports et preuves structurées
+└── state/           # états nécessaires à certains rollbacks
 ```
 
-ou :
-
-```powershell
-.\menu.ps1
-```
-
-Le centre de contrôle route vers les orchestrateurs existants pour l'installation, la réparation, les mises à jour, les audits, la sauvegarde et les validations.
-
-Guide : [`docs/17_CONTROL_CENTER.md`](docs/17_CONTROL_CENTER.md).
-
-### Pour comprendre l'orchestration
-
-```powershell
-.\install.ps1 -Mode Audit
-.\install.ps1 -Mode Apply
-.\install.ps1 -Mode Verify
-.\install.ps1 -Mode Rollback
-```
-
-Guide : [`docs/14_ORCHESTRATION.md`](docs/14_ORCHESTRATION.md).
+La carte complète des sources de vérité se trouve dans [`docs/23_SOURCES_DE_VERITE.md`](docs/23_SOURCES_DE_VERITE.md).
 
 ---
 
-## Validation
+## 14. Documentation officielle
 
-Le dépôt ne considère pas qu'une installation est réussie uniquement parce qu'une commande s'est terminée.
+Le dossier [`docs/`](docs/README.md) est la référence technique humaine du projet.
 
-La logique de validation est :
-
-```text
-contrat attendu
-+
-état réellement observé
-+
-preuve disponible
-+
-Verify réussi
-```
-
-Une validation complète peut couvrir le matériel, WSL2 et la stack DevOps :
-
-```powershell
-.\install.ps1 `
-  -Mode Verify `
-  -ValidateHardware `
-  -ValidateWsl `
-  -ValidateDevOps
-```
-
-OpenClaw peut être vérifié séparément lorsque cette intégration est utilisée.
-
-Guide : [`docs/11_VALIDATION.md`](docs/11_VALIDATION.md).
-
----
-
-## Documentation
-
-La documentation active est organisée par responsabilité, pas par ancienne version du projet :
-
-| Document | Rôle |
+| Besoin | Document |
 | --- | --- |
-| [`docs/00_ARCHITECTURE.md`](docs/00_ARCHITECTURE.md) | architecture globale et frontières Windows/Linux |
-| [`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md) | installation Windows depuis zéro |
-| [`docs/02_BIOS_DRIVERS.md`](docs/02_BIOS_DRIVERS.md) | UEFI, BIOS et stratégie pilotes |
-| [`docs/03_STOCKAGE.md`](docs/03_STOCKAGE.md) | organisation des SSD et fichiers |
-| [`docs/04_OPTIMISATION_WINDOWS.md`](docs/04_OPTIMISATION_WINDOWS.md) | optimisation et réactivité Windows |
-| [`docs/05_DEFENDER_PERFORMANCE.md`](docs/05_DEFENDER_PERFORMANCE.md) | Defender et performance |
-| [`docs/06_WSL2.md`](docs/06_WSL2.md) | configuration WSL2 actuelle |
-| [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) | environnement Linux DevOps et terminal |
-| [`docs/08_APPLICATIONS.md`](docs/08_APPLICATIONS.md) | applications Windows |
-| [`docs/09_GAMING_OLED.md`](docs/09_GAMING_OLED.md) | gaming et affichage |
-| [`docs/10_BACKUP_RESTORE.md`](docs/10_BACKUP_RESTORE.md) | sauvegarde et reprise |
-| [`docs/11_VALIDATION.md`](docs/11_VALIDATION.md) | validation de la workstation |
-| [`docs/12_HARDWARE_QUALIFICATION.md`](docs/12_HARDWARE_QUALIFICATION.md) | qualification matérielle |
-| [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md) | reconstruction complète |
-| [`docs/14_ORCHESTRATION.md`](docs/14_ORCHESTRATION.md) | convergence et idempotence |
-| [`docs/15_MISES_A_JOUR.md`](docs/15_MISES_A_JOUR.md) | maintenance de la plateforme |
-| [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) | guide pédagogique WSL2 |
-| [`docs/17_CONTROL_CENTER.md`](docs/17_CONTROL_CENTER.md) | menu interactif |
-| [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md) | compréhension complète du projet |
-| [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) | intégration OpenClaw/OpenRouter |
-
-L'historique des évolutions reste dans [`CHANGELOG.md`](CHANGELOG.md). Il n'est plus utilisé comme structure de la documentation actuelle.
-
----
-
-## Limites volontaires
-
-Le dépôt ne doit jamais automatiquement :
-
-- formater un SSD ;
-- flasher le BIOS/UEFI ;
-- forcer PBO, overclocking ou timings RAM ;
-- désactiver Defender globalement ;
-- désactiver Windows Update ;
-- appliquer des exclusions Defender larges non mesurées ;
-- supprimer massivement des composants Windows ;
-- déplacer les projets Linux actifs vers `/mnt/c` ou `/mnt/d` ;
-- remplacer les versions DevOps qualifiées par `latest` ;
-- forcer un redémarrage ;
-- lancer une restauration bare-metal destructive ;
-- supprimer automatiquement la distribution WSL active ;
-- publier des secrets dans Git.
+| Comprendre l'architecture | [`docs/00_ARCHITECTURE.md`](docs/00_ARCHITECTURE.md) |
+| Installer Windows depuis zéro | [`docs/01_INSTALLATION_WINDOWS.md`](docs/01_INSTALLATION_WINDOWS.md) |
+| BIOS et pilotes | [`docs/02_BIOS_DRIVERS.md`](docs/02_BIOS_DRIVERS.md) |
+| Stockage | [`docs/03_STOCKAGE.md`](docs/03_STOCKAGE.md) |
+| Optimisation Windows | [`docs/04_OPTIMISATION_WINDOWS.md`](docs/04_OPTIMISATION_WINDOWS.md) |
+| Defender | [`docs/05_DEFENDER_PERFORMANCE.md`](docs/05_DEFENDER_PERFORMANCE.md) |
+| WSL2 | [`docs/06_WSL2.md`](docs/06_WSL2.md) |
+| Stack DevOps | [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) |
+| Applications | [`docs/08_APPLICATIONS.md`](docs/08_APPLICATIONS.md) |
+| Gaming / affichage | [`docs/09_GAMING_OLED.md`](docs/09_GAMING_OLED.md) |
+| Backup / restore | [`docs/10_BACKUP_RESTORE.md`](docs/10_BACKUP_RESTORE.md) |
+| Validation | [`docs/11_VALIDATION.md`](docs/11_VALIDATION.md) |
+| Qualification matérielle | [`docs/12_HARDWARE_QUALIFICATION.md`](docs/12_HARDWARE_QUALIFICATION.md) |
+| Reconstruction après incident | [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md) |
+| Orchestration | [`docs/14_ORCHESTRATION.md`](docs/14_ORCHESTRATION.md) |
+| Mises à jour | [`docs/15_MISES_A_JOUR.md`](docs/15_MISES_A_JOUR.md) |
+| Apprendre WSL2 | [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) |
+| Centre de contrôle | [`docs/17_CONTROL_CENTER.md`](docs/17_CONTROL_CENTER.md) |
+| Guide maître | [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md) |
+| OpenClaw/OpenRouter | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+| **Réaliser le projet de A à Z** | **[`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md)** |
+| Référence des commandes | [`docs/21_REFERENCE_COMMANDES.md`](docs/21_REFERENCE_COMMANDES.md) |
+| Troubleshooting | [`docs/22_TROUBLESHOOTING.md`](docs/22_TROUBLESHOOTING.md) |
+| Sources de vérité | [`docs/23_SOURCES_DE_VERITE.md`](docs/23_SOURCES_DE_VERITE.md) |
+| Critères d'acceptation | [`docs/24_CRITERES_ACCEPTATION.md`](docs/24_CRITERES_ACCEPTATION.md) |
 
 ---
 
-## Résultat attendu
+## 15. Si quelque chose ne fonctionne pas
 
-À la fin, la workstation doit être compréhensible comme un système complet :
+Commence par :
+
+1. identifier le composant ;
+2. lire son log ;
+3. vérifier le contrat correspondant ;
+4. corriger la cause ;
+5. relancer le même `Verify` ou l'`Apply` ciblé.
+
+Ne contourne pas un validateur en affaiblissant la sécurité du système.
+
+Guide : [`docs/22_TROUBLESHOOTING.md`](docs/22_TROUBLESHOOTING.md).
+
+---
+
+## 16. Source de vérité et historique
+
+La documentation active décrit **l'état actuel du projet**.
 
 ```text
-Windows 11 Pro stable et agréable
-+
-matériel qualifié
-+
-WSL2 correctement dimensionné
-+
-stack DevOps Linux complète
-+
-applications et terminal cohérents
-+
-optimisations mesurées et sûres
-+
-validation factuelle
-+
-maintenance maîtrisée
-+
-sauvegarde réellement exploitable
+README / docs -> présent et exploitation
+CHANGELOG     -> historique fonctionnel
+Git           -> détail des évolutions
 ```
 
-C'est cette cohérence globale — et non la quantité de scripts — qui définit **Windows 11 Pro Custom**.
+Les noms de certains fichiers internes peuvent conserver un identifiant technique historique lorsqu'il fait partie du contrat actuel. Cela ne signifie pas que le lecteur doit connaître les anciennes étapes du dépôt pour utiliser la workstation aujourd'hui.
+
+En cas de divergence, se référer à [`docs/23_SOURCES_DE_VERITE.md`](docs/23_SOURCES_DE_VERITE.md).
+
+---
+
+## Résumé en une phrase
+
+**`Windows_11_Pro_Custom` transforme une workstation Windows 11 Pro personnelle en une plateforme DevOps/Ops versionnée, machine-first, reproductible, vérifiable, maintenable et récupérable, avec Windows comme hôte et Ubuntu WSL2 comme backend Linux spécialisé.**
