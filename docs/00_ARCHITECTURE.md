@@ -2,11 +2,11 @@
 
 Ce document décrit **où vit chaque composant, qui en est responsable et quelles frontières ne doivent pas être mélangées**.
 
-Pour la documentation complète du projet : [`24_GUIDE_MAITRE_V13.md`](24_GUIDE_MAITRE_V13.md).
+Pour la vision consolidée du projet : [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md).
 
 ---
 
-## 1. Vue d'ensemble
+## Vue d'ensemble
 
 ```text
                          WINDOWS 11 PRO
@@ -31,9 +31,11 @@ Pour la documentation complète du projet : [`24_GUIDE_MAITRE_V13.md`](24_GUIDE_
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+Le projet utilise Windows comme **hôte principal** et WSL2 comme **backend Linux DevOps**.
+
 ---
 
-## 2. Architecture physique du stockage
+## Architecture physique du stockage
 
 ```text
 Crucial T705 #1
@@ -41,80 +43,84 @@ Crucial T705 #1
     ├── Windows 11 Pro
     ├── applications Windows
     ├── drivers
-    └── profils utilisateur
+    └── profil utilisateur
 
 Crucial T705 #2
 └── D: NTFS
-    ├── DATA
-    ├── D:\WSL\Ubuntu-DevOps\...
+    ├── données
+    ├── D:\WSL\Ubuntu-DevOps
     ├── D:\WSL\swap\wsl-swap.vhdx
-    ├── D:\AI\OpenClaw\...
+    ├── D:\AI\OpenClaw
     ├── ISO
-    └── exports / données locales
+    └── exports
 
 Disque USB séparé
-└── Golden Backup V7
-    ├── WindowsImageBackup\
-    └── export WSL VHDX + SHA-256
+└── sauvegarde de référence
 ```
 
 ### Invariant
 
 Il n'existe **aucune partition EXT4 physique** prévue par le projet.
 
-Le filesystem ext4 Ubuntu se trouve **dans le VHDX WSL2**, lui-même stocké sur `D:` NTFS.
+Le filesystem ext4 Ubuntu se trouve dans le VHDX WSL2, lui-même stocké sur `D:` NTFS.
 
 ---
 
-## 3. Pourquoi deux SSD ?
+## Pourquoi deux SSD ?
 
-### SSD système — `C:`
+### `C:` — système
 
-Responsabilité : Windows et les composants directement liés à l'OS.
+Responsabilités :
 
-### SSD DATA — `D:`
+- Windows 11 Pro ;
+- applications Windows ;
+- drivers ;
+- profil utilisateur ;
+- composants directement liés à l'OS.
 
-Responsabilité : données lourdes et environnements qui doivent être séparés du volume système :
+### `D:` — données et environnements lourds
 
+Responsabilités :
+
+- données ;
 - WSL2 ;
 - OpenClaw ;
-- données ;
 - ISO ;
-- exports.
+- exports et artefacts volumineux.
 
-Cette séparation permet de conserver une architecture compréhensible tout en protégeant `C:` et `D:` ensemble dans le Golden Backup V7.
+Cette séparation limite la pression sur le volume système tout en conservant les deux SSD dans une architecture Windows cohérente et sauvegardable.
 
 ---
 
-## 4. Windows reste l'hôte
+## Windows reste l'hôte
 
 Windows est responsable de :
 
 ```text
-hardware / drivers
-UEFI-facing security state
+matériel / drivers
+sécurité Windows
 Windows Update
 WinGet
 PowerShell
 applications graphiques
 VS Code UI
 WezTerm
-OpenClaw Windows
-WSL runtime
+gaming
+runtime WSL
 backup Windows
 ```
 
-Le dépôt ne cherche pas à remplacer ces responsabilités par des outils Linux.
+Le dépôt ne cherche pas à déléguer ces responsabilités à Linux.
 
 ---
 
-## 5. WSL2 reste la plateforme Linux DevOps
+## WSL2 reste la plateforme Linux DevOps
 
 Ubuntu est responsable de :
 
 ```text
 Bash
-Git des projets DevOps
+Git des projets Linux
 Docker Engine
 Compose / Buildx
 kubectl
@@ -129,16 +135,18 @@ Trivy
 outils qualité
 ```
 
-Le contrat actuel est :
+Contrat actuel :
 
 ```text
-Ubuntu 26.04 (resolute)
+Ubuntu 26.04
 D:\WSL\Ubuntu-DevOps
 ```
 
+Guide : [`06_WSL2.md`](06_WSL2.md).
+
 ---
 
-## 6. Frontière des fichiers
+## Frontière des fichiers
 
 Pour un projet Linux :
 
@@ -148,119 +156,87 @@ Pour un projet Linux :
 ~/repositories
 ```
 
-Le contrat interdit comme racines de travail principales :
+Les chemins suivants ne doivent pas devenir les racines de travail principales :
 
 ```text
 /mnt/c
 /mnt/d
 ```
 
-### Pourquoi ?
-
-Un build Linux, Git, Docker ou un gestionnaire de dépendances peut manipuler des milliers de petits fichiers. Le filesystem Linux du VHDX offre la sémantique et les performances attendues par ces outils.
+Un build Linux, Git, Docker ou un gestionnaire de dépendances peut manipuler des milliers de petits fichiers. Le filesystem Linux du VHDX fournit la sémantique et les performances attendues.
 
 Cela n'empêche pas d'accéder ponctuellement aux fichiers Windows depuis WSL.
 
 ---
 
-## 7. Architecture terminal / éditeur
+## Terminal et éditeur
 
 ```text
 WezTerm
-├── Ubuntu DevOps / Bash    <- profil principal
-└── PowerShell 7            <- profil secondaire
+├── Ubuntu / Bash DevOps  <- principal pour Linux
+└── PowerShell 7          <- administration Windows
 
 VS Code Windows
 └── extension WSL
-    └── même Ubuntu
-        └── même Bash
-            └── même profil DevOps
+    └── Ubuntu
+        └── Bash / outils Linux
 ```
 
-Le profil Bash géré est chargé dans :
+Le profil shell géré est chargé depuis :
 
 ```text
 ~/.config/windows11-pro-custom/devops.sh
 ```
 
-La personnalisation locale non versionnée peut vivre dans :
+Une personnalisation locale non versionnée peut vivre dans :
 
 ```text
 ~/.config/windows11-pro-custom/local.sh
 ```
 
----
-
-## 8. Architecture OpenClaw
-
-```text
-D:\AI\OpenClaw\
-├── control-plane
-├── npm-global
-├── state
-├── workspace
-├── clawops
-├── venv
-├── logs
-└── cache
-```
-
-OpenClaw est volontairement Windows-native, tandis que WSL fournit le backend DevOps Linux.
-
-La source de code OpenClaw approuvée est épinglée par SHA via :
-
-```text
-config/openclaw/control-plane.json
-```
+Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-## 9. Architecture d'orchestration
+## OpenClaw
+
+L'intégration optionnelle est isolée sous :
+
+```text
+D:\AI\OpenClaw
+```
+
+Le projet Windows prépare l'environnement et la qualification ; le dépôt OpenClaw/OpenRouter reste responsable de la logique métier IA.
+
+Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+
+---
+
+## Orchestration
+
+```text
+état réel
+   ↓
+Verify
+   ↓
+plan complet
+   ↓
+Apply uniquement sur les écarts
+   ↓
+re-Verify
+   ↓
+logs / rapports / verdict
+```
 
 Le point d'entrée technique principal est `install.ps1`.
 
-V9 suit :
+Le point d'entrée humain est `menu.ps1`.
 
-```text
-DISCOVERY
-   ↓
-faits machine
-   ↓
-VERIFY de chaque composant
-   ↓
-PLAN COMPLET
-   ↓
-confirmation
-   ↓
-point de restauration / mesure avant si changement
-   ↓
-APPLY uniquement pour les écarts
-   ↓
-RE-VERIFY
-   ↓
-mesure après / logs / rapports
-```
-
-Le plan est calculé avant la première mutation.
+Guides : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) et [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
 
 ---
 
-## 10. Architecture du menu V12
-
-```text
-START_MENU.cmd
-      ↓
-menu.ps1
-      ├── install.ps1
-      ├── update.ps1
-      └── composants spécialisés existants
-```
-
-Le menu ne possède pas sa propre logique d'installation : il route vers les mécanismes déjà testés.
-
----
-
-## 11. Architecture des mises à jour V11
+## Mises à jour
 
 ```text
 update.ps1
@@ -268,15 +244,17 @@ update.ps1
 ├── WinGet
 ├── WSL runtime
 ├── Ubuntu / APT
-├── DevOps pinned
-└── VS Code extensions
+├── outils DevOps épinglés
+└── extensions VS Code
 ```
 
-Les couches restent séparées : APT ne met pas à jour Windows, WinGet ne décide pas des versions Terraform épinglées, et Windows Update n'est pas autorisé à imposer les drivers facultatifs par défaut.
+Les couches restent séparées : APT ne met pas à jour Windows, WinGet ne choisit pas arbitrairement les versions Terraform, et Windows Update ne doit pas imposer tous les drivers facultatifs.
+
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-## 12. Architecture de sauvegarde V7
+## Sauvegarde
 
 ```text
 État réel de la workstation
@@ -287,18 +265,20 @@ Les couches restent séparées : APT ne met pas à jour Windows, WinGet ne déci
 ├── WindowsImageBackup
 │   └── C: + D: + volumes critiques
 │
-├── WSL export VHDX
+├── export WSL VHDX
 │   └── SHA-256
 │
 └── GitHub
     └── reconstruction du socle versionné
 ```
 
-La création et la validation sont automatisées. La restauration destructive reste humaine.
+La création et la validation peuvent être automatisées. La restauration destructive reste une décision humaine.
+
+Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-## 13. Architecture de sécurité
+## Sécurité
 
 ### Automatisable
 
@@ -306,23 +286,23 @@ La création et la validation sont automatisées. La restauration destructive re
 - mesurer Defender ;
 - appliquer uniquement des exclusions explicitement approuvées ;
 - contrôler les versions ;
-- créer des backups ;
+- créer et vérifier des sauvegardes ;
 - vérifier des hashes ;
-- créer un plan de reprise.
+- produire des plans de reprise.
 
 ### Non automatisé par sécurité
 
 - formatage des SSD ;
 - flash BIOS ;
 - PBO/overclocking ;
-- forçage RAM 6000 ;
+- fréquence mémoire forcée ;
 - restauration bare-metal ;
-- `wsl --unregister` de la distribution active ;
-- suppression des données OpenClaw.
+- suppression destructive d'une distribution WSL ;
+- suppression de données utilisateur/OpenClaw.
 
 ---
 
-## 14. Architecture du dépôt
+## Architecture du dépôt
 
 ```text
 Windows_11_Pro_Custom/
@@ -332,17 +312,6 @@ Windows_11_Pro_Custom/
 ├── install.ps1
 ├── update.ps1
 ├── config/
-│   ├── backup/
-│   ├── defender/
-│   ├── devops/
-│   ├── hardware/
-│   ├── openclaw/
-│   ├── orchestration/
-│   ├── updates/
-│   ├── vscode/
-│   ├── wezterm/
-│   ├── windows/
-│   └── wsl/
 ├── manifests/
 ├── scripts/
 │   ├── backup/
@@ -360,30 +329,32 @@ Windows_11_Pro_Custom/
 
 ---
 
-## 15. Où regarder selon le problème ?
+## Sources de vérité
 
-| Problème | Source de vérité principale |
-|---|---|
-| Matériel attendu | `config/hardware/target-v5.json` |
+| Besoin | Source principale |
+| --- | --- |
+| Matériel attendu | politiques de `config/hardware/` |
 | WSL version/emplacement | `config/wsl/runtime-contract.json` |
 | Ressources WSL | `config/wsl/*.wslconfig` |
 | Versions DevOps | `config/devops/tool-versions.env` |
 | Logiciels Windows | `manifests/winget/apps-core.json` |
 | OpenClaw | `config/openclaw/control-plane.json` |
-| Backup | `config/backup/v7-policy.json` |
-| Updates | `config/updates/v11.json` |
+| Sauvegarde | politique sous `config/backup/` |
+| Mises à jour | politique sous `config/updates/` |
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
 | Utilisation humaine | `menu.ps1` |
 
+Les suffixes historiques éventuellement présents dans certains noms de fichiers internes sont des détails d'implémentation ; la documentation active décrit **le contrat courant**.
+
 ---
 
-## 16. Objectifs architecturaux
+## Objectifs architecturaux
 
 1. **Reproductibilité** — reconstruire sans mémoire implicite.
-2. **Performance I/O** — Linux travaille sur ext4 dans WSL.
-3. **Sécurité conservée** — pas de debloat destructif ni de protection désactivée sans preuve.
+2. **Performance I/O** — Linux travaille sur ext4 dans WSL2.
+3. **Sécurité conservée** — pas de debloat destructif.
 4. **Idempotence** — ne pas réinstaller ce qui est déjà correct.
-5. **Réversibilité** — rollback lorsqu'un état initial fiable existe.
+5. **Réversibilité** — rollback lorsque l'état initial est fiable.
 6. **Observabilité** — logs et rapports persistants.
-7. **Disaster recovery** — sauvegarde réelle distincte du dépôt Git.
-8. **Pédagogie** — un débutant peut suivre la procédure sans connaître l'historique V1→V12.
+7. **Disaster recovery** — sauvegarde réelle distincte de Git.
+8. **Pédagogie** — comprendre le présent sans devoir apprendre l'historique du dépôt.
