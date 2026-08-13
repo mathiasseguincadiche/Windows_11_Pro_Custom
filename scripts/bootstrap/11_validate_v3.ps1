@@ -66,8 +66,8 @@ $reportPath = Join-Path $reportDir 'validation-v3.json'
 $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
 foreach ($check in $checks.GetEnumerator()) { Write-Host ("[{0}] {1}" -f $(if ($check.Value) { 'OK' } else { 'KO' }), $check.Key) }
 if ($failed.Count -gt 0) {
-    Write-Host "VERDICT: V3 WINDOWS KO ($($failed.Count) contrôle(s))" -ForegroundColor Red
-    throw "V3 Windows non conforme: $($failed -join ', '). Rapport: $reportPath"
+    Write-Host "VERDICT: WINDOWS KO ($($failed.Count) contrôle(s))" -ForegroundColor Red
+    throw "Windows non conforme: $($failed -join ', '). Rapport: $reportPath"
 }
-Write-Host 'VERDICT: V3 WINDOWS READY' -ForegroundColor Green
+Write-Host 'VERDICT: WINDOWS READY' -ForegroundColor Green
 Write-Host "Rapport: $reportPath"
