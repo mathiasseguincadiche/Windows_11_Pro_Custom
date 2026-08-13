@@ -30,12 +30,41 @@ for cmd in curl jq unzip tar sha256sum sudo; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "[ERREUR] Commande requise absente: $cmd" >&2; exit 1; }
 done
 
-current_kubectl() { command -v kubectl >/dev/null 2>&1 && kubectl version --client --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion // empty' || true; }
-current_helm() { command -v helm >/dev/null 2>&1 && helm version --template '{{.Version}}' 2>/dev/null || true; }
-current_terraform() { command -v terraform >/dev/null 2>&1 && terraform version -json 2>/dev/null | jq -r '.terraform_version // empty' || true; }
-current_aws() { command -v aws >/dev/null 2>&1 && aws --version 2>&1 | sed -n 's/^aws-cli\/\([^ ]*\).*/\1/p' || true; }
-current_minikube() { command -v minikube >/dev/null 2>&1 && minikube version --short 2>/dev/null | tr -d '[:space:]' || true; }
-current_kind() { command -v kind >/dev/null 2>&1 && kind version 2>/dev/null | awk '{print $2}' || true; }
+current_kubectl() {
+  if command -v kubectl >/dev/null 2>&1; then
+    kubectl version --client --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion // empty'
+  fi
+}
+
+current_helm() {
+  if command -v helm >/dev/null 2>&1; then
+    helm version --template '{{.Version}}' 2>/dev/null
+  fi
+}
+
+current_terraform() {
+  if command -v terraform >/dev/null 2>&1; then
+    terraform version -json 2>/dev/null | jq -r '.terraform_version // empty'
+  fi
+}
+
+current_aws() {
+  if command -v aws >/dev/null 2>&1; then
+    aws --version 2>&1 | sed -n 's/^aws-cli\/\([^ ]*\).*/\1/p'
+  fi
+}
+
+current_minikube() {
+  if command -v minikube >/dev/null 2>&1; then
+    minikube version --short 2>/dev/null | tr -d '[:space:]'
+  fi
+}
+
+current_kind() {
+  if command -v kind >/dev/null 2>&1; then
+    kind version 2>/dev/null | awk '{print $2}'
+  fi
+}
 
 expected_names=(kubectl helm terraform aws minikube kind)
 expected_versions=("$KUBECTL_VERSION" "$HELM_VERSION" "$TERRAFORM_VERSION" "$AWS_CLI_VERSION" "$MINIKUBE_VERSION" "$KIND_VERSION")
