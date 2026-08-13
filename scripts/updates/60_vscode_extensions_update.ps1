@@ -46,7 +46,7 @@ $global:LASTEXITCODE = 0
 Write-Host ("[INFO] VS Code CLI: {0}" -f (($version | Select-Object -First 1) -join '')) -ForegroundColor Cyan
 
 if ($Mode -eq 'Audit') {
-    Write-Host '[INFO] Le CLI VS Code ne propose pas de dry-run des mises à jour d’extensions; Apply utilisera --update-extensions, qui ne modifie que les extensions réellement obsolètes.' -ForegroundColor DarkGray
+    Write-Host '[INFO] Le CLI VS Code ne propose pas de dry-run des mises à jour dʼextensions; Apply utilisera --update-extensions, qui ne modifie que les extensions réellement obsolètes.' -ForegroundColor DarkGray
     [void](Invoke-WpcManagedScript -Context $context -Path $windowsVerify -Arguments @{ Mode='Verify' } -DisplayName 'VS Code Windows managed set' -Phase 'Updates' -Purpose 'Probe' -AllowFailure)
     [void](Invoke-WslExtensionManager -Action 'audit')
     return
@@ -56,7 +56,7 @@ if ($Mode -eq 'Verify') {
     [void](Invoke-WpcManagedScript -Context $context -Path $windowsVerify -Arguments @{ Mode='Verify' } -DisplayName 'VS Code Windows managed set' -Phase 'Updates')
     $wslResult = Invoke-WslExtensionManager -Action 'verify'
     if (-not $wslResult.Success) { throw "Extensions VS Code WSL non conformes: $($wslResult.Error)" }
-    Write-Host '[DÉJÀ OK] Ensembles d’extensions VS Code Windows/WSL conformes au dépôt.' -ForegroundColor Green
+    Write-Host '[DÉJÀ OK] Ensembles dʼextensions VS Code Windows/WSL conformes au dépôt.' -ForegroundColor Green
     return
 }
 
