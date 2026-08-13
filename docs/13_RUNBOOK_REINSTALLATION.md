@@ -1,1028 +1,672 @@
 # Runbook — réinstallation et reconstruction complète de la workstation
 
-Ce document est la **procédure opérationnelle** à suivre lorsqu'il faut reconstruire la machine après une réinstallation volontaire, une panne Windows, un remplacement de SSD ou une corruption importante.
+Ce Runbook sert quand la machine doit être **reconstruite après une panne, un remplacement de disque, une réinstallation volontaire ou une perte importante de configuration**.
 
-Il n'est pas conçu pour enseigner tous les concepts : le tutoriel pédagogique d'installation est [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md). Ici, l'objectif est de savoir **quoi faire, dans quel ordre, quand s'arrêter et comment prouver que chaque phase est correcte**.
+Il ne suppose pas que la meilleure réponse est toujours « réinstaller Windows ». La première étape consiste à choisir entre réparation, restauration et reconstruction.
 
----
+> **Frontière de sécurité :** ce dépôt peut préparer, auditer, converger et vérifier la workstation, mais il ne formate jamais automatiquement les SSD et ne déclenche jamais une restauration bare-metal destructive sans décision humaine.
 
-# 0. Avant toute chose : choisir le bon scénario
+Pour une première installation sans incident, utiliser [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md).
 
-Ne réinstalle pas Windows automatiquement dès qu'un problème apparaît.
-
-```text
-Incident léger
-├── mauvais réglage / tweak
-│   └── Rollback du dépôt ou System Restore
-│
-├── Windows démarre mais fonctionne mal
-│   └── diagnostic / réparation / éventuellement restauration V7
-│
-├── WSL seulement est endommagé
-│   └── restaurer le VHDX sous un autre nom et valider
-│
-├── Windows ne démarre plus / disque remplacé
-│   └── restauration WindowsImageBackup V7 via WinRE
-│
-└── aucune sauvegarde exploitable
-    └── installation Windows propre + reconstruction depuis GitHub
-```
-
-## STOP immédiat si
-
-- tu n'es pas certain du SSD que tu vas effacer ;
-- des données importantes ne sont pas sauvegardées ;
-- tu possèdes une sauvegarde V7 mais tu ne l'as pas encore vérifiée ;
-- un disque semble physiquement défaillant ;
-- tu n'as pas la clé de récupération d'un éventuel chiffrement externe au projet ;
-- tu hésites entre `C:` et `D:` dans WinRE ou l'installateur Windows.
-
-**Le dépôt n'automatise aucun formatage.** Une erreur manuelle de sélection de disque reste destructive.
+Pour comprendre la stratégie de sauvegarde, utiliser [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-# 1. Décider : restauration V7 ou reconstruction propre ?
+# Phase 0 — qualifier l'incident
 
-## Choisir la restauration V7 si
-
-Tu disposes d'un Golden Backup validé contenant :
+Avant de toucher aux disques, réponds à ces questions :
 
 ```text
-WindowsImageBackup\
-Windows_11_Pro_Custom_Backup\V7\...
-└── WSL\Ubuntu-GOLDEN-V7.vhdx
+Windows démarre-t-il ?
+Les données C: sont-elles accessibles ?
+Les données D: sont-elles accessibles ?
+WSL2 démarre-t-il ?
+Le VHDX Ubuntu existe-t-il ?
+Une image Windows validée existe-t-elle ?
+Un export WSL validé existe-t-il ?
+Le disque de sauvegarde externe est-il disponible ?
+Le problème est-il logiciel, système ou matériel ?
 ```
 
-et que :
-
-- le disque USB de sauvegarde est sain ;
-- la version désirée apparaît dans `wbadmin get versions` ;
-- le VHDX WSL passe son contrôle SHA-256 ;
-- tu souhaites récupérer l'état complet de la machine tel qu'il était au moment du snapshot.
-
-Voir directement : [Restauration V7](#17-restauration-v7--procédures-de-reprise).
-
-## Choisir la reconstruction propre si
-
-- aucune image V7 utilisable n'existe ;
-- tu veux volontairement repartir d'un Windows neuf ;
-- la sauvegarde est plus ancienne que l'état que tu veux reconstruire ;
-- un changement majeur de stockage rend une reconstruction préférable ;
-- tu veux profiter de la reproductibilité du dépôt plutôt que restaurer un état historique.
-
-Dans ce cas, suis les phases 2 à 16.
+Ne reformate pas une machine dont le problème pourrait être corrigé par un rollback ou une restauration ciblée.
 
 ---
 
-# 2. Préparer les éléments nécessaires
+## Choisir la bonne stratégie
 
-Avant d'effacer quoi que ce soit, réunis :
+### Cas A — Windows démarre et la machine est seulement incohérente
 
-```text
-[ ] clé USB Windows 11 officielle
-[ ] accès Internet
-[ ] accès au compte/licence Windows
-[ ] accès au dépôt GitHub
-[ ] accès GitHub au dépôt privé OpenClaw si celui-ci doit être restauré
-[ ] sauvegarde des fichiers personnels
-[ ] disque Golden Backup V7 si disponible
-[ ] éventuelles clés de récupération externes au projet
-[ ] pilotes réseau de secours si nécessaire
-```
-
-Sources constructeur utiles :
-
-- Windows 11 : <https://www.microsoft.com/software-download/windows11>
-- MSI B850M Mortar WiFi : <https://www.msi.com/Motherboard/MAG-B850M-MORTAR-WIFI/support>
-- AMD B850 chipset : <https://www.amd.com/en/support/downloads/drivers.html/chipsets/am5/b850.html>
-- Intel Arc B580 : <https://www.intel.com/content/www/us/en/products/sku/241598/intel-arc-b580-graphics/downloads.html>
-
-Ne conserve pas dans ce Runbook un numéro de BIOS ou de driver comme vérité permanente : vérifie la source officielle au moment de la reconstruction.
-
----
-
-# 3. Vérifier le matériel et l'UEFI
-
-Avant installation Windows :
-
-```text
-UEFI                       [requis]
-CSM / Legacy               [désactivé]
-TPM / AMD fTPM             [actif]
-Secure Boot                [actif]
-SVM / virtualisation       [actif]
-Above 4G Decoding          [actif]
-Resizable BAR              [actif]
-RAM 6000                   [uniquement si stabilité connue]
-```
-
-## BIOS
-
-Ne flashe pas automatiquement le BIOS.
-
-Procédure :
-
-1. relève la version actuelle ;
-2. consulte le support MSI ;
-3. lis les notes des versions stables ;
-4. décide si le flash apporte une correction pertinente ;
-5. évite une version bêta sans raison précise.
-
-## Mémoire
-
-Si la reconstruction fait suite à des crashes inexpliqués, repasse temporairement aux valeurs mémoire par défaut avant de diagnostiquer Windows. La cible 6000 MT/s ne vaut que si elle est réellement stable.
-
----
-
-# 4. Protéger le deuxième T705 pendant l'installation
-
-Architecture cible :
-
-```text
-T705 #1 -> C: NTFS -> Windows 11 Pro
-T705 #2 -> D: NTFS -> DATA / WSL / OpenClaw
-```
-
-Les deux SSD peuvent être très difficiles à distinguer dans l'installateur Windows.
-
-## Méthode recommandée
-
-Si possible :
-
-1. désactive dans l'UEFI ou déconnecte temporairement le T705 destiné à `D:` ;
-2. laisse uniquement le SSD système visible pendant l'installation Windows ;
-3. reconnecte/réactive le deuxième SSD après le premier boot réussi.
-
-Cela protège `D:` d'une suppression accidentelle et évite que Windows place ses partitions EFI sur le mauvais disque.
-
----
-
-# 5. Installer Windows 11 Pro proprement
-
-Pour les explications écran par écran : [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md).
-
-Checklist opératoire :
-
-```text
-[ ] démarrer la clé en mode UEFI
-[ ] choisir Windows 11 Pro
-[ ] choisir installation personnalisée
-[ ] identifier le T705 système sans ambiguïté
-[ ] supprimer les anciennes partitions UNIQUEMENT si réinstallation propre voulue
-[ ] sélectionner l'espace non alloué du bon SSD
-[ ] laisser Windows créer EFI/MSR/Recovery/Primary
-[ ] laisser l'installation terminer
-[ ] ne plus redémarrer sur la clé après la première phase
-```
-
-### Critère de sortie phase 5
-
-La machine atteint le bureau Windows 11 Pro et démarre depuis Windows Boot Manager.
-
----
-
-# 6. Terminer OOBE et établir un Windows sain
-
-Avant les scripts du dépôt :
-
-```text
-[ ] édition Windows 11 Pro confirmée
-[ ] activation vérifiée
-[ ] compte utilisateur créé
-[ ] réseau fonctionnel
-[ ] date / heure / fuseau corrects
-[ ] écran utilisable
-[ ] bureau Windows accessible sans erreur
-```
-
-Le dépôt ne documente pas de contournement non supporté de l'OOBE.
-
----
-
-# 7. Premier cycle Windows Update
-
-Dans :
-
-```text
-Paramètres -> Windows Update
-```
-
-Répète :
-
-```text
-Rechercher
-→ installer les mises à jour normales
-→ redémarrer si demandé
-→ rechercher à nouveau
-```
-
-jusqu'à obtenir un état stable.
-
-**Ne sélectionne pas aveuglément tous les pilotes facultatifs.** Le projet préfère les pilotes chipset/GPU officiels des constructeurs.
-
-### Critère de sortie phase 7
-
-Windows Update ne présente plus de mise à jour normale importante en attente avant l'installation des drivers constructeur.
-
----
-
-# 8. Installer les pilotes constructeur
-
-Ordre conseillé :
-
-## 8.1 AMD chipset B850
-
-Source AMD officielle.
-
-Après installation, redémarre si demandé.
-
-## 8.2 Intel Arc B580
-
-Source Intel officielle.
-
-Vérifie après installation :
-
-```text
-Gestionnaire de périphériques -> Intel Arc B580 sans erreur
-```
-
-## 8.3 MSI / périphériques carte mère
-
-Installe uniquement ce qui est nécessaire :
-
-- LAN ;
-- Wi-Fi ;
-- Bluetooth ;
-- audio ;
-- autre périphérique réellement non reconnu.
-
-Le projet ne dépend pas de MSI Center.
-
-## 8.4 Contrôle Gestionnaire de périphériques
-
-Objectif :
-
-```text
-Périphérique inconnu        : 0
-Triangle jaune inattendu    : 0
-Arc B580                    : OK
-Réseau                      : OK
-Wi-Fi/Bluetooth             : OK si utilisés
-Audio                       : OK
-```
-
-### Critère de sortie phase 8
-
-Le matériel nécessaire à l'exploitation courante est correctement reconnu.
-
----
-
-# 9. Préparer `D:`
-
-Reconnecte/réactive le deuxième T705 si nécessaire.
-
-Dans Gestion des disques :
-
-```text
-T705 #2
-→ GPT
-→ volume simple
-→ NTFS
-→ lettre D:
-```
-
-Vérifie en PowerShell :
+Commence par :
 
 ```powershell
-Get-Volume -DriveLetter C,D | Format-Table DriveLetter,FileSystem,HealthStatus,Size,SizeRemaining
-Get-Disk | Format-Table Number,FriendlyName,PartitionStyle,HealthStatus,Size
+.\install.ps1 -Mode Audit
 ```
 
-Attendu :
+Puis, si les écarts sont compris :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Le mode `PlanOnly` permet de voir le plan avant toute mutation.
+
+Si le plan est cohérent :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall
+```
+
+Une réinstallation Windows n'est pas nécessaire si l'orchestrateur peut faire converger la machine.
+
+### Cas B — un réglage géré récemment a cassé le poste
+
+Si l'état précédent est connu et rollbackable :
+
+```powershell
+.\install.ps1 -Mode Rollback
+```
+
+Le rollback concerne les composants gérés pour lesquels un état initial fiable existe. Il ne remplace pas une restauration complète.
+
+### Cas C — Windows est endommagé mais une image validée existe
+
+Évalue la restauration Windows à partir du support de sauvegarde externe et de WinRE.
+
+Une restauration bare-metal reste manuelle.
+
+### Cas D — seul WSL2 est endommagé
+
+Si un export VHDX validé existe, restaure d'abord Ubuntu **sous un nom distinct**, par exemple :
 
 ```text
-C: NTFS Healthy
-D: NTFS Healthy
+Ubuntu-Restore
 ```
 
-**Ne crée aucune partition EXT4 physique.**
+Ne supprime pas la distribution active avant d'avoir vérifié la copie restaurée.
+
+### Cas E — disque remplacé ou réinstallation complète souhaitée
+
+Suis les phases suivantes du Runbook.
 
 ---
 
-# 10. Vérifier les prérequis de sécurité et virtualisation
+# Phase 1 — protéger ce qui est encore récupérable
 
-PowerShell administrateur :
+Si les disques sont accessibles, sauvegarde avant toute opération destructrice.
 
-```powershell
-Confirm-SecureBootUEFI
-Get-Tpm
-systeminfo
-```
-
-Attendu :
+Priorités :
 
 ```text
-Secure Boot     -> True
-TPM             -> présent / prêt
-Virtualisation  -> activée firmware
+données personnelles
+projets non poussés sur Git
+clés SSH
+fichiers de configuration locaux
+secrets / credentials
+état OpenClaw utile
+VHDX WSL ou export disponible
+documents non synchronisés
 ```
 
-Vérifie également l'écran :
+Ne mets jamais les secrets dans le dépôt Git pour les « sauver temporairement ».
 
-```text
-2560×1440
-~240 Hz si le driver et l'écran le proposent
-```
+Si une sauvegarde de référence existe déjà, **ne l'écrase pas** avant d'avoir terminé la reconstruction.
 
 ---
 
-# 11. Récupérer le dépôt
+# Phase 2 — vérifier le matériel avant de réinstaller
 
-Sur un Windows neuf, **Git for Windows peut être absent**.
+Une panne logicielle supposée peut être causée par un problème matériel.
 
-## Méthode simple
+Avant une reconstruction complète, vérifie :
 
-Télécharge le ZIP du dépôt GitHub puis extrais-le dans :
+- SSD visibles dans l'UEFI ;
+- température et refroidissement plausibles ;
+- RAM détectée ;
+- absence d'erreurs matérielles connues ;
+- câble/écran/périphériques essentiels ;
+- stabilité du BIOS ;
+- alimentation correcte.
+
+Si la machine présente des crashs aléatoires, réduis les variables expérimentales :
 
 ```text
-C:\Users\<user>\Documents\Windows_11_Pro_Custom
+RAM -> paramètres sûrs
+CPU -> stock
+GPU -> pas d'OC/undervolt expérimental
+BIOS -> base stable connue
 ```
 
-## Si Git est déjà installé
+La qualification complète est documentée dans [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
+
+---
+
+# Phase 3 — préparer le média Windows
+
+Utilise une image Windows 11 officielle et une clé USB fiable.
+
+Depuis Linux, Ventoy peut être utilisé si la clé est déjà préparée. Depuis Windows, l'outil Microsoft de création de média est la méthode la plus simple.
+
+L'objectif est une installation supportée normalement : aucun contournement TPM/Secure Boot n'est nécessaire sur cette configuration.
+
+---
+
+# Phase 4 — sécuriser les deux SSD
+
+La workstation utilise deux Crucial T705 similaires :
+
+```text
+T705 #1 -> C: -> Windows 11 Pro
+T705 #2 -> D: -> données / WSL / OpenClaw
+```
+
+La meilleure protection contre une erreur de sélection est de déconnecter ou désactiver temporairement le SSD `D:` pendant l'installation Windows si cela peut être fait sans risque.
+
+Sinon, vérifie numéro et capacité à chaque suppression de partition.
+
+> Une erreur de disque au moment du partitionnement est irréversible sans sauvegarde.
+
+---
+
+# Phase 5 — vérifier l'UEFI
+
+Réglages attendus :
+
+| Réglage | Cible |
+| --- | --- |
+| Boot | UEFI |
+| CSM | désactivé |
+| Secure Boot | actif |
+| TPM / AMD fTPM | actif |
+| SVM | actif |
+| Above 4G Decoding | actif |
+| Resizable BAR | actif |
+
+Le dépôt ne les modifie pas automatiquement.
+
+Si la RAM est en cours de diagnostic, privilégie une configuration stable avant de retenter 6000 MT/s.
+
+---
+
+# Phase 6 — réinstaller Windows 11 Pro
+
+Démarre sur le média UEFI puis effectue une installation personnalisée sur le **SSD système uniquement**.
+
+Pour une reconstruction totalement propre :
+
+1. confirme que les données importantes sont sauvegardées ;
+2. sélectionne le bon T705 ;
+3. supprime uniquement les anciennes partitions Windows voulues ;
+4. laisse Windows recréer automatiquement GPT/EFI/MSR/Recovery/Primary ;
+5. installe Windows 11 Pro.
+
+Après le premier redémarrage, démarre sur Windows Boot Manager.
+
+---
+
+# Phase 7 — stabiliser Windows avant le dépôt
+
+Une fois sur le bureau :
+
+1. vérifier activation et édition Windows 11 Pro ;
+2. vérifier heure/fuseau/réseau ;
+3. effectuer Windows Update ;
+4. redémarrer si nécessaire ;
+5. installer le chipset AMD ;
+6. installer le pilote Intel Arc ;
+7. compléter les pilotes MSI réellement nécessaires ;
+8. vérifier le Gestionnaire de périphériques.
+
+Ne lance pas les optimisations tant que des périphériques essentiels restent inconnus ou instables.
+
+---
+
+# Phase 8 — reconstruire `D:`
+
+Si le second SSD est intact, ne le reformate pas inutilement.
+
+S'il a été remplacé ou doit réellement être recréé :
+
+```text
+GPT
+└── D: NTFS
+```
+
+Architecture logique :
+
+```text
+D:\
+├── DATA\
+├── WSL\
+│   ├── Ubuntu-DevOps\
+│   └── swap\
+├── AI\
+├── ISO\
+└── exports\
+```
+
+Aucune partition EXT4 physique n'est nécessaire.
+
+Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
+
+---
+
+# Phase 9 — récupérer le dépôt
+
+Installe Git si nécessaire puis clone :
 
 ```powershell
+mkdir C:\Dev -ErrorAction SilentlyContinue
+cd C:\Dev
 git clone https://github.com/mathiasseguincadiche/Windows_11_Pro_Custom.git
 cd Windows_11_Pro_Custom
 ```
 
-### Critère de sortie phase 11
-
-Le dossier contient au minimum :
-
-```text
-README.md
-menu.ps1
-install.ps1
-update.ps1
-config\
-docs\
-manifest\ ou manifests\ selon arborescence réelle
-scripts\
-```
-
-Dans ce dépôt, le dossier applicatif actuel est `manifests\`.
-
----
-
-# 12. Audit initial : ne pas commencer par Apply
-
-Ouvre PowerShell en administrateur dans le dépôt :
+Avant toute mutation :
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\install.ps1 -Mode Audit
 ```
 
-L'Audit relit notamment :
-
-- le préflight Windows ;
-- l'état réel de la machine ;
-- le système et le stockage ;
-- le matériel ;
-- les réglages Windows ;
-- les applications ;
-- WSL ;
-- Defender ;
-- workstation VS Code/WezTerm ;
-- OpenClaw s'il existe déjà.
-
-## STOP si l'Audit montre
-
-- `D:` absent ;
-- `C:` ou `D:` dans un filesystem inattendu ;
-- incohérence matérielle majeure ;
-- erreur préflight non comprise ;
-- stockage dégradé ;
-- autre condition fondamentale qui rendrait l'Apply dangereux.
-
-### Critère de sortie phase 12
-
-La machine possède une base cohérente permettant de construire le plan d'installation.
+L'audit doit être conservé comme premier état factuel de la reconstruction.
 
 ---
 
-# 13. Prévisualiser le plan complet
+# Phase 10 — prévisualiser la convergence
 
-Avant une reconstruction importante, il est recommandé d'exécuter :
+Calcule le plan complet :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-Le plan V9 est calculé depuis `Verify` :
+Relis le plan.
+
+Le résultat attendu n'est pas forcément « tout installer » : une machine partiellement restaurée peut déjà contenir des éléments conformes.
+
+Le moteur doit distinguer :
 
 ```text
-DEJA_OK -> aucune mutation prévue
-A_FAIRE -> Apply puis re-Verify
+DÉJÀ OK
+À FAIRE
+ACTION REQUISE
+KO
 ```
 
-`PlanOnly` s'arrête avant les changements système après la phase de découverte.
-
-Lis le plan. Si une action attendue est surprenante, ne valide pas tant que tu ne comprends pas pourquoi elle est proposée.
+Guide : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
 
 ---
 
-# 14. Lancer l'installation complète
+# Phase 11 — appliquer la configuration actuelle
 
-## Via le menu V12
-
-```powershell
-.\menu.ps1
-```
-
-Puis :
-
-```text
-1. Installation complète
-```
-
-## Via PowerShell
+Si le plan est cohérent :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-`FullInstall` demande actuellement :
+Ou utilise le centre de contrôle :
 
 ```text
-Windows/apps/configuration
-WSL2
-stack DevOps
-validation WSL
-validation DevOps
-qualification hardware
-OpenClaw/OpenRouter
-validation OpenClaw
+START_MENU.cmd
 ```
 
-L'orchestrateur :
+Puis **Installation complète**.
 
-1. relit l'état machine ;
-2. construit le plan avant mutation ;
-3. demande confirmation ;
-4. tente un point de restauration avant changements ;
-5. capture un benchmark avant ;
-6. n'applique que les composants en écart ;
-7. revalide chaque composant ;
-8. capture les preuves après modification ;
-9. écrit les logs et résumés.
+Le processus peut nécessiter plusieurs passages lorsque Windows ou WSL exige un redémarrage ou une création d'utilisateur.
+
+Ne considère pas un redémarrage nécessaire comme un échec : traite l'action puis relance l'audit/convergence.
 
 ---
 
-# 15. Gérer les redémarrages et le premier lancement WSL
+# Phase 12 — WSL2 / Ubuntu
 
-Une reconstruction Windows/WSL peut nécessiter un ou plusieurs redémarrages.
+Le contrat actuel est :
 
-## Si Windows demande un reboot
+```text
+Ubuntu 26.04
+D:\WSL\Ubuntu-DevOps
+HOME ext4
+```
 
-1. termine proprement l'étape en cours ;
-2. redémarre ;
-3. retourne dans le dépôt ;
-4. relance **la même commande**.
+Si Ubuntu doit être recréé, crée un utilisateur Linux normal, puis laisse le dépôt installer/converger la configuration.
 
-L'idempotence V9 doit faire apparaître les composants déjà convergés comme `DEJA_OK` plutôt que les réinstaller.
+Après une modification de `.wslconfig` :
 
-## Si Ubuntu demande la création d'un utilisateur
+```powershell
+wsl --shutdown
+wsl -d Ubuntu
+```
 
-Lors du premier lancement WSL :
-
-1. ouvre Ubuntu ;
-2. crée l'utilisateur Linux demandé ;
-3. reviens ensuite à l'orchestrateur.
-
-Les racines de travail attendues sont :
+Dans Ubuntu :
 
 ```bash
-mkdir -p ~/projects ~/labs ~/repositories
+whoami
+nproc
+free -h
+swapon --show
+ps -p 1 -o comm=
+findmnt -T "$HOME"
 ```
 
-Ne place pas tes projets Linux dans `/mnt/c` ou `/mnt/d`.
+Guide : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-# 16. Qualifications après reconstruction
+# Phase 13 — restaurer un WSL sauvegardé
 
-## 16.1 Windows / workstation
+Si un VHDX sauvegardé existe, privilégie une restauration parallèle.
 
-```powershell
-.\install.ps1 -Mode Verify
+Principe :
+
+```text
+Ubuntu actuel
+     +
+Ubuntu-Restore importé
+     ↓
+validation indépendante
+     ↓
+choix humain
 ```
 
-## 16.2 Hardware + WSL + DevOps
+Vérifie la copie restaurée avant toute suppression de l'ancienne distribution :
+
+- utilisateur ;
+- projets ;
+- permissions ;
+- Docker ;
+- outils DevOps ;
+- fichiers personnels ;
+- intégrité attendue.
+
+Ne lance jamais par automatisme :
 
 ```powershell
-.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
+wsl --unregister Ubuntu
 ```
 
-## 16.3 Avec OpenClaw
+Cette commande détruit la distribution ciblée.
+
+---
+
+# Phase 14 — stack DevOps
+
+Applique/valide :
+
+```powershell
+.\install.ps1 -Mode Apply -InstallDevOps
+```
+
+Puis :
+
+```powershell
+wsl --shutdown
+.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
+```
+
+La stack attendue comprend Docker, Kubernetes, Terraform, Ansible, AWS CLI, GitHub CLI et les outils qualité définis par le dépôt.
+
+Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
+
+---
+
+# Phase 15 — VS Code, WezTerm et accès distants
+
+Vérifie que :
+
+- PowerShell 7 fonctionne ;
+- WezTerm ouvre Ubuntu/Bash comme environnement Linux principal ;
+- PowerShell reste accessible ;
+- VS Code WSL ouvre les projets sous `/home/<user>/...` ;
+- Remote - SSH fonctionne si nécessaire ;
+- les configurations SFTP/FTP personnelles ne publient aucun secret.
+
+Le terminal et la stack sont documentés dans [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
+
+---
+
+# Phase 16 — restaurer les données personnelles
+
+Restaure les données **après** avoir stabilisé le système de base lorsque c'est possible.
+
+Ordre conseillé :
+
+```text
+workstation stable
+   ↓
+profil / documents
+   ↓
+projets non présents dans Git
+   ↓
+clés et secrets depuis leur stockage sécurisé
+   ↓
+données applicatives
+   ↓
+OpenClaw si utilisé
+```
+
+Évite de recopier en bloc des anciens dossiers système ou caches qui pourraient réintroduire le problème initial.
+
+---
+
+# Phase 17 — OpenClaw / OpenRouter
+
+Si cette intégration fait partie de la machine :
+
+```text
+D:\AI\OpenClaw
+```
+
+Le dépôt Windows prépare et vérifie l'intégration. Les données et secrets OpenClaw doivent être restaurés avec prudence depuis une sauvegarde appropriée.
+
+Validation :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateOpenClawAI
+```
+
+Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+
+---
+
+# Phase 18 — validation matérielle
+
+Une réinstallation Windows ne prouve pas que le BIOS, la RAM ou le GPU sont correctement configurés.
+
+Lance :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateHardware
+```
+
+Puis renseigne les contrôles manuels si nécessaire :
+
+```powershell
+.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive
+```
+
+Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
+
+---
+
+# Phase 19 — validation globale
+
+Commande recommandée :
 
 ```powershell
 .\install.ps1 `
   -Mode Verify `
   -ValidateHardware `
   -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateOpenClawAI
+  -ValidateDevOps
 ```
 
-## Preuves matérielles manuelles
-
-Si la qualification V5 indique `ACTION_REQUISE`, enregistre les preuves guidées :
+Si OpenClaw est utilisé :
 
 ```powershell
-.\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive
+.\install.ps1 -Mode Verify -ValidateOpenClawAI
 ```
 
-À confirmer honnêtement :
+La validation doit reposer sur l'état réel, pas sur le fait que le script d'installation a été lancé.
 
-```text
-[ ] CSM désactivé
-[ ] Above 4G actif
-[ ] ReBAR actif
-[ ] T705 dans les emplacements prévus
-[ ] heatsinks / airflow SSD vérifiés
-[ ] stabilité DDR5 6000 vérifiée
-[ ] BIOS stable revu
-[ ] drivers constructeur revus
-```
-
-Un élément non prouvé ne doit pas être marqué réussi simplement pour obtenir un verdict vert.
+Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ---
 
-# 17. Restauration V7 — procédures de reprise
+# Phase 20 — maintenance après reconstruction
 
-Cette section concerne un incident où un Golden Backup existe déjà.
-
-Pour les détails : [`18_BACKUP_DISASTER_RECOVERY_V7.md`](18_BACKUP_DISASTER_RECOVERY_V7.md).
-
-## 17.1 Générer d'abord le plan
-
-Depuis un Windows encore utilisable :
+Audite d'abord :
 
 ```powershell
-.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
+.\update.ps1 -Mode Audit
 ```
 
-Le fichier généré est :
-
-```text
-reports/backup/restore-plan-v7.txt
-```
-
-Le script vérifie l'intégrité du VHDX avant de produire le plan et **ne restaure rien automatiquement**.
-
-## 17.2 WSL endommagé seulement
-
-Principe :
-
-```text
-Ubuntu actuel        -> reste intact
-Ubuntu-Restore-V7    -> importé à côté
-                       ↓
-                    validation
-                       ↓
-               décision humaine
-```
-
-Le plan propose typiquement :
+Puis, si la situation est claire :
 
 ```powershell
-wsl --shutdown
-wsl --import Ubuntu-Restore-V7 "D:\WSL\Ubuntu-Restore-V7" "E:\...\Ubuntu-GOLDEN-V7.vhdx" --vhd
-wsl -l -v
-wsl -d Ubuntu-Restore-V7
+.\update.ps1 -Mode Apply
 ```
 
-**Ne lance jamais `wsl --unregister Ubuntu` avant d'avoir validé la copie restaurée et sauvegardé ce qui doit l'être.**
+Enfin :
 
-## 17.3 Régression Windows légère
-
-Utilise d'abord, selon le cas :
-
-```text
-install.ps1 -Mode Rollback
+```powershell
+.\update.ps1 -Mode Verify
 ```
 
-pour les réglages réellement gérés par le dépôt, ou **System Restore** pour revenir à un point de restauration Windows.
+Le gestionnaire couvre Windows Update, WinGet, WSL, Ubuntu, outils DevOps épinglés et extensions VS Code sans forcer un reboot ni un flash firmware.
 
-## 17.4 Windows ne démarre plus / remplacement du SSD
-
-Démarre dans WinRE ou depuis une Recovery Drive.
-
-Connecte le disque de sauvegarde.
-
-**Attention : les lettres de lecteur peuvent changer dans WinRE. Vérifie-les.**
-
-Lister les versions :
-
-```text
-wbadmin get versions -backupTarget:E:
-```
-
-La commande bare-metal de type :
-
-```text
-wbadmin start sysrecovery -version:<VERSION_IDENTIFIER> -backupTarget:E: -restoreAllVolumes
-```
-
-est lancée **manuellement**, après validation des disques et de la version choisie.
-
-Le projet n'ajoute pas automatiquement `-recreateDisks` car cette option peut repartitionner les disques.
+Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-# 18. Rollback ≠ restauration
+# Phase 21 — créer une nouvelle sauvegarde de référence
 
-Ces termes ne signifient pas la même chose.
+Ne remplace pas immédiatement l'ancienne sauvegarde validée.
 
-## Rollback du dépôt
-
-```powershell
-.\install.ps1 -Mode Rollback
-```
-
-Restaure les états initiaux enregistrés pour les réglages gérés : optimisations/tweaks/Defender/workstation selon les états disponibles.
-
-Il **ne** :
-
-- désinstalle pas toute la machine ;
-- supprime pas WSL ;
-- supprime pas OpenClaw ;
-- restaure pas une image disque.
-
-## RestorePlan V7
-
-```powershell
-.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
-```
-
-Produit une procédure de reprise sans l'exécuter.
-
-## Bare-metal V7
-
-Restauration manuelle depuis WinRE d'une image système complète.
-
----
-
-# 19. Terminal V10 et VS Code après reconstruction
-
-Une fois WSL installé, WezTerm doit ouvrir par défaut Ubuntu/Bash.
-
-Architecture attendue :
-
-```text
-WezTerm
-├── Ubuntu DevOps / Bash
-└── PowerShell 7
-
-VS Code
-└── Ubuntu WSL / Bash
-```
-
-Dans Ubuntu, vérifie :
-
-```bash
-command -v starship
-command -v fzf
-command -v zoxide
-command -v eza
-command -v rg
-```
-
-Le profil géré se trouve sous :
-
-```text
-~/.config/windows11-pro-custom/devops.sh
-```
-
-Personnalisation locale :
-
-```text
-~/.config/windows11-pro-custom/local.sh
-```
-
-Guide : [`21_DEVOPS_TERMINAL_V10.md`](21_DEVOPS_TERMINAL_V10.md).
-
----
-
-# 20. Smoke tests DevOps
-
-Dans Ubuntu :
-
-```bash
-git --version
-docker info
-docker run --rm hello-world
-kubectl version --client
-helm version
-terraform version
-aws --version
-ansible --version
-gh --version
-```
-
-Pour Kubernetes local si nécessaire :
-
-```bash
-minikube start --driver=docker
-kubectl get nodes
-```
-
-Ne considère pas seulement la présence du binaire : la validation du dépôt vérifie également les versions/contrats nécessaires.
-
----
-
-# 21. OpenClaw / OpenRouter après reconstruction
-
-Architecture :
-
-```text
-D:\AI\OpenClaw\
-├── control-plane
-├── npm-global
-├── state
-├── workspace
-├── clawops
-├── venv
-├── logs
-└── cache
-```
-
-Le control-plane suit un **SHA Git épinglé**, pas une branche mobile.
-
-Si OpenClaw n'a pas été installé pendant `FullInstall` :
-
-```powershell
-.\install.ps1 -Mode Apply -InstallDevOps -InstallOpenClawAI
-```
-
-Puis :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps -ValidateOpenClawAI
-```
-
-Le dépôt privé nécessite une authentification GitHub au premier clone.
-
-## Secrets
-
-La clé OpenRouter n'est pas destinée à Git.
-
-L'onboarding se fait explicitement quand nécessaire :
-
-```powershell
-openclaw onboard --auth-choice openrouter-api-key
-```
-
-Le rollback global ne supprime pas `D:\AI\OpenClaw`, car `state` peut contenir des credentials et des données de travail.
-
-Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
-
----
-
-# 22. Créer le nouveau Golden Backup
-
-**Ne crée pas le Golden Backup avant d'avoir qualifié la machine.**
-
-Connecte un disque USB NTFS séparé, exemple `E:`.
-
-Créer :
+Quand la reconstruction est stable et réellement vérifiée, crée une nouvelle sauvegarde sur un disque USB NTFS distinct :
 
 ```powershell
 .\install.ps1 -BackupAction Create -BackupTargetDrive E:
 ```
 
-Vérifier :
+Puis :
 
 ```powershell
 .\install.ps1 -BackupAction Verify -BackupTargetDrive E:
 ```
 
-Verdict attendu sur la vraie machine :
-
-```text
-VERDICT: V7 BACKUP READY
-```
-
-La politique actuelle exige notamment :
-
-```text
-C: + D: protégés
-cible distincte physiquement
-USB par défaut
-NTFS
->= 100 Go libres avant lancement
-WSL exporté en VHDX
-SHA-256 vérifié
-WinRE actif
-```
-
-Ne supprime pas immédiatement un Golden Backup précédent qui est encore connu comme bon.
-
----
-
-# 23. Créer une Recovery Drive
-
-Lance :
+Et, pour confirmer que le plan de reprise peut être généré :
 
 ```powershell
-recoverydrive.exe
+.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
 ```
 
-Windows efface la clé choisie : cette opération reste volontairement interactive.
-
-La Recovery Drive complète le Golden Backup ; elle ne remplace pas les données sauvegardées.
+Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-# 24. Maintenance après reconstruction
+# Phase 22 — contrôles finaux
 
-Le gestionnaire V11 est le mécanisme régulier :
-
-```powershell
-.\update.ps1 -Mode Audit
-.\update.ps1 -Mode Apply
-.\update.ps1 -Mode Verify
-```
-
-ou menu :
+Checklist :
 
 ```text
-3. Mises à jour complètes
-```
-
-Couverture :
-
-```text
-Windows Update
-WinGet
-WSL runtime
-Ubuntu / APT
-DevOps épinglé
-VS Code extensions
-```
-
-Par défaut, V11 ne force ni drivers facultatifs, ni BIOS, ni firmware, ni reboot.
-
----
-
-# 25. Journaux et preuves à conserver
-
-Après une reconstruction, ouvre depuis le menu :
-
-```text
-9. Journaux et rapports
-```
-
-ou inspecte :
-
-```text
-logs/
-logs/runs/<RunId>/events.ndjson
-logs/runs/<RunId>/summary.json
-reports/
-```
-
-À conserver comme preuve de bonne reconstruction :
-
-- dernier résumé d'installation ;
-- validations Windows/WSL/DevOps/hardware ;
-- rapport backup V7 ;
-- éventuels benchmarks avant/après ;
-- rapport V11 après maintenance.
-
----
-
-# 26. Dépannage : arbre de décision
-
-## `install.ps1` échoue au préflight
-
-```text
-Ne pas relancer en boucle.
-↓
-Lire l'erreur précise.
-↓
-Vérifier C:/D:, droits admin, Windows, stockage.
-```
-
-## WinGet est absent
-
-Ouvre Microsoft Store, mets **App Installer** à jour, puis relance la même commande.
-
-## WSL demande un reboot
-
-Redémarre Windows puis relance l'orchestrateur. Les étapes déjà conformes doivent devenir `DEJA_OK`.
-
-## Ubuntu existe mais l'utilisateur n'est pas prêt
-
-Ouvre la distribution, termine le premier lancement, crée l'utilisateur, puis relance.
-
-## Docker refuse l'accès après installation
-
-Ferme les shells WSL ou :
-
-```powershell
-wsl --shutdown
-```
-
-puis relance Ubuntu afin que l'appartenance au groupe soit rechargée.
-
-## Une version DevOps est différente
-
-Ne remplace pas manuellement par `latest` pour « faire disparaître » l'erreur.
-
-Vérifie :
-
-```text
-config/devops/tool-versions.env
-```
-
-puis utilise l'orchestrateur/mise à jour pour converger vers la version du dépôt.
-
-## Hardware V5 reste incomplet
-
-Complète les preuves manuelles ; ne truque pas le résultat.
-
-## OpenClaw ne clone pas le dépôt privé
-
-Vérifie l'authentification GitHub / Git Credential Manager et l'accès au dépôt privé. Ne remplace pas le SHA épinglé par `main` pour contourner le problème.
-
-## Une restauration WSL est incertaine
-
-Importe sous `Ubuntu-Restore-V7`, valide-la à côté de l'ancienne distribution. Ne désenregistre pas l'original tant que la copie n'est pas prouvée.
-
----
-
-# 27. Sign-off final
-
-La reconstruction n'est terminée que lorsque cette checklist est satisfaite :
-
-```text
-WINDOWS
 [ ] Windows 11 Pro activé
-[ ] Windows Update stabilisé
 [ ] aucun périphérique inconnu
-[ ] AMD chipset valide
-[ ] Arc B580 valide
-
-STOCKAGE / SECURITY
-[ ] C: NTFS / T705 système
-[ ] D: NTFS / T705 DATA
-[ ] GPT
-[ ] Secure Boot
-[ ] TPM 2.0
-[ ] SVM
-[ ] ReBAR + Above 4G vérifiés
-
-WORKSTATION
-[ ] applications automatiques présentes
-[ ] PowerShell 7
-[ ] VS Code
-[ ] WezTerm
-[ ] terminal Bash DevOps
-
-WSL / DEVOPS
-[ ] Ubuntu 26.04
-[ ] HOME Linux ext4
-[ ] projets dans ~/projects / ~/labs / ~/repositories
-[ ] Docker
-[ ] Kubernetes/Helm
-[ ] Terraform
-[ ] Ansible
-[ ] AWS CLI
-[ ] GitHub CLI
-
-VALIDATION
-[ ] .\install.ps1 -Mode Verify réussi
-[ ] ValidateHardware réussi
-[ ] ValidateWsl réussi
-[ ] ValidateDevOps réussi
-[ ] ValidateOpenClawAI réussi si OpenClaw utilisé
-
-RECOVERY
-[ ] Golden Backup V7 créé
-[ ] Golden Backup V7 vérifié
-[ ] Recovery Drive disponible/revue
-[ ] restore-plan compréhensible
-
-MAINTENANCE
-[ ] V11 Audit/Apply/Verify exploitable
-[ ] logs et reports accessibles
+[ ] chipset AMD installé
+[ ] Intel Arc fonctionnelle
+[ ] Secure Boot / TPM / SVM corrects
+[ ] ReBAR / Above 4G vérifiés
+[ ] C: NTFS correct
+[ ] D: NTFS correct
+[ ] WSL2 Ubuntu démarre
+[ ] HOME Linux sur ext4
+[ ] ressources WSL conformes
+[ ] Docker fonctionnel
+[ ] Terraform / Ansible / kubectl / Helm disponibles
+[ ] VS Code WSL fonctionnel
+[ ] WezTerm / PowerShell 7 fonctionnels
+[ ] validations matérielles traitées
+[ ] mises à jour vérifiées
+[ ] données restaurées
+[ ] secrets non présents dans Git
+[ ] backup externe créé et vérifié
 ```
 
-## Verdict d'exploitation
+---
 
-Lorsque les validations réellement demandées sont vertes et que la sauvegarde réelle est vérifiée, la workstation peut être considérée **prête à l'exploitation**.
+# Si la reconstruction échoue à mi-parcours
 
-La CI GitHub prouve les contrats du code ; elle ne remplace jamais cette validation physique sur la vraie machine.
+Ne recommence pas automatiquement depuis le début.
+
+Relance :
+
+```powershell
+.\install.ps1 -Mode Audit
+```
+
+Puis consulte :
+
+```text
+logs\
+reports\
+```
+
+Le dépôt est conçu pour **reprendre à partir de l'état réel**.
+
+Une étape déjà conforme doit rester conforme et ne pas être refaite inutilement.
+
+---
+
+# Ce que le Runbook ne fait jamais automatiquement
+
+```text
+formatage SSD               NON
+flash BIOS                  NON
+PBO / OC                    NON
+RAM 6000 forcée             NON
+Defender désactivé          NON
+reboot forcé                NON
+wsl --unregister actif      NON
+bare-metal restore          NON
+secret vers Git             NON
+```
+
+Ces limites protègent la machine pendant un moment où le risque d'erreur est déjà élevé.
+
+---
+
+# Ordre de confiance pendant un incident
+
+En cas de contradiction :
+
+1. **état réel de la machine** ;
+2. configurations/manifests actuels ;
+3. scripts actuels ;
+4. documentation actuelle ;
+5. changelog et historique Git.
+
+Un ancien comportement documenté dans l'historique ne doit jamais l'emporter sur le contrat actuel de `main`.
+
+---
+
+# Résultat attendu
+
+La reconstruction est terminée lorsque :
+
+```text
+Windows est stable
++
+le matériel est qualifié
++
+WSL2 est conforme
++
+la stack DevOps fonctionne
++
+les données utiles sont restaurées
++
+la machine est vérifiée
++
+une nouvelle sauvegarde externe est validée
+```
+
+Le but du Runbook n'est pas seulement de « remettre Windows ». Il doit rendre à nouveau disponible **la workstation complète**, avec ses frontières Windows/Linux, ses outils, ses preuves et sa capacité de reprise future.
