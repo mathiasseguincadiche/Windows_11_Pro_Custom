@@ -56,7 +56,7 @@ function Write-Inventory {
     }
     Write-Host ("[À FAIRE] {0} application(s) ont une mise à jour WinGet disponible:" -f $Inventory.Rows.Count) -ForegroundColor Yellow
     foreach ($row in $Inventory.Rows) { Write-Host ("  {0}" -f $row) }
-    Write-Host '[INFO] Les packages épinglés restent exclus: V11 n’utilise ni --include-pinned ni --force.' -ForegroundColor DarkGray
+    Write-Host '[INFO] Les packages épinglés restent exclus: V11 nʼutilise ni --include-pinned ni --force.' -ForegroundColor DarkGray
 }
 
 $inventory = Get-UpgradeInventory
@@ -88,7 +88,7 @@ Write-Host '[EN COURS] Mise à jour des applications WinGet non épinglées...' 
 $result = Invoke-WinGetCapture -Arguments $args
 $result.Lines | ForEach-Object { if ($_){ Write-Host ("  {0}" -f $_) } }
 if ($result.Code -ne 0) {
-    throw ("winget upgrade --all a signalé un échec (code={0}). Les autres composants peuvent continuer via l’orchestrateur, mais WinGet doit être revérifié." -f $result.Code)
+    throw ("winget upgrade --all a signalé un échec (code={0}). Les autres composants peuvent continuer via lʼorchestrateur, mais WinGet doit être revérifié." -f $result.Code)
 }
 
 $remaining = Get-UpgradeInventory
