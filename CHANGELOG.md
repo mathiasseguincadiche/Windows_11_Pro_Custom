@@ -90,7 +90,7 @@ Pour l'état actuel du projet, utiliser :
 - ajout de `-PlanOnly`, `-NonInteractive`, `-Yes`, `-WslUser` et `-FullInstall` ;
 - les contrôles physiques/BIOS impossibles à automatiser sont explicitement marqués `ACTION_REQUISE` ;
 - masquage automatique des arguments sensibles dans les journaux ;
-- documentation désormais consolidée dans `docs/14_ORCHESTRATION_IDEMPOTENCE.md` et `logs/README.md`.
+- documentation désormais consolidée dans `docs/14_ORCHESTRATION.md` et `logs/README.md`.
 
 ### V8 — Windows Responsiveness
 
