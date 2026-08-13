@@ -47,7 +47,7 @@ missing_packages() {
 audit() {
   local pkg
   local missing=0
-  printf 'Terminal DevOps V10 - état réel Ubuntu\n\n'
+  printf 'Terminal DevOps - état réel Ubuntu\n\n'
   for pkg in "${packages[@]}"; do
     if package_installed "$pkg" && command_ready "$pkg"; then
       printf '[DÉJÀ OK] %-12s installé et commande disponible\n' "$pkg"
@@ -74,7 +74,7 @@ verify() {
   fi
   bash "$profile_script" verify
   STARSHIP_CONFIG="$HOME/.config/windows11-pro-custom/starship.toml" starship prompt >/dev/null
-  echo '[OK] Terminal DevOps V10 validé factuellement.'
+  echo '[OK] Terminal DevOps validé factuellement.'
 }
 
 if [[ "$mode" == audit ]]; then
@@ -93,7 +93,7 @@ if [[ "$mode" == apply ]]; then
   if bash "$profile_script" verify >/dev/null 2>&1; then profile_ok=true; fi
 
   if ((${#missing[@]} == 0)) && [[ "$profile_ok" == true ]]; then
-    echo '[DÉJÀ OK] Terminal DevOps V10 déjà conforme; aucun paquet ni profil modifié.'
+    echo '[DÉJÀ OK] Terminal DevOps déjà conforme; aucun paquet ni profil modifié.'
     exit 0
   fi
 
@@ -114,21 +114,21 @@ if [[ "$mode" == apply ]]; then
 
   bash "$profile_script" apply
   verify
-  echo '[FAIT] Terminal DevOps V10 convergé.'
+  echo '[FAIT] Terminal DevOps convergé.'
   exit 0
 fi
 
 if [[ ! -e "$state_file" ]]; then
-  echo '[DÉJÀ OK] Aucun état initial Terminal V10 enregistré; rollback paquet inutile.'
+  echo '[DÉJÀ OK] Aucun état initial Terminal DevOps enregistré; rollback paquet inutile.'
   bash "$profile_script" rollback
   exit 0
 fi
 
 bash "$profile_script" rollback
-mapfile -t installed_by_v10 < <(grep -Ev '^[[:space:]]*$' "$state_file" || true)
-if ((${#installed_by_v10[@]} > 0)); then
-  printf '[EN COURS] Retrait des paquets ajoutés par V10: %s\n' "${installed_by_v10[*]}"
-  sudo apt-get remove -y "${installed_by_v10[@]}"
+mapfile -t installed_by_terminal < <(grep -Ev '^[[:space:]]*$' "$state_file" || true)
+if ((${#installed_by_terminal[@]} > 0)); then
+  printf '[EN COURS] Retrait des paquets ajoutés par le gestionnaire terminal: %s\n' "${installed_by_terminal[*]}"
+  sudo apt-get remove -y "${installed_by_terminal[@]}"
 fi
 rm -f "$state_file"
-echo "[FAIT] Terminal DevOps V10 restauré à l'état initial enregistré."
+echo "[FAIT] Terminal DevOps restauré à l'état initial enregistré."
