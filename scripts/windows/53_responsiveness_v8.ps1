@@ -47,7 +47,7 @@ function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw 'PowerShell administrateur requis pour V8 Apply/Rollback.'
+        throw 'PowerShell administrateur requis pour Apply/Rollback de la réactivité Windows.'
     }
 }
 
@@ -236,7 +236,7 @@ function Write-Report {
     }
     $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $reportPath
     foreach ($warning in $warnings) { Write-Warning $warning }
-    Write-Host "[INFO] V8 responsiveness report: $reportPath"
+    Write-Host "[INFO] Rapport de réactivité Windows: $reportPath"
 }
 
 if ($Mode -eq 'Apply') {
@@ -244,7 +244,7 @@ if ($Mode -eq 'Apply') {
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
     if (-not (Test-Path $statePath)) {
         Get-CurrentState | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $statePath
-        Write-Host "[OK] V8 initial state saved: $statePath"
+        Write-Host "[OK] État initial de réactivité enregistré: $statePath"
     }
 
     $mm = Get-MemoryManagerState
@@ -272,11 +272,11 @@ if ($Mode -eq 'Apply') {
     }
 
     Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$policy.ui.minimizeRestoreAnimation) -ClientAreaAnimations ([bool]$policy.ui.clientAreaAnimations)
-    Write-Host '[INFO] Startup applications are inventory-only in V8; none were disabled automatically.'
+    Write-Host '[INFO] Les applications de démarrage sont uniquement inventoriées; aucune n’est désactivée automatiquement.'
 }
 elseif ($Mode -eq 'Rollback') {
     Assert-Administrator
-    if (-not (Test-Path $statePath)) { throw "V8 state backup missing: $statePath" }
+    if (-not (Test-Path $statePath)) { throw "État initial de réactivité absent: $statePath" }
     $before = Get-Content -Raw $statePath | ConvertFrom-Json
 
     $mmNow = Get-MemoryManagerState
@@ -304,7 +304,7 @@ elseif ($Mode -eq 'Rollback') {
     if ($null -ne $before.UI.MinimizeRestoreAnimation -and $null -ne $before.UI.ClientAreaAnimations) {
         Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$before.UI.MinimizeRestoreAnimation) -ClientAreaAnimations ([bool]$before.UI.ClientAreaAnimations)
     }
-    Write-Host '[OK] V8 responsiveness state restored. A reboot may be required for pagefile changes.' -ForegroundColor Green
+    Write-Host '[OK] État de réactivité Windows restauré. Un redémarrage peut être nécessaire pour les changements de pagefile.' -ForegroundColor Green
 }
 
 $current = Get-CurrentState
@@ -324,7 +324,7 @@ if ($Mode -eq 'Verify') {
     if ($current.Storage.TrimEnabled -ne $true) { $failed.Add('TrimEnabled') }
     if ($current.Storage.ScheduledOptimizeEnabled -eq $false) { $failed.Add('ScheduledOptimize') }
     if ($failed.Count -gt 0) {
-        throw "V8 responsiveness verification failed: $($failed -join ', '). See $reportPath"
+        throw "Vérification de réactivité Windows échouée: $($failed -join ', '). Voir $reportPath"
     }
-    Write-Host 'VERDICT: V8 WINDOWS RESPONSIVENESS READY' -ForegroundColor Green
+    Write-Host 'VERDICT: WINDOWS RESPONSIVENESS READY' -ForegroundColor Green
 }
