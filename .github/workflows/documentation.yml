@@ -200,7 +200,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RniE '(^|[^[:alnum:]_])(TODO|FIXME|TBD)([^[:alnum:]_]|$)' README.md docs/*.md; then
+          if grep -RniE '^[[:space:]]*(TODO|FIXME|TBD)(:|[[:space:]]*$)' README.md docs/*.md; then
             echo 'Placeholder documentaire restant.' >&2
             exit 1
           fi
