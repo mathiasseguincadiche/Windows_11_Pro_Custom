@@ -67,7 +67,7 @@ jobs:
           grep -Fq 'Enable-MMAgent -MemoryCompression' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationLaunchPrefetching' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationPreLaunch' "$script"
-          grep -Fq 'Startup applications are inventory-only' "$script"
+          grep -Fq 'Les applications de démarrage sont uniquement inventoriées' "$script"
           grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
           grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
           grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
