@@ -5,17 +5,13 @@ on:
     paths:
       - '.github/workflows/native-app-alias-v18.yml'
       - 'scripts/core/native-process.psm1'
-      - 'scripts/bootstrap/01_machine_state.ps1'
-      - 'scripts/bootstrap/02_physical_readiness.ps1'
-      - 'scripts/bootstrap/03_apps.ps1'
+      - 'scripts/**/*.ps1'
   push:
     branches: [main]
     paths:
       - '.github/workflows/native-app-alias-v18.yml'
       - 'scripts/core/native-process.psm1'
-      - 'scripts/bootstrap/01_machine_state.ps1'
-      - 'scripts/bootstrap/02_physical_readiness.ps1'
-      - 'scripts/bootstrap/03_apps.ps1'
+      - 'scripts/**/*.ps1'
 
 permissions:
   contents: read
@@ -45,13 +41,18 @@ jobs:
             grep -Fq 'Invoke-WpcNativeCapture' "$script"
           done
 
-          if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "${scripts[@]}"; then
-            echo 'Unsafe WinGet pipeline detected. App Execution Aliases must run as a standalone native command.' >&2
+          if grep -RIn --include='*.ps1' -E 'winget\.exe[^[:cntrl:]]*\|' scripts; then
+            echo 'Unsafe WinGet pipeline detected anywhere in scripts/. App Execution Aliases must run as standalone native commands.' >&2
             exit 1
           fi
 
-          if grep -nF '(& winget.exe' "${scripts[@]}"; then
-            echo 'Direct captured WinGet invocation detected; use Invoke-WpcNativeCapture.' >&2
+          if grep -RIn --include='*.ps1' -F '(& winget.exe' scripts; then
+            echo 'Direct captured WinGet invocation detected anywhere in scripts/; use Invoke-WpcNativeCapture.' >&2
+            exit 1
+          fi
+
+          if grep -nE '& \$FilePath[^[:cntrl:]]*\|' "$module"; then
+            echo 'Native helper itself must never pipe the application invocation.' >&2
             exit 1
           fi
 
@@ -112,7 +113,7 @@ jobs:
 
           $winget = Get-WpcNativeApplication -Name 'winget.exe'
           if (-not $winget) {
-            Write-Warning 'winget.exe is not installed on this hosted image; static contract remains authoritative.'
+            Write-Warning 'winget.exe is not installed on this hosted image; repository-wide static contract remains authoritative.'
             exit 0
           }
 
