@@ -33,7 +33,7 @@ jobs:
           grep -Fq 'Invoke-WpcNativeCapture' "$helper"
           grep -Fq 'replace "`0"' "$helper"
           grep -Fq 'Checkpoint-Computer' "$readiness"
-          grep -Fq 'Invoke-WpcNativeCapture -FilePath $windowsPowerShell' "$readiness"
+          grep -Fq "Invoke-WpcNativeCapture -FilePath \$windowsPowerShell" "$readiness"
 
   windows-host-smoke:
     runs-on: windows-latest
