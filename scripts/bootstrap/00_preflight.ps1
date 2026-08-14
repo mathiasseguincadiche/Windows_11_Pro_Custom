@@ -11,38 +11,21 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
+$rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
 $physicalReadinessScript = Join-Path $repoRoot 'scripts\bootstrap\02_physical_readiness.ps1'
 if (-not (Test-Path -LiteralPath $windowsNativeModule)) {
     throw "Bootstrap des modules Windows introuvable: $windowsNativeModule"
+}
+if (-not (Test-Path -LiteralPath $rebootStateModule)) {
+    throw "Détection de redémarrage Windows introuvable: $rebootStateModule"
 }
 if (-not (Test-Path -LiteralPath $physicalReadinessScript)) {
     throw "Préqualification physique introuvable: $physicalReadinessScript"
 }
 Import-Module $windowsNativeModule
+Import-Module $rebootStateModule -Force
 $nativeModules = @(Initialize-WpcWindowsNativeModules -Profile Full)
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
-
-function Get-PendingRebootState {
-    $reasons = [System.Collections.Generic.List[string]]::new()
-
-    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') {
-        $reasons.Add('CBS')
-    }
-    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') {
-        $reasons.Add('WindowsUpdate')
-    }
-    try {
-        $pendingRename = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop
-        if ($null -ne $pendingRename) {
-            $reasons.Add('PendingFileRenameOperations')
-        }
-    } catch {}
-
-    return [pscustomobject]@{
-        Pending = ($reasons.Count -gt 0)
-        Reasons = @($reasons)
-    }
-}
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -52,7 +35,7 @@ $os = Get-CimInstance Win32_OperatingSystem
 $computer = Get-CimInstance Win32_ComputerSystem
 $volumes = Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystem, HealthStatus, SizeRemaining, Size
 $editionId = [string](Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop)
-$pendingReboot = Get-PendingRebootState
+$pendingReboot = Get-WpcPendingRebootState
 $isWindows11 = ($os.Caption -match 'Windows 11')
 $isHomeEdition = ($editionId -match '^Core')
 
@@ -93,7 +76,7 @@ if ($c.FileSystem -ne 'NTFS') { throw 'C: doit être NTFS.' }
 if ($d.FileSystem -ne 'NTFS') { throw 'D: doit être NTFS. Aucun EXT4 physique n est attendu.' }
 
 if ($pendingReboot.Pending -and -not $AllowPendingReboot) {
-    throw "Un redémarrage Windows est en attente ($($pendingReboot.Reasons -join ', ')). Redémarre Windows avant de lancer la convergence. Le bypass n'est autorisé que pour un diagnostic volontaire via -AllowPendingReboot."
+    throw "Un redémarrage Windows est en attente ($($pendingReboot.Reasons -join ', ')). Redémarre Windows puis relance Installation complète: la convergence reprendra idempotemment. Le bypass n'est autorisé que pour un diagnostic volontaire via -AllowPendingReboot."
 }
 
 if ($pendingReboot.Pending) {
