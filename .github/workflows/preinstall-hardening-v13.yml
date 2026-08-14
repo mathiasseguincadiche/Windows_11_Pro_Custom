@@ -1,4 +1,4 @@
-name: preinstall-hardening-v13
+name: preinstall-hardening
 
 on:
   pull_request:
