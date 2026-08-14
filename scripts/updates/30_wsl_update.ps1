@@ -9,20 +9,23 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $contractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
+$nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
 if (-not (Test-Path $contractPath)) { throw "Contrat WSL absent: $contractPath" }
+if (-not (Test-Path $nativeProcessModule)) { throw "Module d'exécution native introuvable: $nativeProcessModule" }
+Import-Module $nativeProcessModule
 $contract = Get-Content -Raw $contractPath | ConvertFrom-Json
 $distribution = [string]$contract.distribution
 
-if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
-    throw 'wsl.exe est introuvable.'
-}
+$wslCommand = Get-WpcNativeApplication -Name 'wsl.exe'
+if (-not $wslCommand) { throw 'wsl.exe est introuvable.' }
 
 function Invoke-Capture {
     param([string[]]$Arguments)
-    $output = @(& wsl.exe @Arguments 2>&1)
-    $code = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    return [pscustomobject]@{ Code=$code; Lines=@($output | ForEach-Object { ([string]$_) -replace "`0", '' }) }
+    $result = Invoke-WpcNativeCapture -FilePath $wslCommand.Source -ArgumentList $Arguments
+    return [pscustomobject]@{
+        Code = $result.ExitCode
+        Lines = @($result.Lines | ForEach-Object { ([string]$_) -replace "`0", '' })
+    }
 }
 
 function Test-DistributionPresent {
@@ -38,12 +41,12 @@ function Get-WslVersionText {
 }
 
 function Get-WslUpgradeSignal {
-    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+    $winget = Get-WpcNativeApplication -Name 'winget.exe'
+    if (-not $winget) {
         return [pscustomobject]@{ Detectable=$false; Pending=$false; Detail='WinGet absent: disponibilité WSL non détectable sans mutation.' }
     }
-    $output = @(& winget.exe list --id Microsoft.WSL --exact --upgrade-available --accept-source-agreements --disable-interactivity 2>&1)
-    $global:LASTEXITCODE = 0
-    $lines = @($output | ForEach-Object { [string]$_ })
+    $result = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('list', '--id', 'Microsoft.WSL', '--exact', '--upgrade-available', '--accept-source-agreements', '--disable-interactivity')
+    $lines = @($result.Lines)
     $separator = -1
     for ($i=0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match '^\s*-{3,}') { $separator=$i; break }
