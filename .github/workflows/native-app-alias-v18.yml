@@ -54,8 +54,10 @@ jobs:
             exit 1
           fi
 
-          if grep -nE '^[[:space:]]*[^#].*& \$FilePath[^[:cntrl:]]*\|' "$module"; then
+          helper_pipe="$(grep -nE '& \$FilePath[^[:cntrl:]]*\|' "$module" | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
+          if [[ -n "$helper_pipe" ]]; then
             echo 'Native helper itself must never pipe the application invocation.' >&2
+            echo "$helper_pipe" >&2
             exit 1
           fi
 
