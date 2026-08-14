@@ -88,22 +88,18 @@ jobs:
               'config.default_prog = ubuntu_devops',
               'Ubuntu DevOps (WSL2)',
               'PowerShell 7',
-              'OpenClaw / clawops (Windows)',
-              'Get-Command openclaw',
-              'Get-Command clawops',
-              'openclaw.cmd',
-              'clawops.exe',
               'JetBrainsMono Nerd Font',
           ]
           for needle in required:
               assert needle in wezterm, needle
 
-          forbidden = [
-              'openclaw gateway install',
-              'openclaw onboard',
-              'clawops team deploy',
+          forbidden_external_hooks = [
+              'OpenClaw',
+              'openclaw',
+              'clawops',
+              'OPENCLAW_',
           ]
-          for needle in forbidden:
+          for needle in forbidden_external_hooks:
               assert needle not in wezterm, needle
 
           profile = Path('config/wsl/bashrc.d/devops.sh').read_text()
