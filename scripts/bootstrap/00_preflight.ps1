@@ -8,6 +8,12 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports'
+$windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
+if (-not (Test-Path -LiteralPath $windowsNativeModule)) {
+    throw "Bootstrap des modules Windows introuvable: $windowsNativeModule"
+}
+Import-Module $windowsNativeModule
+$nativeModules = @(Initialize-WpcWindowsNativeModules -Profile Full)
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
 function Get-PendingRebootState {
@@ -56,9 +62,10 @@ $result = [ordered]@{
     TotalMemoryGB = [math]::Round($computer.TotalPhysicalMemory / 1GB, 2)
     PendingReboot = $pendingReboot
     Volumes = $volumes
+    NativeModules = @($nativeModules)
 }
 
-$result | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $reportDir 'preflight.json')
+$result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $reportDir 'preflight.json')
 
 if (-not $isAdmin) {
     throw 'PowerShell doit être lancé en administrateur.'
@@ -86,4 +93,6 @@ if ($pendingReboot.Pending) {
     Write-Warning "Redémarrage Windows en attente: $($pendingReboot.Reasons -join ', '). Le préflight a été explicitement autorisé en mode diagnostic."
 }
 
+$loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module)
+Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
