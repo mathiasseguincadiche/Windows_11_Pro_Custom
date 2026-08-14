@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/physical-install-v17.yml'
+      - 'install.ps1'
       - 'scripts/bootstrap/00_preflight.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/physical-install-v17.yml'
+      - 'install.ps1'
       - 'scripts/bootstrap/00_preflight.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
@@ -37,12 +39,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          install='install.ps1'
           preflight='scripts/bootstrap/00_preflight.ps1'
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
 
           test -f "$readiness"
           grep -Fq "02_physical_readiness.ps1" "$preflight"
-          grep -Fq '& $physicalReadinessScript -Strict' "$preflight"
+          grep -Fq '& $physicalReadinessScript -Strict:$StrictPhysicalReadiness' "$preflight"
+          grep -Fq "StrictPhysicalReadiness" "$install"
+          grep -Fq "if (\$Mode -in @('Apply','Verify'))" "$install"
+          grep -Fq "Ensure-HardwareManualEvidence" "$install"
+          grep -Fq "before toute convergence" "$install"
+          grep -Fq "-not \$PlanOnly" "$install"
           grep -Fq "PowerShell 7 supporté" "$readiness"
           grep -Fq "7.4.0" "$readiness"
           grep -Fq "build -ge 22621" "$readiness"
@@ -90,6 +98,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
+            '.\install.ps1',
             '.\scripts\bootstrap\00_preflight.ps1',
             '.\scripts\bootstrap\02_physical_readiness.ps1',
             '.\scripts\bootstrap\06_wsl.ps1',
