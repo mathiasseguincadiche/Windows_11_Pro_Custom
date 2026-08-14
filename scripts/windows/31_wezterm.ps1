@@ -21,10 +21,7 @@ function Assert-WezTermSourceContract {
     $required = @(
         'config.default_prog = ubuntu_devops',
         "label = 'Ubuntu DevOps (WSL2)'",
-        "label = 'PowerShell 7'",
-        "label = 'OpenClaw / clawops (Windows)'",
-        'Get-Command openclaw',
-        'Get-Command clawops'
+        "label = 'PowerShell 7'"
     )
 
     foreach ($needle in $required) {
@@ -33,14 +30,15 @@ function Assert-WezTermSourceContract {
         }
     }
 
-    $forbiddenAutoActions = @(
-        'openclaw gateway install',
-        'openclaw onboard',
-        'clawops team deploy'
+    $forbiddenExternalProjectHooks = @(
+        'OpenClaw',
+        'openclaw',
+        'clawops',
+        'OPENCLAW_'
     )
-    foreach ($needle in $forbiddenAutoActions) {
+    foreach ($needle in $forbiddenExternalProjectHooks) {
         if ($content.Contains($needle)) {
-            throw "Contrat WezTerm non sûr: action automatique interdite détectée: $needle"
+            throw "Contrat WezTerm hors périmètre: référence projet externe détectée: $needle"
         }
     }
 }
@@ -58,7 +56,7 @@ if ($Mode -eq 'Audit') {
     Write-Host "WezTerm CLI: $(if ($wezterm) { $wezterm.Source } else { 'ABSENT' })"
     Write-Host "Configuration cible: $target"
     Write-Host "Configuration conforme: $match"
-    Write-Host 'Profils: Ubuntu DevOps (défaut) | PowerShell 7 | OpenClaw / clawops (Windows)'
+    Write-Host 'Profils: Ubuntu DevOps (défaut) | PowerShell 7'
     if ($wezterm -and $match) {
         Write-Host '[DÉJÀ OK] WezTerm est installé et sa configuration est conforme.' -ForegroundColor Green
     } else {
@@ -70,7 +68,7 @@ if ($Mode -eq 'Audit') {
 if ($Mode -eq 'Verify') {
     if (-not $wezterm) { throw 'WezTerm est absent ou wezterm.exe est introuvable.' }
     if (-not $match) { throw '.wezterm.lua est absent ou différent de la configuration du dépôt.' }
-    Write-Host '[OK] WezTerm validé: application présente, trois profils conformes et Ubuntu reste le défaut.' -ForegroundColor Green
+    Write-Host '[OK] WezTerm validé: Ubuntu DevOps reste le défaut et PowerShell 7 reste disponible.' -ForegroundColor Green
     return
 }
 
