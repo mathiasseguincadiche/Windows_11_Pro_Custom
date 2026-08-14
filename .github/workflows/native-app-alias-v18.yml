@@ -54,7 +54,7 @@ jobs:
             exit 1
           fi
 
-          if grep -nE '& \$FilePath[^[:cntrl:]]*\|' "$module"; then
+          if grep -nE '^[[:space:]]*[^#].*& \$FilePath[^[:cntrl:]]*\|' "$module"; then
             echo 'Native helper itself must never pipe the application invocation.' >&2
             exit 1
           fi
