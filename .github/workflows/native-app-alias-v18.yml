@@ -1,0 +1,130 @@
+name: Native App Alias V18
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-app-alias-v18.yml'
+      - 'scripts/core/native-process.psm1'
+      - 'scripts/bootstrap/01_machine_state.ps1'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
+      - 'scripts/bootstrap/03_apps.ps1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-app-alias-v18.yml'
+      - 'scripts/core/native-process.psm1'
+      - 'scripts/bootstrap/01_machine_state.ps1'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
+      - 'scripts/bootstrap/03_apps.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enforce safe WinGet capture contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='scripts/core/native-process.psm1'
+          scripts=(
+            'scripts/bootstrap/01_machine_state.ps1'
+            'scripts/bootstrap/02_physical_readiness.ps1'
+            'scripts/bootstrap/03_apps.ps1'
+          )
+
+          test -f "$module"
+          grep -Fq 'Invoke-WpcNativeCapture' "$module"
+          grep -Fq 'CantActivateDocumentInPipeline' "$module"
+
+          for script in "${scripts[@]}"; do
+            grep -Fq 'native-process.psm1' "$script"
+            grep -Fq 'Invoke-WpcNativeCapture' "$script"
+          done
+
+          if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "${scripts[@]}"; then
+            echo 'Unsafe WinGet pipeline detected. App Execution Aliases must run as a standalone native command.' >&2
+            exit 1
+          fi
+
+          if grep -nF '(& winget.exe' "${scripts[@]}"; then
+            echo 'Direct captured WinGet invocation detected; use Invoke-WpcNativeCapture.' >&2
+            exit 1
+          fi
+
+      - name: Keep physical readiness fail-closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          readiness='scripts/bootstrap/02_physical_readiness.ps1'
+          grep -Fq '$pendingReboot = @(Get-PendingRebootReasons)' "$readiness"
+          grep -Fq 'VERDICT: PHYSICAL INSTALL READY' "$readiness"
+          grep -Fq 'aucune convergence ne doit commencer avant un verdict READY' "$readiness"
+
+  windows-native-capture:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse native capture and bootstrap PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            '.\scripts\core\native-process.psm1',
+            '.\scripts\bootstrap\01_machine_state.ps1',
+            '.\scripts\bootstrap\02_physical_readiness.ps1',
+            '.\scripts\bootstrap\03_apps.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Prove standalone native capture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          Import-Module .\scripts\core\native-process.psm1 -Force
+
+          $powershell = Get-WpcNativeApplication -Name 'powershell.exe'
+          if (-not $powershell) { throw 'powershell.exe unavailable on Windows runner.' }
+          $result = Invoke-WpcNativeCapture -FilePath $powershell.Source -ArgumentList @(
+            '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "[Console]::Out.Write('native-capture-ok')"
+          )
+          if ($result.ExitCode -ne 0 -or $result.Text.Trim() -ne 'native-capture-ok') {
+            throw "Native capture failed: exit=$($result.ExitCode) text=$($result.Text)"
+          }
+
+      - name: Exercise WinGet App Execution Alias when available
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          Import-Module .\scripts\core\native-process.psm1 -Force
+
+          $winget = Get-WpcNativeApplication -Name 'winget.exe'
+          if (-not $winget) {
+            Write-Warning 'winget.exe is not installed on this hosted image; static contract remains authoritative.'
+            exit 0
+          }
+
+          Write-Host "WinGet source: $($winget.Source)"
+          $result = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('--version') -SuppressErrorOutput
+          if ($result.ExitCode -ne 0) {
+            throw "winget --version failed with exit code $($result.ExitCode)"
+          }
+          if ([string]::IsNullOrWhiteSpace($result.Text)) {
+            throw 'winget --version returned no text.'
+          }
+          Write-Host "WinGet version: $($result.Text.Trim())"
+          if ($winget.Source -match '\\Microsoft\\WindowsApps\\') {
+            Write-Host 'Hosted runner exercises the WindowsApps App Execution Alias path.'
+          }
