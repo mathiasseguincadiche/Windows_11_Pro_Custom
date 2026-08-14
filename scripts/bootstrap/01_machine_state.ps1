@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
-Import-Module $runtimeModule -Force
+Import-Module $runtimeModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $reportDir = Join-Path $repoRoot 'reports\orchestration'
 $reportPath = Join-Path $reportDir 'machine-state.json'
@@ -54,19 +54,37 @@ function Get-VolumeFact {
     }
 }
 
-function Test-WingetPackage {
-    param([Parameter(Mandatory)][string]$Id)
-    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
-        return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence='WinGet unavailable' }
+function Get-WingetInventory {
+    $wingetCommand = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if (-not $wingetCommand) {
+        return [pscustomobject]@{ Available=$false; Success=$false; Lines=@(); Error='WinGet unavailable' }
     }
-    $text = (& winget.exe list --id $Id --exact --accept-source-agreements --disable-interactivity 2>$null | Out-String)
+
+    $lines = @(& winget.exe list --accept-source-agreements --disable-interactivity 2>$null | ForEach-Object { [string]$_ })
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($code -eq 0 -and $text -match [regex]::Escape($Id)) {
-        $evidence = @($text -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
-        return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence=($evidence -join '') }
+    if ($code -ne 0) {
+        return [pscustomobject]@{ Available=$true; Success=$false; Lines=$lines; Error="winget list failed with exit code $code" }
     }
-    return [pscustomobject]@{ Id=$Id; State='MISSING'; Evidence='Exact WinGet ID not found' }
+    return [pscustomobject]@{ Available=$true; Success=$true; Lines=$lines; Error='' }
+}
+
+function Get-WingetPackageFact {
+    param(
+        [Parameter(Mandatory)]$Inventory,
+        [Parameter(Mandatory)][string]$Id
+    )
+    if (-not $Inventory.Available) {
+        return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence='WinGet unavailable' }
+    }
+    if (-not $Inventory.Success) {
+        return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence=$Inventory.Error }
+    }
+    $line = @($Inventory.Lines | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
+    if ($line.Count -gt 0) {
+        return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence=[string]$line[0] }
+    }
+    return [pscustomobject]@{ Id=$Id; State='MISSING'; Evidence='Exact WinGet ID not found in global inventory' }
 }
 
 function Get-WslFacts {
@@ -142,23 +160,31 @@ function Get-OneDriveFact {
     return [pscustomobject]@{ Installed=$installed; Running=($null -ne (Get-Process -Name OneDrive -ErrorAction SilentlyContinue)) }
 }
 
+Write-Host '[INFO] Découverte machine: Windows, matériel et volumes...' -ForegroundColor DarkGray
 $os = Get-CimInstance Win32_OperatingSystem
 $computer = Get-CimInstance Win32_ComputerSystem
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 $pendingReboot = Test-PendingReboot
 $c = Get-VolumeFact -DriveLetter 'C'
 $d = Get-VolumeFact -DriveLetter 'D'
+
 $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
 $manifest = Get-Content -Raw (Join-Path $repoRoot 'manifests\winget\apps-core.json') | ConvertFrom-Json
+$requiredApps = @($manifest.apps | Where-Object { $_.autoInstall -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetId) })
+Write-Host "[INFO] Inventaire WinGet global: $($requiredApps.Count) applications cibles..." -ForegroundColor DarkGray
+$wingetInventory = Get-WingetInventory
 $appFacts = @()
-foreach ($app in @($manifest.apps | Where-Object { $_.autoInstall -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetId) })) {
-    $fact = Test-WingetPackage -Id ([string]$app.wingetId)
+foreach ($app in $requiredApps) {
+    $fact = Get-WingetPackageFact -Inventory $wingetInventory -Id ([string]$app.wingetId)
     $appFacts += [pscustomobject]@{ Name=[string]$app.name; Id=[string]$app.wingetId; State=$fact.State; Evidence=$fact.Evidence }
 }
 $installedApps = @($appFacts | Where-Object State -EQ 'INSTALLED').Count
 $missingApps = @($appFacts | Where-Object State -EQ 'MISSING').Count
 $unknownApps = @($appFacts | Where-Object State -EQ 'UNKNOWN').Count
+
+Write-Host '[INFO] Découverte WSL2...' -ForegroundColor DarkGray
 $wslFacts = Get-WslFacts
+Write-Host '[INFO] Découverte outils Windows, OneDrive et Defender...' -ForegroundColor DarkGray
 $code = Get-Command code.cmd -ErrorAction SilentlyContinue
 if (-not $code) { $code = Get-Command code -ErrorAction SilentlyContinue }
 $wezterm = Get-Command wezterm.exe -ErrorAction SilentlyContinue
@@ -207,6 +233,8 @@ $report = [ordered]@{
     Storage = @($c, $d)
     WinGet = [ordered]@{
         Available = ($null -ne $winget)
+        InventorySuccess = [bool]$wingetInventory.Success
+        InventoryError = [string]$wingetInventory.Error
         Path = if ($winget) { $winget.Source } else { $null }
         RequiredApps = $appFacts
         InstalledCount = $installedApps
@@ -240,7 +268,7 @@ switch ($state) {
 Write-WpcStatus -Status $(if ($c.Present -and $c.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume C:' -Detail "Présent=$($c.Present) FS=$($c.FileSystem) Santé=$($c.HealthStatus) Libre=$($c.FreeGB) Go" -Context $context
 Write-WpcStatus -Status $(if ($d.Present -and $d.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume D:' -Detail "Présent=$($d.Present) FS=$($d.FileSystem) Santé=$($d.HealthStatus) Libre=$($d.FreeGB) Go" -Context $context
 if ($unknownApps -gt 0) {
-    Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Applications WinGet' -Detail 'WinGet indisponible: état des applications non déterminable sans inventer.' -Context $context
+    Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Applications WinGet' -Detail "État incomplet: $unknownApps application(s) indéterminée(s). $($wingetInventory.Error)" -Context $context
 } elseif ($missingApps -gt 0) {
     Write-WpcStatus -Status 'A_FAIRE' -Message 'Applications WinGet' -Detail "$installedApps installées, $missingApps manquantes." -Context $context
 } else {

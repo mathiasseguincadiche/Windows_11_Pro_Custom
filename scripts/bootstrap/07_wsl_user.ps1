@@ -10,7 +10,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
-Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1') -Force
+Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1')
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $usernamePattern = '^[a-z_][a-z0-9_-]{0,31}$'
 

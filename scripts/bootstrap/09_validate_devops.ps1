@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
-Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1') -Force
+Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1')
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $windowsScript = Join-Path $repoRoot 'scripts\wsl\validate-devops.sh'
 $terminalScript = Join-Path $repoRoot 'scripts\wsl\validate-devops-terminal.sh'
