@@ -54,6 +54,7 @@ jobs:
             exit 1
           fi
 
+          # shellcheck disable=SC2016
           helper_pipe="$(grep -nE '& \$FilePath[^[:cntrl:]]*\|' "$module" | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
           if [[ -n "$helper_pipe" ]]; then
             echo 'Native helper itself must never pipe the application invocation.' >&2
@@ -66,6 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
+          # shellcheck disable=SC2016
           grep -Fq '$pendingReboot = @(Get-PendingRebootReasons)' "$readiness"
           grep -Fq 'VERDICT: PHYSICAL INSTALL READY' "$readiness"
           grep -Fq 'aucune convergence ne doit commencer avant un verdict READY' "$readiness"
