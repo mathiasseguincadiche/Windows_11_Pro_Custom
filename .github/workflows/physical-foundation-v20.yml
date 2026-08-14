@@ -80,8 +80,10 @@ jobs:
           grep -Fq "REDÉMARRAGE REQUIS" "$foundation"
           grep -Fq "Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe" "$foundation"
           grep -Fq "Microsoft.WinGet.Client" "$foundation"
+          grep -Fq "Install-PackageProvider -Name NuGet -Force -ForceBootstrap" "$foundation"
+          grep -Fq "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted" "$foundation"
           grep -Fq "Repair-WinGetPackageManager -Force -Latest" "$foundation"
-          grep -Fq "--web-download" "$foundation"
+          grep -Fq -- "--web-download" "$foundation"
           grep -Fq "VERDICT: WINDOWS FOUNDATION READY" "$foundation"
 
           grep -Fq 'System32\WindowsPowerShell\v1.0\powershell.exe' "$foundation"
