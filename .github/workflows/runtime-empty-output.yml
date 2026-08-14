@@ -20,7 +20,9 @@ jobs:
           Import-Module .\scripts\core\runtime.psm1 -Force
           $repoRoot = (Resolve-Path '.').Path
           $context = New-WpcRunContext -RepoRoot $repoRoot -Mode 'RuntimeEmptyOutputSmoke'
-          $fixture = Join-Path $env:RUNNER_TEMP 'wpc-empty-output-fixture.ps1'
+          $fixtureDir = Join-Path $repoRoot 'state\ci'
+          New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
+          $fixture = Join-Path $fixtureDir 'wpc-empty-output-fixture.ps1'
           @"
           Write-Host '[INFO] before blank line'
           Write-Host ''
