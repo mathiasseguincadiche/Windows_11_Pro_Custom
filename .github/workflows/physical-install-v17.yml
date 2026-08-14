@@ -10,6 +10,7 @@ on:
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/core/windows-native.psm1'
+      - 'scripts/core/native-process.psm1'
       - 'config/hardware/**'
       - 'config/wsl/**'
       - 'manifests/winget/apps-core.json'
@@ -23,6 +24,7 @@ on:
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/core/windows-native.psm1'
+      - 'scripts/core/native-process.psm1'
       - 'config/hardware/**'
       - 'config/wsl/**'
       - 'manifests/winget/apps-core.json'
@@ -42,8 +44,10 @@ jobs:
           install='install.ps1'
           preflight='scripts/bootstrap/00_preflight.ps1'
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
+          native='scripts/core/native-process.psm1'
 
           test -f "$readiness"
+          test -f "$native"
           grep -Fq "02_physical_readiness.ps1" "$preflight"
           grep -Fq "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight"
           grep -Fq "StrictPhysicalReadiness" "$install"
@@ -62,11 +66,18 @@ jobs:
           grep -Fq "Microsoft-Windows-Subsystem-Linux" "$readiness"
           grep -Fq "VirtualMachinePlatform" "$readiness"
           grep -Fq "Garde-fou point de restauration disponible" "$readiness"
-          grep -Fq "winget.exe show --id" "$readiness"
+          grep -Fq "Get-WpcNativeApplication -Name 'winget.exe'" "$readiness"
+          grep -Fq "Invoke-WpcNativeCapture -FilePath \$winget.Source -ArgumentList @('show', '--id', \$id, '--exact'" "$readiness"
           grep -Fq "sourceDistribution" "$readiness"
           grep -Fq "VERDICT: PHYSICAL INSTALL READY" "$readiness"
           grep -Fq "aucune convergence ne doit commencer avant un verdict READY" "$readiness"
           grep -Fq "\$pendingReboot = @(Get-PendingRebootReasons)" "$readiness"
+          grep -Fq 'CantActivateDocumentInPipeline' "$native"
+
+          if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$readiness"; then
+            echo 'Physical readiness must not pipe a WinGet App Execution Alias.' >&2
+            exit 1
+          fi
 
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|DisableRealtimeMonitoring|--unregister|Remove-AppxPackage'
           if grep -InE "$forbidden" "$readiness"; then
@@ -104,7 +115,8 @@ jobs:
             '.\scripts\bootstrap\02_physical_readiness.ps1',
             '.\scripts\bootstrap\06_wsl.ps1',
             '.\scripts\bootstrap\08_devops.ps1',
-            '.\scripts\core\windows-native.psm1'
+            '.\scripts\core\windows-native.psm1',
+            '.\scripts\core\native-process.psm1'
           )) {
             $tokens = $null
             $errors = $null
@@ -176,14 +188,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $wsl = Get-Command wsl.exe -ErrorAction Stop
-          $help = (& $wsl.Source --help 2>&1 | Out-String)
-          $observedExitCode = $LASTEXITCODE
-          $global:LASTEXITCODE = 0
-          Write-Host "Hosted runner wsl --help exit code = $observedExitCode"
+          Import-Module .\scripts\core\native-process.psm1 -Force
+          $wsl = Get-WpcNativeApplication -Name 'wsl.exe'
+          if (-not $wsl) { throw 'wsl.exe is unavailable on the hosted Windows runner.' }
+          $result = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--help')
+          Write-Host "Hosted runner wsl --help exit code = $($result.ExitCode)"
           foreach ($option in @('--location','--name','--no-launch')) {
-            $present = $help -match [regex]::Escape($option)
+            $present = $result.Text -match [regex]::Escape($option)
             Write-Host "Hosted runner capability $option = $present"
           }
           Write-Host 'The hosted Windows image is not treated as the Store WSL source of truth. scripts/bootstrap/02_physical_readiness.ps1 enforces these switches on the real workstation before mutation.'
-          exit 0
