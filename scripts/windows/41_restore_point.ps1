@@ -9,22 +9,58 @@ $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Restore point creation requires an elevated PowerShell session.'
+    throw 'La création du point de restauration exige une session PowerShell administrateur.'
 }
 
-if (-not (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) {
-    Write-Warning 'Checkpoint-Computer is unavailable. Registry backups remain the primary rollback mechanism.'
-    return
+function New-WpcRestorePointCurrentHost {
+    param([Parameter(Mandatory)][string]$RestorePointDescription)
+
+    if (-not (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+
+    $systemDrive = "$($env:SystemDrive)\"
+    if (Get-Command Enable-ComputerRestore -ErrorAction SilentlyContinue) {
+        Enable-ComputerRestore -Drive $systemDrive -ErrorAction Stop
+    }
+    Checkpoint-Computer -Description $RestorePointDescription -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+    return $true
+}
+
+function New-WpcRestorePointWindowsPowerShell {
+    param([Parameter(Mandatory)][string]$RestorePointDescription)
+
+    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if (-not $windowsPowerShell) {
+        throw 'Checkpoint-Computer est indisponible dans cet hôte et Windows PowerShell 5.1 est introuvable.'
+    }
+
+    $escapedDescription = $RestorePointDescription.Replace("'", "''")
+    $command = @'
+$ErrorActionPreference = 'Stop'
+$systemDrive = "$env:SystemDrive\"
+if (Get-Command Enable-ComputerRestore -ErrorAction SilentlyContinue) {
+    Enable-ComputerRestore -Drive $systemDrive -ErrorAction Stop
+}
+Checkpoint-Computer -Description '__DESCRIPTION__' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+'@
+    $command = $command.Replace('__DESCRIPTION__', $escapedDescription)
+
+    & $windowsPowerShell.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -Command $command
+    $exitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($exitCode -ne 0) {
+        throw "Windows PowerShell n'a pas pu créer le point de restauration (code=$exitCode)."
+    }
 }
 
 try {
-    $systemDrive = "$($env:SystemDrive)\"
-    if (Get-Command Enable-ComputerRestore -ErrorAction SilentlyContinue) {
-        Enable-ComputerRestore -Drive $systemDrive -ErrorAction SilentlyContinue
+    $createdInCurrentHost = New-WpcRestorePointCurrentHost -RestorePointDescription $Description
+    if (-not $createdInCurrentHost) {
+        Write-Host '[INFO] Checkpoint-Computer indisponible dans cet hôte; bascule vers Windows PowerShell 5.1.' -ForegroundColor Cyan
+        New-WpcRestorePointWindowsPowerShell -RestorePointDescription $Description
     }
-    Checkpoint-Computer -Description $Description -RestorePointType MODIFY_SETTINGS
-    Write-Host '[OK] Windows restore point created before optimization.' -ForegroundColor Green
+    Write-Host '[OK] Point de restauration Windows créé avant les modifications.' -ForegroundColor Green
 } catch {
-    Write-Warning "Restore point creation failed: $($_.Exception.Message)"
-    Write-Warning 'The optimization engine will still preserve per-profile Registry and service state for rollback.'
+    throw "Impossible de créer le point de restauration de sécurité. Aucune optimisation ne doit continuer sans ce garde-fou, sauf choix explicite via -SkipV4RestorePoint. Détail: $($_.Exception.Message)"
 }
