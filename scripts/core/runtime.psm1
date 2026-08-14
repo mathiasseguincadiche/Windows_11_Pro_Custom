@@ -123,7 +123,7 @@ function Protect-WpcCommandText {
 }
 
 function Write-WpcChildLine {
-    param([Parameter(Mandatory)][string]$Line,[Parameter(Mandatory)][string]$LogPath,[switch]$Quiet)
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Line,[Parameter(Mandatory)][string]$LogPath,[switch]$Quiet)
     if ([string]::IsNullOrWhiteSpace($Line)) { return }
     Add-WpcLogLine -Path $LogPath -Level 'OUTPUT' -Message (Protect-WpcCommandText -Text $Line)
     if ($Quiet) { return }
