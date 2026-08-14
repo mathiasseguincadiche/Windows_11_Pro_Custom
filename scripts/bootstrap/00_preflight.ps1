@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$AllowPendingReboot,
-    [switch]$StrictPhysicalReadiness
+    [switch]$StrictPhysicalReadiness,
+    [switch]$RequireFoundation
 )
 
 Set-StrictMode -Version Latest
@@ -68,6 +69,7 @@ $result = [ordered]@{
     PendingReboot = $pendingReboot
     Volumes = $volumes
     NativeModules = @($nativeModules)
+    RequireFoundation = [bool]$RequireFoundation
 }
 
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $reportDir 'preflight.json')
@@ -102,4 +104,4 @@ $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
 Write-Host '[ANALYSE] Préqualification physique complète avant toute convergence...' -ForegroundColor Cyan
-& $physicalReadinessScript -Strict:$StrictPhysicalReadiness
+& $physicalReadinessScript -Strict:$StrictPhysicalReadiness -RequireFoundation:$RequireFoundation
