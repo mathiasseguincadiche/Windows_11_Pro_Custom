@@ -49,15 +49,25 @@ jobs:
             exit 1
           fi
 
-      - name: Enforce single-pass WinGet machine inventory
+      - name: Enforce global WinGet inventory with targeted exact fallback
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'Get-WingetInventory' scripts/bootstrap/01_machine_state.ps1
-          grep -Fq 'winget.exe list --accept-source-agreements --disable-interactivity' scripts/bootstrap/01_machine_state.ps1
+          script='scripts/bootstrap/01_machine_state.ps1'
+          grep -Fq 'Get-WingetInventory' "$script"
+          grep -Fq 'winget.exe list --accept-source-agreements --disable-interactivity' "$script"
+          grep -Fq 'Exact fallback:' "$script"
           # shellcheck disable=SC2016
-          if grep -Fq 'winget.exe list --id $Id' scripts/bootstrap/01_machine_state.ps1; then
-            echo 'Machine-state discovery must not execute one winget list call per application.' >&2
+          exact_calls="$(grep -Fc 'winget.exe list --id $Id --exact' "$script")"
+          if [[ "$exact_calls" -ne 1 ]]; then
+            echo "Machine-state must contain exactly one targeted WinGet exact-fallback command location; found ${exact_calls}." >&2
+            exit 1
+          fi
+          # The exact command must stay after the fast global-match return path.
+          global_hit_line="$(grep -nF "State='INSTALLED'; Evidence=[string]\$line[0]" "$script" | head -n1 | cut -d: -f1)"
+          exact_line="$(grep -nF 'winget.exe list --id $Id --exact' "$script" | head -n1 | cut -d: -f1)"
+          if [[ -z "$global_hit_line" || -z "$exact_line" || "$exact_line" -le "$global_hit_line" ]]; then
+            echo 'Targeted exact WinGet fallback must execute only after the global inventory lookup misses.' >&2
             exit 1
           fi
 
@@ -94,7 +104,8 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq 'powershell.exe' scripts/windows/41_restore_point.ps1
-          grep -Fq 'Impossible de créer le point de restauration de sécurité' scripts/windows/41_restore_point.ps1
+          grep -Fq 'Impossible de créer ou confirmer le point de restauration de sécurité' scripts/windows/41_restore_point.ps1
+          grep -Fq 'Point de restauration récent déjà présent' scripts/windows/41_restore_point.ps1
           if grep -Fq "Registry backups remain the primary rollback mechanism" scripts/windows/41_restore_point.ps1; then
             echo 'Restore-point failure must not silently continue.' >&2
             exit 1
