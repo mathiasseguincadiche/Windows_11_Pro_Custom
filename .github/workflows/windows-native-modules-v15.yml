@@ -33,7 +33,7 @@ jobs:
           grep -Fq "Get-Volume','Get-PhysicalDisk','Get-StorageReliabilityCounter" "$module"
           grep -Fq 'Initialize-WpcWindowsNativeModules -Profile Full' "$preflight"
           bootstrap_line="$(grep -nF 'Initialize-WpcWindowsNativeModules -Profile Full' "$preflight" | head -n1 | cut -d: -f1)"
-          volume_line="$(grep -nF '$volumes = Get-Volume' "$preflight" | head -n1 | cut -d: -f1)"
+          volume_line="$(grep -nF "\$volumes = Get-Volume" "$preflight" | head -n1 | cut -d: -f1)"
           if [[ -z "$bootstrap_line" || -z "$volume_line" || "$bootstrap_line" -ge "$volume_line" ]]; then
             echo 'Windows native modules must be initialized before the first Get-Volume call.' >&2
             exit 1
