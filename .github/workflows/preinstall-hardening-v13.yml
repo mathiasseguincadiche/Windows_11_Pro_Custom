@@ -1,0 +1,90 @@
+name: preinstall-hardening
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate PowerShell syntax of hardened scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            'scripts/bootstrap/00_preflight.ps1',
+            'scripts/bootstrap/03_apps.ps1',
+            'scripts/bootstrap/11_validate_v3.ps1',
+            'scripts/windows/41_restore_point.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+            if (@($errors).Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "${path}: $($_.Message)" }
+            }
+          }
+
+      - name: Enforce Windows 11 Pro and reboot guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "EditionID" scripts/bootstrap/00_preflight.ps1
+          grep -Fq "editionId -ne 'Professional'" scripts/bootstrap/00_preflight.ps1
+          grep -Fq 'PendingFileRenameOperations' scripts/bootstrap/00_preflight.ps1
+          grep -Fq 'Un redémarrage Windows est en attente' scripts/bootstrap/00_preflight.ps1
+          grep -Fq 'Windows11Pro' scripts/bootstrap/11_validate_v3.ps1
+          grep -Fq "editionId -eq 'Professional'" scripts/bootstrap/11_validate_v3.ps1
+
+      - name: Enforce fail-closed restore point
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'powershell.exe' scripts/windows/41_restore_point.ps1
+          grep -Fq 'Impossible de créer le point de restauration de sécurité' scripts/windows/41_restore_point.ps1
+          if grep -Fq "Registry backups remain the primary rollback mechanism" scripts/windows/41_restore_point.ps1; then
+            echo 'Restore-point failure must not silently continue.' >&2
+            exit 1
+          fi
+
+      - name: Enforce WinGet preflight before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Préflight WinGet: validation de tous les identifiants avant la première installation.' scripts/bootstrap/03_apps.ps1
+          grep -Fq 'Préflight WinGet échoué avant toute mutation' scripts/bootstrap/03_apps.ps1
+
+      - name: Enforce supply-chain verification for AWS CLI and kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/wsl/install-devops.sh
+          grep -Fq 'FB5DB77FD5C118B80511ADA8A6310ACC4672475C' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq 'gpg --batch --homedir "$aws_gnupg" --verify "$aws_sig" "$aws_zip"' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq '${aws_archive}.sig' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq '${kind_url}.sha256sum' scripts/wsl/install-devops.sh
+          grep -Fq 'sha256sum -c kind-linux-amd64.sha256sum' scripts/wsl/install-devops.sh
+
+  upstream-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate pinned signature and checksum assets exist upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source config/devops/tool-versions.env
+          curl --retry 3 --retry-all-errors -fsSL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64.sha256sum" | grep -Eq '^[0-9a-f]{64}[[:space:]]+kind-linux-amd64$'
+          curl --retry 3 --retry-all-errors -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip.sig" -o awscliv2.sig
+          test -s awscliv2.sig

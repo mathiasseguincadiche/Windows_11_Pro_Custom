@@ -57,7 +57,7 @@ log() { printf '\n==> %s\n' "$*"; }
 log "Paquets de base"
 sudo apt-get update
 sudo apt-get install -y \
-  ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client rsync tar gzip \
+  ca-certificates curl wget gnupg dirmngr lsb-release unzip jq git openssh-client rsync tar gzip \
   python3 python3-pip python3-venv pipx shellcheck shfmt ansible-core bash-completion
 
 log "Docker Engine + Buildx + Compose depuis le dépôt Docker officiel"
@@ -127,10 +127,23 @@ echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.
 sudo apt-get update
 sudo apt-get install -y gh trivy
 
-log "AWS CLI v2 ${AWS_CLI_VERSION} depuis l'archive officielle versionnée"
+log "AWS CLI v2 ${AWS_CLI_VERSION} avec signature PGP officielle"
 aws_archive="awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip"
-curl -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$tmpdir/awscliv2.zip"
-unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir/aws-cli"
+aws_zip="$tmpdir/awscliv2.zip"
+aws_sig="$tmpdir/awscliv2.sig"
+aws_gnupg="$tmpdir/aws-gnupg"
+aws_fingerprint='FB5DB77FD5C118B80511ADA8A6310ACC4672475C'
+install -m 0700 -d "$aws_gnupg"
+curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$aws_zip"
+curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}.sig" -o "$aws_sig"
+gpg --batch --homedir "$aws_gnupg" --keyserver hkps://keyserver.ubuntu.com --recv-keys "$aws_fingerprint"
+aws_imported_fingerprint="$(gpg --batch --homedir "$aws_gnupg" --with-colons --fingerprint "$aws_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
+if [[ "$aws_imported_fingerprint" != "$aws_fingerprint" ]]; then
+  echo "[ERREUR] Empreinte de clé AWS CLI inattendue: ${aws_imported_fingerprint:-absente}" >&2
+  exit 1
+fi
+gpg --batch --homedir "$aws_gnupg" --verify "$aws_sig" "$aws_zip"
+unzip -q "$aws_zip" -d "$tmpdir/aws-cli"
 if command -v aws >/dev/null 2>&1; then
   sudo "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
 else
@@ -144,9 +157,15 @@ curl -fsSL "${minikube_url}.sha256" -o "$tmpdir/minikube.sha256"
 echo "$(cat "$tmpdir/minikube.sha256")  $tmpdir/minikube" | sha256sum -c -
 sudo install -m 0755 "$tmpdir/minikube" /usr/local/bin/minikube
 
-log "kind ${KIND_VERSION}"
-curl -fsSL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" -o "$tmpdir/kind"
-sudo install -m 0755 "$tmpdir/kind" /usr/local/bin/kind
+log "kind ${KIND_VERSION} avec checksum upstream"
+kind_url="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+curl --retry 5 --retry-all-errors -fsSL "$kind_url" -o "$tmpdir/kind-linux-amd64"
+curl --retry 5 --retry-all-errors -fsSL "${kind_url}.sha256sum" -o "$tmpdir/kind-linux-amd64.sha256sum"
+(
+  cd "$tmpdir"
+  sha256sum -c kind-linux-amd64.sha256sum
+)
+sudo install -m 0755 "$tmpdir/kind-linux-amd64" /usr/local/bin/kind
 
 log "Outils qualité IaC"
 bash "$SCRIPT_DIR/install-quality-tools.sh"
@@ -167,10 +186,11 @@ kind version | grep -F "$KIND_VERSION" >/dev/null
 
 cat <<'EOF'
 
-[OK] Stack DevOps V3 installée avec versions cœur épinglées.
+[OK] Stack DevOps V3 installée avec versions cœur épinglées et artefacts sensibles vérifiés.
 
 Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
 Les versions kubectl, Helm, Terraform, AWS CLI, Minikube et kind sont pilotées par config/devops/tool-versions.env.
+AWS CLI est vérifié par signature PGP et kind par checksum SHA-256 upstream avant installation.
 Les outils IaC et le profil shell DevOps sont installés.
 Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL.
 Exécute ensuite :
