@@ -44,7 +44,14 @@ function Invoke-WpcNativeCapture {
     }
 
     $global:LASTEXITCODE = 0
-    $lines = @($raw | ForEach-Object { [string]$_ })
+
+    # Certaines frontières natives Windows (notamment Windows PowerShell 5.1 et
+    # certaines sorties WSL) peuvent remonter des caractères NUL invisibles dans
+    # PowerShell 7. Ils sont sans signification dans les sorties texte que ce
+    # helper est chargé de capturer, mais rendent les comparaisons exactes fausses
+    # alors que l'affichage console paraît correct. Normaliser ici évite que chaque
+    # consommateur doive appliquer son propre `-replace "`0", ''`.
+    $lines = @($raw | ForEach-Object { ([string]$_) -replace "`0", '' })
 
     return [pscustomobject]@{
         ExitCode = $exitCode
