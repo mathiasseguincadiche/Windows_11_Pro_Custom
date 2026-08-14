@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$AllowPendingReboot
+    [switch]$AllowPendingReboot,
+    [switch]$StrictPhysicalReadiness
 )
 
 Set-StrictMode -Version Latest
@@ -101,4 +102,4 @@ $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
 Write-Host '[ANALYSE] Préqualification physique complète avant toute convergence...' -ForegroundColor Cyan
-& $physicalReadinessScript -Strict
+& $physicalReadinessScript -Strict:$StrictPhysicalReadiness
