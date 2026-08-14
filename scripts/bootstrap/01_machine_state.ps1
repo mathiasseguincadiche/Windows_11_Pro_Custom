@@ -12,8 +12,10 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
 $wslDetectionModule = Join-Path $repoRoot 'scripts\core\wsl-detection.psm1'
+$nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
 Import-Module $runtimeModule
 Import-Module $wslDetectionModule
+Import-Module $nativeProcessModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $reportDir = Join-Path $repoRoot 'reports\orchestration'
 $reportPath = Join-Path $reportDir 'machine-state.json'
@@ -57,16 +59,15 @@ function Get-VolumeFact {
 }
 
 function Get-WingetInventory {
-    $wingetCommand = Get-Command winget.exe -ErrorAction SilentlyContinue
+    $wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
     if (-not $wingetCommand) {
         return [pscustomobject]@{ Available=$false; Success=$false; Lines=@(); Error='WinGet unavailable' }
     }
 
-    $lines = @(& winget.exe list --accept-source-agreements --disable-interactivity 2>$null | ForEach-Object { [string]$_ })
-    $code = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    if ($code -ne 0) {
-        return [pscustomobject]@{ Available=$true; Success=$false; Lines=$lines; Error="winget list failed with exit code $code" }
+    $result = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('list', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
+    $lines = @($result.Lines)
+    if ($result.ExitCode -ne 0) {
+        return [pscustomobject]@{ Available=$true; Success=$false; Lines=$lines; Error="winget list failed with exit code $($result.ExitCode)" }
     }
     return [pscustomobject]@{ Available=$true; Success=$true; Lines=$lines; Error='' }
 }
@@ -90,11 +91,14 @@ function Get-WingetPackageFact {
 
     # Le tableau global WinGet peut tronquer un identifiant selon la largeur du terminal.
     # On ne paie donc le coût d'un appel exact que pour les candidats apparemment absents.
-    $exactText = (& winget.exe list --id $Id --exact --accept-source-agreements --disable-interactivity 2>$null | Out-String)
-    $exactCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
+    $wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
+    if (-not $wingetCommand) {
+        return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence='WinGet unavailable during exact fallback' }
+    }
+    $exactResult = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('list', '--id', $Id, '--exact', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
+    $exactText = $exactResult.Text
     $exactLine = @($exactText -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
-    if ($exactCode -eq 0 -and $exactLine.Count -gt 0) {
+    if ($exactResult.ExitCode -eq 0 -and $exactLine.Count -gt 0) {
         return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence="Exact fallback: $([string]$exactLine[0])" }
     }
 
@@ -186,7 +190,7 @@ $pendingReboot = Test-PendingReboot
 $c = Get-VolumeFact -DriveLetter 'C'
 $d = Get-VolumeFact -DriveLetter 'D'
 
-$winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+$winget = Get-WpcNativeApplication -Name 'winget.exe'
 $manifest = Get-Content -Raw (Join-Path $repoRoot 'manifests\winget\apps-core.json') | ConvertFrom-Json
 $requiredApps = @($manifest.apps | Where-Object { $_.autoInstall -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetId) })
 Write-Host "[INFO] Inventaire WinGet global: $($requiredApps.Count) applications cibles..." -ForegroundColor DarkGray

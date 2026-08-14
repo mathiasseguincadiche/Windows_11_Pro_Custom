@@ -6,6 +6,7 @@ on:
       - '.github/workflows/onedrive-contract.yml'
       - 'config/windows/onedrive.json'
       - 'config/winutil/mathias-winutil.json'
+      - 'scripts/core/native-process.psm1'
       - 'scripts/windows/33_onedrive.ps1'
       - 'scripts/bootstrap/10_workstation.ps1'
       - 'docs/08_APPLICATIONS.md'
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/onedrive-contract.yml'
       - 'config/windows/onedrive.json'
       - 'config/winutil/mathias-winutil.json'
+      - 'scripts/core/native-process.psm1'
       - 'scripts/windows/33_onedrive.ps1'
       - 'scripts/bootstrap/10_workstation.ps1'
       - 'docs/08_APPLICATIONS.md'
@@ -57,7 +59,8 @@ jobs:
           set -euo pipefail
           script='scripts/windows/33_onedrive.ps1'
 
-          grep -Fq "winget.exe uninstall --id \$config.wingetId --exact --source winget" "$script"
+          grep -Fq 'native-process.psm1' "$script"
+          grep -Fq "& \$winget.Source uninstall --id \$config.wingetId --exact --source winget" "$script"
           grep -Fq "OneDriveSetup.exe" "$script"
           grep -Fq "'/uninstall'" "$script"
           grep -Fq 'DisableFileSyncNGSC' config/windows/onedrive.json
@@ -68,7 +71,8 @@ jobs:
             exit 1
           fi
 
-          mapfile -t uninstall_files < <(grep -RIlE 'winget(\.exe)?[[:space:]]+uninstall' scripts --include='*.ps1' || true)
+          # shellcheck disable=SC2016
+          mapfile -t uninstall_files < <(grep -RIlE 'winget(\.exe)?[[:space:]]+uninstall|\$winget\.Source[[:space:]]+uninstall' scripts --include='*.ps1' || true)
           for file in "${uninstall_files[@]}"; do
             if [[ "$file" != "$script" ]]; then
               echo "Désinstallation WinGet non autorisée hors du contrat OneDrive: $file" >&2
@@ -85,6 +89,7 @@ jobs:
       - name: Load contract and execute non-mutating audit
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $contract = Get-Content -Raw .\config\windows\onedrive.json | ConvertFrom-Json
           if ($contract.desiredState -ne 'absent') { throw 'Unexpected OneDrive desired state.' }
           & .\scripts\windows\33_onedrive.ps1 -Mode Audit
