@@ -28,7 +28,7 @@ jobs:
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
             if (@($errors).Count -gt 0) {
-              $errors | ForEach-Object { Write-Error "$path: $($_.Message)" }
+              $errors | ForEach-Object { Write-Error "${path}: $($_.Message)" }
             }
           }
 
