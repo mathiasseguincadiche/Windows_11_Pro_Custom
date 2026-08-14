@@ -11,8 +11,11 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $configPath = Join-Path $repoRoot 'config\windows\onedrive.json'
 $stateDir = Join-Path $repoRoot 'state\onedrive'
 $statePath = Join-Path $stateDir 'state.json'
+$nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
 
 if (-not (Test-Path $configPath)) { throw "Contrat OneDrive introuvable: $configPath" }
+if (-not (Test-Path $nativeProcessModule)) { throw "Module d'exécution native introuvable: $nativeProcessModule" }
+Import-Module $nativeProcessModule
 $config = Get-Content -Raw $configPath | ConvertFrom-Json
 if ([string]$config.desiredState -ne 'absent') { throw "Etat OneDrive non supporté: $($config.desiredState)" }
 
@@ -50,14 +53,17 @@ function Get-OneDriveExecutablePaths {
     return @($paths | Select-Object -Unique)
 }
 
+function Get-OneDriveWingetCommand {
+    return Get-WpcNativeApplication -Name 'winget.exe'
+}
+
 function Test-OneDriveInstalled {
     if (Get-Process -Name OneDrive -ErrorAction SilentlyContinue) { return $true }
     foreach ($path in Get-OneDriveExecutablePaths) { if (Test-Path $path) { return $true } }
-    if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
-        $output = (& winget.exe list --id $config.wingetId --exact --accept-source-agreements --disable-interactivity 2>$null | Out-String)
-        $wingetExitCode = $LASTEXITCODE
-        $global:LASTEXITCODE = 0
-        if ($wingetExitCode -eq 0 -and $output -match [regex]::Escape([string]$config.wingetId)) { return $true }
+    $winget = Get-OneDriveWingetCommand
+    if ($winget) {
+        $result = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('list', '--id', [string]$config.wingetId, '--exact', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
+        if ($result.ExitCode -eq 0 -and $result.Text -match [regex]::Escape([string]$config.wingetId)) { return $true }
     }
     return $false
 }
@@ -69,9 +75,10 @@ function Stop-OneDriveProcess {
 function Remove-OneDriveClient {
     Stop-OneDriveProcess
     if (-not (Test-OneDriveInstalled)) { return }
-    if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
+    $winget = Get-OneDriveWingetCommand
+    if ($winget) {
         Write-Host "[EN COURS] Désinstallation ciblée de $($config.wingetId) via WinGet..." -ForegroundColor Cyan
-        & winget.exe uninstall --id $config.wingetId --exact --source winget --silent --accept-source-agreements --disable-interactivity
+        & $winget.Source uninstall --id $config.wingetId --exact --source winget --silent --accept-source-agreements --disable-interactivity
         $wingetExitCode = $LASTEXITCODE
         $global:LASTEXITCODE = 0
         if ($wingetExitCode -ne 0) { Write-Warning 'WinGet nʼa pas confirmé la désinstallation; fallback Microsoft autorisé.' }
@@ -92,8 +99,9 @@ function Remove-OneDriveClient {
 
 function Install-OneDriveClient {
     if (Test-OneDriveInstalled) { return }
-    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { throw 'Rollback OneDrive impossible: WinGet est introuvable.' }
-    & winget.exe install --id $config.wingetId --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    $winget = Get-OneDriveWingetCommand
+    if (-not $winget) { throw 'Rollback OneDrive impossible: WinGet est introuvable.' }
+    & $winget.Source install --id $config.wingetId --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
     $wingetExitCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($wingetExitCode -ne 0 -or -not (Test-OneDriveInstalled)) { throw 'Rollback OneDrive impossible: la réinstallation nʼa pas été confirmée.' }
