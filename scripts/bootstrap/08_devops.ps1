@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
-Import-Module $runtimeModule -Force
+Import-Module $runtimeModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $windowsScript = Join-Path $repoRoot 'scripts\wsl\install-devops.sh'
 $terminalScript = Join-Path $repoRoot 'scripts\wsl\manage-devops-terminal.sh'
