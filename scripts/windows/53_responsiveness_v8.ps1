@@ -217,7 +217,9 @@ function Write-Report {
     if ($State.Memory.ApplicationLaunchPrefetching -eq $false) { $warnings.Add('Application launch prefetching is disabled.') }
     if ($State.Memory.ApplicationPreLaunch -eq $false) { $warnings.Add('Application prelaunch is disabled.') }
     if ($State.ActivePowerSchemeGuid -and $State.ActivePowerSchemeGuid -ne [string]$policy.power.activeSchemeGuid) { $warnings.Add('Active power scheme is not Balanced.') }
-    if ($State.AcPowerModeGuid -and $State.AcPowerModeGuid -ne [string]$policy.power.acPowerModeGuid) { $warnings.Add('AC power mode is not Best Performance.') }
+    if ([string]$policy.power.acPowerModeManagement -eq 'enforce' -and $State.AcPowerModeGuid -and $State.AcPowerModeGuid -ne [string]$policy.power.acPowerModeGuid) {
+        $warnings.Add('AC power mode does not match the managed policy.')
+    }
     if ($State.Storage.TrimEnabled -eq $false) { $warnings.Add('TRIM is disabled.') }
     if ($State.Storage.ScheduledOptimizeEnabled -eq $false) { $warnings.Add('Windows Scheduled Optimize is disabled.') }
     foreach ($volume in $State.Storage.Volumes) {
@@ -229,6 +231,7 @@ function Write-Report {
         Version = 'V8'
         Mode = $Mode
         PolicyReviewedAt = [string]$policy.reviewedAt
+        AcPowerModeManagement = [string]$policy.power.acPowerModeManagement
         State = $State
         StartupAutomaticDisable = [bool]$policy.startup.automaticDisable
         BackgroundGlobalDisable = [bool]$policy.backgroundApps.globalDisable
@@ -265,10 +268,14 @@ if ($Mode -eq 'Apply') {
         & powercfg.exe /SetActive ([string]$policy.power.activeSchemeGuid) | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Failed to activate Balanced power scheme.' }
     }
-    if (Get-AcPowerModeGuid) {
-        Set-AcPowerModeGuid -Guid ([string]$policy.power.acPowerModeGuid)
+    if ([string]$policy.power.acPowerModeManagement -eq 'enforce') {
+        if (Get-AcPowerModeGuid) {
+            Set-AcPowerModeGuid -Guid ([string]$policy.power.acPowerModeGuid)
+        } else {
+            Write-Warning 'Windows AC power-mode API unavailable; the managed AC power mode could not be applied.'
+        }
     } else {
-        Write-Warning 'Windows AC power-mode API unavailable; Best Performance remains a manual verification item.'
+        Write-Host '[INFO] Mode de puissance secteur observé uniquement; le réglage Windows actuel est conservé.'
     }
 
     Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$policy.ui.minimizeRestoreAnimation) -ClientAreaAnimations ([bool]$policy.ui.clientAreaAnimations)
@@ -318,7 +325,7 @@ if ($Mode -eq 'Verify') {
     if ($current.PageFile.AutomaticManagedPagefile -ne $true) { $failed.Add('SystemManagedPagefile') }
     if ($current.PageFile.CrashDumpEnabled -ne [int]$policy.pageFile.crashDumpEnabled) { $failed.Add('AutomaticMemoryDump') }
     if ($current.ActivePowerSchemeGuid -ne [string]$policy.power.activeSchemeGuid) { $failed.Add('BalancedPowerScheme') }
-    if ($current.AcPowerModeGuid -and $current.AcPowerModeGuid -ne [string]$policy.power.acPowerModeGuid) { $failed.Add('BestPerformanceAcPowerMode') }
+    if ([string]$policy.power.acPowerModeManagement -eq 'enforce' -and $current.AcPowerModeGuid -and $current.AcPowerModeGuid -ne [string]$policy.power.acPowerModeGuid) { $failed.Add('ManagedAcPowerMode') }
     if ($current.UI.MinimizeRestoreAnimation -ne [bool]$policy.ui.minimizeRestoreAnimation) { $failed.Add('MinimizeRestoreAnimation') }
     if ($current.UI.ClientAreaAnimations -ne [bool]$policy.ui.clientAreaAnimations) { $failed.Add('ClientAreaAnimations') }
     if ($current.Storage.TrimEnabled -ne $true) { $failed.Add('TrimEnabled') }
