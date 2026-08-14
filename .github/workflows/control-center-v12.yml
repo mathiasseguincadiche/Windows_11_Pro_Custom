@@ -52,12 +52,14 @@ jobs:
             "Mode='Audit'",
             "Mode='Verify'",
             "InstallDevOps=[switch]::Present",
-            "InstallOpenClawAI=[switch]::Present",
             "ValidateHardware=[switch]::Present",
             "DryRun",
             "Start-Process -FilePath `$exe -Verb RunAs"
           )) {
             if (-not $menu.Contains($needle)) { throw "Contrat Control Center absent: $needle" }
+          }
+          foreach ($forbidden in @('InstallOpenClawAI','ValidateOpenClawAI','Installer ou reparer OpenClaw')) {
+            if ($menu.Contains($forbidden)) { throw "Responsabilité externe interdite dans le menu: $forbidden" }
           }
           if ($menu -match 'Remove-Item\s+-Recurse|Format-Volume|Clear-Disk') {
             throw 'Le menu ne doit contenir aucune restauration destructive propre.'
@@ -69,7 +71,7 @@ jobs:
       - name: Prove all critical routes with DryRun
         shell: pwsh
         run: |
-          $choices = @('1','2','3','4.1','4.2','5.1','5.2','6','7','8.1','8.2','8.3','9.1','9.2','10')
+          $choices = @('1','2','3','4.1','4.2','5.1','5.2','6','7','8.1','8.2','9.1','9.2','10')
           foreach ($choice in $choices) {
             Write-Host "--- Choice $choice ---"
             $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
@@ -95,6 +97,9 @@ jobs:
           if (-not $restore.Contains('RestorePlan')) { throw 'Restore plan route incorrect.' }
           if (-not $restore.Contains('ne restaure rien automatiquement')) { throw 'Restore safety message missing.' }
 
+          $hardware = & ./menu.ps1 -Choice 8.2 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not $hardware.Contains('ValidateHardware')) { throw 'Hardware qualification route incorrect.' }
+
   launcher-contract:
     runs-on: ubuntu-latest
     steps:
@@ -115,3 +120,4 @@ jobs:
           grep -Fq 'Composants specifiques' menu.ps1
           grep -Fq 'Journaux et rapports' menu.ps1
           grep -Fq 'La restauration complete destructive reste volontairement non automatique.' menu.ps1
+          grep -Fq 'OpenClaw / OpenRouter ne sont pas geres par ce depot.' menu.ps1

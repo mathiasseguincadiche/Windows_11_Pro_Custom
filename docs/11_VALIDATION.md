@@ -161,19 +161,15 @@ Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-## 6. Qualification OpenClaw/OpenRouter
+## 6. Projets externes
 
-Uniquement si l'intégration IA fait partie de la workstation :
+La validation de `Windows_11_Pro_Custom` s'arrête aux responsabilités de la workstation.
 
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
+OpenClaw/OpenRouter n'est pas un validateur optionnel de ce dépôt : son installation, sa configuration et sa qualification appartiennent exclusivement à `mathiasseguincadiche/openclaw_openrouter`.
 
-Le validateur vérifie le control-plane approuvé, l'installation Windows et le backend WSL2 DevOps attendu par l'intégration.
+La présence ou l'absence d'un projet externe sur la machine ne doit donc pas modifier le verdict de conformité de la workstation.
 
-La qualification OpenClaw reste séparée de la qualification générale afin que la workstation Windows/DevOps ne dépende pas obligatoirement de cette extension.
-
-Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+Frontière : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
@@ -188,8 +184,6 @@ Pour la workstation DevOps/Ops complète :
   -ValidateWsl `
   -ValidateDevOps
 ```
-
-Si OpenClaw est utilisé, exécuter également sa qualification dédiée.
 
 Le résultat attendu est l'absence d'écart critique non traité et la présence des preuves manuelles nécessaires.
 
@@ -302,7 +296,8 @@ Un verdict positif ne doit pas être obtenu en :
 - modifiant le contrat uniquement pour faire passer l'état actuel ;
 - considérant une CI verte comme preuve du matériel réel ;
 - utilisant un ancien fichier `state/` comme preuve de conformité ;
-- désactivant une protection système pour faire disparaître un échec.
+- désactivant une protection système pour faire disparaître un échec ;
+- incluant dans le verdict un projet externe hors périmètre.
 
 Le validateur doit représenter la vérité du projet, pas produire un résultat vert à tout prix.
 
@@ -329,8 +324,6 @@ preuves disponibles
 +
 sauvegarde vérifiée
 ```
-
-OpenClaw s'ajoute uniquement lorsqu'il fait partie du périmètre réel de la workstation.
 
 La checklist détaillée et réutilisable est [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
 

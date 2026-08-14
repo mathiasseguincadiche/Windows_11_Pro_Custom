@@ -179,7 +179,7 @@ Il ne signifie pas :
 
 - restauration complète de disque ;
 - suppression d'Ubuntu ;
-- suppression automatique d'OpenClaw ;
+- suppression automatique de projets externes ;
 - retour arrière d'un changement matériel ;
 - restauration magique de données utilisateur.
 
@@ -193,11 +193,20 @@ Le projet préfère une frontière explicite à une promesse de rollback irréal
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-`-FullInstall` demande le parcours complet prévu par l'orchestrateur et active notamment les validations/compléments du périmètre DevOps et OpenClaw prévus par ce mode.
+`-FullInstall` demande le parcours complet de la workstation et active :
+
+```text
+InstallDevOps
+ValidateDevOps
+ValidateWsl
+ValidateHardware
+```
 
 Ce paramètre ne contourne pas le modèle machine-first : chaque composant doit toujours être vérifié avant d'être modifié.
 
 Une installation complète peut donc produire beaucoup de `DÉJÀ OK` sur une machine déjà partiellement configurée.
+
+Elle ne clone, n'installe, ne configure et ne valide aucun projet externe.
 
 ---
 
@@ -340,17 +349,15 @@ La validation DevOps reste disponible séparément.
 
 ---
 
-# 14. OpenClaw dans l'orchestration
+# 14. Projets externes dans l'orchestration
 
-L'intégration OpenClaw est également explicite :
+L'orchestrateur ne possède pas les projets externes installés éventuellement sur la même machine.
 
-```powershell
-.\install.ps1 -Mode Apply -InstallOpenClawAI
-```
+En particulier, OpenClaw/OpenRouter n'est pas un composant de `install.ps1` : il n'existe plus de paramètre `InstallOpenClawAI`, `ValidateOpenClawAI`, `OpenClawRoot`, `OpenClawControlPlanePath` ou `OpenClawRepositoryRef`, ni de pin `config/openclaw/control-plane.json`.
 
-L'orchestrateur lit normalement le ref approuvé depuis `config/openclaw/control-plane.json`.
+L'installation, la configuration, la maintenance et la validation de cette plateforme appartiennent au dépôt `mathiasseguincadiche/openclaw_openrouter`.
 
-Le rollback général ne supprime pas automatiquement l'état OpenClaw, car ce répertoire peut contenir des données et credentials qui nécessitent une décision spécifique.
+Guide de frontière : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 

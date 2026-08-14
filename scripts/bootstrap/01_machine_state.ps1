@@ -3,8 +3,7 @@ param(
     [ValidateSet('standard', 'lab-heavy', 'nat-fallback')]
     [string]$WslProfile = 'standard',
     [string]$Distribution = 'Ubuntu',
-    [string]$WslInstallLocation = 'D:\WSL\Ubuntu-DevOps',
-    [string]$OpenClawRoot = 'D:\AI\OpenClaw'
+    [string]$WslInstallLocation = 'D:\WSL\Ubuntu-DevOps'
 )
 
 Set-StrictMode -Version Latest
@@ -219,7 +218,6 @@ $report = [ordered]@{
         VSCodeCli = if ($code) { $code.Source } else { $null }
         WezTermCli = if ($wezterm) { $wezterm.Source } else { $null }
         SshCli = if ($ssh) { $ssh.Source } else { $null }
-        OpenClawRootPresent = Test-Path $OpenClawRoot
     }
     OneDrive = $oneDrive
     Defender = [ordered]@{

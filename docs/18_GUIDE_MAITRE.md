@@ -1,8 +1,6 @@
 # Guide maître — vue consolidée du projet
 
-Ce document donne **une vue unique du projet** et oriente vers le guide qui fait réellement référence pour chaque sujet. Il reste volontairement court afin de ne pas dupliquer les procédures spécialisées.
-
-Pour découvrir le projet, lire d'abord le [`README.md`](../README.md). Pour le réaliser, suivre [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
+Ce document donne **une vue consolidée** de `Windows_11_Pro_Custom` et oriente vers les guides qui font référence. Pour réaliser le projet dans le bon ordre, suivre [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 
 ## Le projet en une chaîne
 
@@ -14,46 +12,37 @@ Windows 11 Pro
 configuration versionnée
    ↓
 WezTerm / VS Code
-   ├── Ubuntu WSL2 -> Linux DevOps
-   ├── PowerShell 7 -> Windows
-   └── OpenClaw / clawops -> Windows-native, si utilisé
+   ├── Ubuntu DevOps (WSL2) -> Linux DevOps
+   └── PowerShell 7         -> Windows
    ↓
-audit et convergence
+audit → plan → convergence → validation
    ↓
-validation
-   ↓
-idempotence
-   ↓
-maintenance et sauvegarde
+idempotence → maintenance → sauvegarde
 ```
 
-Le principe central est celui d'une **workstation-as-code** : l'état réel est observé, comparé aux contrats actuels, corrigé uniquement lorsque nécessaire puis re-vérifié.
+Le principe central est **workstation-as-code** : l'état réel est observé, comparé aux contrats actuels, corrigé uniquement lorsque nécessaire puis re-vérifié.
 
 ## Responsabilités
 
 ```text
 Windows
-└── desktop / pilotes / PowerShell / VS Code / WezTerm / runtime WSL
+└── desktop / pilotes / sécurité / PowerShell / VS Code / WezTerm / runtime WSL
 
 WSL2 Ubuntu
 └── Bash / Git / Docker / Kubernetes / Terraform / Ansible / AWS
 
 WezTerm
-├── Ubuntu DevOps (WSL2)          <- défaut
-├── PowerShell 7                  <- Windows
-└── OpenClaw / clawops (Windows)  <- IA Windows-native
-
-OpenClaw, si utilisé
-└── D:\AI\OpenClaw + control-plane épinglé
+├── Ubuntu DevOps (WSL2) <- défaut
+└── PowerShell 7         <- Windows
 
 Orchestration
 └── install.ps1 / update.ps1 / menu.ps1
 
 Preuves
-└── logs / reports / validateurs
+└── logs / reports
 ```
 
-Les projets Linux actifs restent sur le filesystem ext4 de WSL2, sous `~/projects`, `~/labs` ou `~/repositories`.
+Les projets Linux actifs restent sur le filesystem ext4 de WSL2 sous `~/projects`, `~/labs` ou `~/repositories`.
 
 ## Cycle opérationnel
 
@@ -85,18 +74,25 @@ Une exécution réussie d'`Apply` ne suffit pas : la conformité vient de l'éta
 | Backup / restore | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) |
 | Validation | [`11_VALIDATION.md`](11_VALIDATION.md) |
 | Matériel | [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) |
+| Reconstruction | [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) |
 | Orchestration | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |
 | Mises à jour | [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md) |
 | Centre de contrôle | [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md) |
-| OpenClaw/OpenRouter | [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+| Frontière OpenClaw/OpenRouter | [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md) |
 | Réalisation A à Z | [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) |
 | Commandes | [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md) |
 | Dépannage | [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md) |
 | Sources de vérité | [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md) |
 | Critères d'acceptation | [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) |
 
+## Frontière OpenClaw/OpenRouter
+
+`Windows_11_Pro_Custom` ne prépare, n'installe, ne configure, ne déclenche et ne valide pas OpenClaw/OpenRouter. La plateforme IA appartient entièrement au dépôt `mathiasseguincadiche/openclaw_openrouter`.
+
+Le document `19` existe uniquement pour fixer cette frontière et éviter que les responsabilités des deux projets se mélangent à nouveau.
+
 ## Règle de lecture
 
-Le guide maître explique **comment les briques s'enchaînent**. Les valeurs, commandes, procédures et critères précis appartiennent aux guides spécialisés.
+Le guide maître explique **comment les briques de la workstation s'enchaînent**. Les valeurs, commandes, procédures et critères précis appartiennent aux guides spécialisés.
 
 La documentation active décrit l'état courant ; `CHANGELOG.md` et Git conservent l'historique.

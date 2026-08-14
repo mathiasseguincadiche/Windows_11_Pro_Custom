@@ -64,8 +64,9 @@ Le choix d'installation complète correspond à l'orchestration globale de la wo
 - WSL2 ;
 - environnement DevOps ;
 - workstation VS Code / WezTerm ;
-- validations pertinentes ;
-- intégrations optionnelles prévues par le dépôt.
+- validations pertinentes.
+
+Il ne déclenche aucun projet externe. En particulier, OpenClaw/OpenRouter n'est ni installé ni configuré depuis ce menu.
 
 Le guide pas à pas depuis un Windows vierge reste [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md).
 
@@ -103,16 +104,24 @@ La vérification utilise les contrats actuels du dépôt :
 - stockage ;
 - WSL2 ;
 - DevOps ;
-- matériel lorsque demandé ;
-- intégrations supplémentaires lorsque demandées.
+- matériel lorsque demandé.
+
+Les projets externes ne font pas partie du verdict de conformité de la workstation.
 
 Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ## Composants spécifiques
 
-Cette partie permet d'agir sur une brique sans exécuter l'ensemble du parcours : WSL2, DevOps, terminal, OpenClaw, optimisation ou autres composants exposés par le projet.
+Cette partie permet d'agir sur une brique sans exécuter l'ensemble du parcours. Le contrat courant expose :
+
+```text
+1. WSL2 + stack DevOps + validation
+2. Qualification matérielle guidée
+```
 
 Elle est utile pour le dépannage et la maintenance ciblée.
+
+OpenClaw/OpenRouter n'est pas un composant du centre de contrôle `Windows_11_Pro_Custom` ; ce projet possède son propre dépôt et ses propres points d'entrée.
 
 ## Journaux et rapports
 

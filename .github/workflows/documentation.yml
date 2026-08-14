@@ -11,6 +11,7 @@ on:
       - install.ps1
       - update.ps1
       - scripts/**
+      - config/**
       - .github/workflows/**
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - install.ps1
       - update.ps1
       - scripts/**
+      - config/**
       - .github/workflows/**
 
 permissions:
@@ -133,54 +135,56 @@ jobs:
           grep -Fq 'vue consolidée' docs/18_GUIDE_MAITRE.md
           grep -Fq '20_RUNBOOK_OPERATIONNEL.md' docs/18_GUIDE_MAITRE.md
 
-      - name: Vérifier la cohérence WezTerm et OpenClaw
+      - name: Vérifier le contrat terminal workstation
         shell: bash
         run: |
           set -euo pipefail
-
-          # Ces documents possèdent l'architecture ou l'expérience terminal et
-          # doivent donc exposer explicitement le contrat des trois contextes.
           terminal_contract_docs=(
             README.md
             docs/00_ARCHITECTURE.md
             docs/07_DEVOPS_STACK.md
             docs/18_GUIDE_MAITRE.md
             docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+            docs/20_RUNBOOK_OPERATIONNEL.md
             docs/22_TROUBLESHOOTING.md
             docs/24_CRITERES_ACCEPTATION.md
           )
           for file in "${terminal_contract_docs[@]}"; do
             grep -Fq 'Ubuntu DevOps (WSL2)' "$file" || { echo "$file: profil Ubuntu absent" >&2; exit 1; }
             grep -Fq 'PowerShell 7' "$file" || { echo "$file: profil PowerShell absent" >&2; exit 1; }
-            grep -Fq 'OpenClaw / clawops' "$file" || { echo "$file: profil OpenClaw absent" >&2; exit 1; }
           done
-
-          # Le Runbook possède l'ordre d'exécution, pas la définition complète
-          # du terminal. Il doit orienter vers la référence et prouver l'accès CLI.
-          grep -Fq '07_DEVOPS_STACK.md' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'OpenClaw / clawops (Windows)' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'clawops platform check' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'WezTerm respecte le contrat des trois contextes' docs/20_RUNBOOK_OPERATIONNEL.md
 
           grep -Fq 'config/wezterm/wezterm.lua' docs/00_ARCHITECTURE.md
           grep -Fq 'config/wezterm/wezterm.lua' docs/07_DEVOPS_STACK.md
-          grep -Fq 'config/wezterm/wezterm.lua' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
           grep -Fq 'config/wezterm/wezterm.lua' docs/23_SOURCES_DE_VERITE.md
           grep -Fq 'scripts/windows/31_wezterm.ps1' docs/00_ARCHITECTURE.md
           grep -Fq 'scripts/windows/31_wezterm.ps1' docs/07_DEVOPS_STACK.md
-          grep -Fq 'openclaw --version' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
-          grep -Fq 'ValidateOpenClawAI' docs/24_CRITERES_ACCEPTATION.md
           grep -Fq '07_DEVOPS_STACK.md' docs/README.md
           grep -Fq '19_OPENCLAW_OPENROUTER_WINDOWS.md' docs/README.md
 
-          if grep -Fq 'fermer une ancienne instance WezTerm' docs/20_RUNBOOK_OPERATIONNEL.md; then
-            echo "Le Runbook contient encore l'ancienne procédure de relance WezTerm." >&2
+          if grep -Ei 'OpenClaw|openclaw|clawops|OPENCLAW_' config/wezterm/wezterm.lua; then
+            echo 'La configuration WezTerm de la workstation contient encore une intégration OpenClaw externe.' >&2
             exit 1
           fi
-          if grep -Fq 'openclaw onboard --auth-choice' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md || grep -Fq 'openclaw gateway install' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md; then
-            echo 'Le guide Windows ne doit pas recopier la documentation fonctionnelle OpenClaw.' >&2
-            exit 1
-          fi
+
+      - name: Vérifier la frontière OpenClaw OpenRouter
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e config/openclaw/control-plane.json
+          test ! -e scripts/bootstrap/15_openclaw_ai.ps1
+
+          for needle in InstallOpenClawAI ValidateOpenClawAI OpenClawRoot OpenClawControlPlanePath OpenClawRepositoryRef; do
+            if grep -Fq "$needle" install.ps1; then
+              echo "Paramètre OpenClaw interdit dans install.ps1: $needle" >&2
+              exit 1
+            fi
+          done
+
+          grep -Fq "n'installe pas, ne configure pas, ne met à jour et ne valide pas OpenClaw/OpenRouter" README.md
+          grep -Fq 'projet externe, hors périmètre de la workstation' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+          grep -Fq 'Aucune installation ou configuration OpenClaw/OpenRouter' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+          grep -Fq 'OpenClaw/OpenRouter ne fait pas partie de ce périmètre' docs/20_RUNBOOK_OPERATIONNEL.md
 
       - name: Vérifier le parcours opérationnel réel
         shell: bash
@@ -192,11 +196,11 @@ jobs:
           grep -Fq 'ValidateWsl' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'ValidateDevOps' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fq 'FullInstall' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq 'InstallOpenClawAI' docs/20_RUNBOOK_OPERATIONNEL.md
           grep -Fqi 'idempotence' docs/20_RUNBOOK_OPERATIONNEL.md
-          grep -Fq "\$InstallOpenClawAI = \$true" install.ps1
-          grep -Fq "\$ValidateOpenClawAI = \$true" install.ps1
-          grep -Fq 'OpenClaw inclus' docs/20_RUNBOOK_OPERATIONNEL.md
+          grep -Fq "\$InstallDevOps = \$true" install.ps1
+          grep -Fq "\$ValidateDevOps = \$true" install.ps1
+          grep -Fq "\$ValidateWsl = \$true" install.ps1
+          grep -Fq "\$ValidateHardware = \$true" install.ps1
 
       - name: Vérifier la référence des paramètres publics
         shell: python
@@ -209,10 +213,13 @@ jobs:
               'Mode', 'WslProfile', 'OptimizationProfiles', 'Distribution',
               'WslInstallLocation', 'WslUser', 'InstallDevOps', 'ValidateDevOps',
               'ValidateWsl', 'ValidateHardware', 'SkipV4RestorePoint',
+              'BackupAction', 'BackupTargetDrive', 'AllowNonUsbBackupTarget',
+              'SkipBackupRestorePoint', 'FullInstall', 'PlanOnly',
+              'NonInteractive', 'Yes'
+          ]
+          removed_openclaw_params = [
               'InstallOpenClawAI', 'ValidateOpenClawAI', 'OpenClawRoot',
-              'OpenClawControlPlanePath', 'OpenClawRepositoryRef', 'BackupAction',
-              'BackupTargetDrive', 'AllowNonUsbBackupTarget', 'SkipBackupRestorePoint',
-              'FullInstall', 'PlanOnly', 'NonInteractive', 'Yes'
+              'OpenClawControlPlanePath', 'OpenClawRepositoryRef'
           ]
           update_params = [
               'Mode', 'IncludeDrivers', 'IncludeOptionalUpdates',
@@ -225,6 +232,9 @@ jobs:
                   missing.append(f'install.ps1 n’expose plus ${name}')
               if f'-{name}' not in reference:
                   missing.append(f'docs/21 ne documente pas -{name}')
+          for name in removed_openclaw_params:
+              if f'${name}' in install:
+                  missing.append(f'install.ps1 expose encore le paramètre externe ${name}')
           for name in update_params:
               if f'${name}' not in update:
                   missing.append(f'update.ps1 n’expose plus ${name}')

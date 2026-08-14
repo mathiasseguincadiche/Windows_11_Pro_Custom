@@ -23,11 +23,13 @@ Il ne protège pas automatiquement :
 - les données de `D:` ;
 - le profil utilisateur ;
 - le VHDX WSL réel ;
-- les données OpenClaw ;
+- les données de projets externes ;
 - les fichiers locaux non commités ;
 - les credentials.
 
 GitHub est donc une **source de reconstruction**, pas une image de sauvegarde de la machine.
+
+Les données d'un projet externe éventuellement présentes sur les volumes peuvent être couvertes physiquement par une image disque, mais leur cohérence applicative et leur procédure de restauration restent la responsabilité de ce projet.
 
 ---
 
@@ -227,10 +229,11 @@ Après un changement important **et stabilisé**, par exemple :
 - changement de pilote majeur validé ;
 - évolution structurante de WSL2 ;
 - changement important de la stack DevOps ;
-- intégration OpenClaw stabilisée ;
 - avant une opération risquée.
 
 Ne supprime pas immédiatement la dernière sauvegarde validée lorsque tu en crées une nouvelle.
+
+La sauvegarde fonctionnelle d'un projet externe installé sur la machine reste documentée et validée par ce projet lui-même.
 
 ---
 
@@ -256,10 +259,10 @@ Les clés SSH, tokens, mots de passe et API keys doivent être conservés dans u
 Une sauvegarde contenant :
 
 ```text
-D:\AI\OpenClaw\state
 profil utilisateur
 clés SSH
 credentials locaux
+états applicatifs sensibles
 ```
 
 est un support sensible et doit être protégée physiquement.

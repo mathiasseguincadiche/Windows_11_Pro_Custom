@@ -206,12 +206,8 @@ function Invoke-MainAction {
                 [void](Invoke-WpcRepoScript -DisplayName 'Gestionnaire de mises a jour' -Path $UpdateScript -Arguments @{ Mode='Apply' } -RequiresAdmin)
             }
         }
-        '4.1' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Creer une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Create' } -RequiresAdmin)
-        }
-        '4.2' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Verifier une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Verify' })
-        }
+        '4.1' { [void](Invoke-WpcRepoScript -DisplayName 'Creer une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Create' } -RequiresAdmin) }
+        '4.2' { [void](Invoke-WpcRepoScript -DisplayName 'Verifier une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Verify' }) }
         '5.1' {
             Write-Line '[SECURITE] Cette option genere uniquement un plan de restauration. Elle ne restaure rien automatiquement.' Yellow
             [void](Invoke-WpcRepoScript -DisplayName 'Plan de restauration' -Path $InstallScript -Arguments @{ BackupAction='RestorePlan' })
@@ -221,25 +217,14 @@ function Invoke-MainAction {
                 [void](Invoke-WpcRepoScript -DisplayName 'Rollback des reglages geres' -Path $InstallScript -Arguments @{ Mode='Rollback' } -RequiresAdmin)
             }
         }
-        '6' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Audit et diagnostic global' -Path $InstallScript -Arguments @{ Mode='Audit' })
-        }
-        '7' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Verification de conformite globale' -Path $InstallScript -Arguments @{ Mode='Verify' })
-        }
+        '6' { [void](Invoke-WpcRepoScript -DisplayName 'Audit et diagnostic global' -Path $InstallScript -Arguments @{ Mode='Audit' }) }
+        '7' { [void](Invoke-WpcRepoScript -DisplayName 'Verification de conformite globale' -Path $InstallScript -Arguments @{ Mode='Verify' }) }
         '8.1' {
             if (Confirm-WpcAction -Message 'Installer ou reparer WSL2 et la stack DevOps') {
                 [void](Invoke-WpcRepoScript -DisplayName 'WSL2 + stack DevOps' -Path $InstallScript -Arguments @{ Mode='Apply'; InstallDevOps=[switch]::Present; ValidateWsl=[switch]::Present; ValidateDevOps=[switch]::Present } -RequiresAdmin)
             }
         }
-        '8.2' {
-            if (Confirm-WpcAction -Message 'Installer ou reparer OpenClaw / OpenRouter') {
-                [void](Invoke-WpcRepoScript -DisplayName 'OpenClaw / OpenRouter' -Path $InstallScript -Arguments @{ Mode='Apply'; InstallOpenClawAI=[switch]::Present; ValidateOpenClawAI=[switch]::Present } -RequiresAdmin)
-            }
-        }
-        '8.3' {
-            [void](Invoke-WpcRepoScript -DisplayName 'Qualification materielle guidee' -Path $InstallScript -Arguments @{ Mode='Verify'; ValidateHardware=[switch]::Present } -RequiresAdmin)
-        }
+        '8.2' { [void](Invoke-WpcRepoScript -DisplayName 'Qualification materielle guidee' -Path $InstallScript -Arguments @{ Mode='Verify'; ValidateHardware=[switch]::Present } -RequiresAdmin) }
         '9.1' { Invoke-OpenFolder -Path (Join-Path $RepoRoot 'logs') -Label 'les journaux' }
         '9.2' { Invoke-OpenFolder -Path (Join-Path $RepoRoot 'reports') -Label 'les rapports' }
         '10' { Show-Help }
@@ -258,10 +243,7 @@ function Show-BackupMenu {
         Write-Host ''
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2')) {
-            Invoke-MainAction -Selected "4.$value"
-            Pause-WpcMenu
-        }
+        if ($value -in @('1','2')) { Invoke-MainAction -Selected "4.$value"; Pause-WpcMenu }
     }
 }
 
@@ -277,10 +259,7 @@ function Show-RestoreMenu {
         Write-Line 'La restauration complete destructive reste volontairement non automatique.' DarkGray
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2')) {
-            Invoke-MainAction -Selected "5.$value"
-            Pause-WpcMenu
-        }
+        if ($value -in @('1','2')) { Invoke-MainAction -Selected "5.$value"; Pause-WpcMenu }
     }
 }
 
@@ -290,16 +269,12 @@ function Show-ComponentsMenu {
         Write-Line ' COMPOSANTS SPECIFIQUES' White
         Write-Line ''
         Write-Line '  1. WSL2 + stack DevOps + validation' White
-        Write-Line '  2. OpenClaw / OpenRouter + validation' White
-        Write-Line '  3. Qualification materielle guidee' White
+        Write-Line '  2. Qualification materielle guidee' White
         Write-Line '  0. Retour' DarkGray
         Write-Host ''
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2','3')) {
-            Invoke-MainAction -Selected "8.$value"
-            Pause-WpcMenu
-        }
+        if ($value -in @('1','2')) { Invoke-MainAction -Selected "8.$value"; Pause-WpcMenu }
     }
 }
 
@@ -314,10 +289,7 @@ function Show-LogsMenu {
         Write-Host ''
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2')) {
-            Invoke-MainAction -Selected "9.$value"
-            Pause-WpcMenu
-        }
+        if ($value -in @('1','2')) { Invoke-MainAction -Selected "9.$value"; Pause-WpcMenu }
     }
 }
 
@@ -337,6 +309,9 @@ function Show-Help {
     Write-Line '  Genere un plan de restauration ou rollback les reglages geres. Pas de restauration destructive automatique.' DarkGray
     Write-Line 'Audit / verification' Cyan
     Write-Line '  Audit observe; Verify exige la conformite des composants verifies.' DarkGray
+    Write-Line ''
+    Write-Line 'OpenClaw / OpenRouter ne sont pas geres par ce depot.' Yellow
+    Write-Line 'Leur installation et leur configuration appartiennent au depot openclaw_openrouter.' DarkGray
     Write-Line ''
     Write-Line 'Lancement direct possible pour automatisation/test:' White
     Write-Line '  .\menu.ps1 -Choice 3 -DryRun' DarkGray
@@ -366,10 +341,7 @@ function Show-MainMenu {
             '5' { Show-RestoreMenu }
             '8' { Show-ComponentsMenu }
             '9' { Show-LogsMenu }
-            default {
-                Invoke-MainAction -Selected $selected
-                Pause-WpcMenu
-            }
+            default { Invoke-MainAction -Selected $selected; Pause-WpcMenu }
         }
     }
 }

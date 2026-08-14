@@ -45,21 +45,26 @@ jobs:
           curl --retry 3 -fsSL "https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64.sha256" | grep -Eq '^[0-9a-f]{64}$'
           curl --retry 3 -fsIL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" >/dev/null
           curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" >/dev/null
-      - name: Validate OpenClaw immutable pin and end-to-end wiring
+      - name: Enforce external-project boundary
         shell: bash
         run: |
           set -euo pipefail
-          cfg='config/openclaw/control-plane.json'
-          jq -e '
-            (.repository | type == "string") and
-            (.ref | test("^[0-9a-fA-F]{40}$")) and
-            (.policy == "pinned-commit")
-          ' "$cfg" >/dev/null
-          grep -q 'checkout --detach FETCH_HEAD' scripts/bootstrap/15_openclaw_ai.ps1
-          grep -q "OpenClawRepositoryRef = ''" install.ps1
-          grep -q '02_validate_wsl_backend.ps1' scripts/bootstrap/15_openclaw_ai.ps1
-          grep -q 'WslBackendValidatorPresent' scripts/bootstrap/15_openclaw_ai.ps1
-          grep -q 'Qualification backend DevOps WSL2' scripts/bootstrap/15_openclaw_ai.ps1
+          test ! -e config/openclaw/control-plane.json
+          test ! -e scripts/bootstrap/15_openclaw_ai.ps1
+          for needle in InstallOpenClawAI ValidateOpenClawAI OpenClawRoot OpenClawControlPlanePath OpenClawRepositoryRef; do
+            if grep -Fq "$needle" install.ps1; then
+              echo "External OpenClaw ownership leaked into install.ps1: $needle" >&2
+              exit 1
+            fi
+          done
+          if grep -Ei 'OpenClaw|openclaw|clawops|OPENCLAW_' config/wezterm/wezterm.lua; then
+            echo 'External OpenClaw project hook leaked into workstation WezTerm config.' >&2
+            exit 1
+          fi
+          if grep -Fq 'InstallOpenClawAI' menu.ps1 || grep -Fq 'ValidateOpenClawAI' menu.ps1; then
+            echo 'Control Center must not install or validate OpenClaw/OpenRouter.' >&2
+            exit 1
+          fi
       - name: Validate backup capacity policy wiring
         shell: bash
         run: |

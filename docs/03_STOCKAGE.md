@@ -7,7 +7,7 @@ Les deux SSD internes Crucial T705 restent en **NTFS**.
 | Disque | Lettre | Filesystem | Rôle principal |
 | --- | --- | --- | --- |
 | Crucial T705 #1 | `C:` | NTFS | Windows 11 Pro, applications, profils |
-| Crucial T705 #2 | `D:` | NTFS | données, WSL2 VHDX, OpenClaw, ISO, données lourdes |
+| Crucial T705 #2 | `D:` | NTFS | données, WSL2 VHDX, ISO, données lourdes |
 | Disque externe séparé | exemple `E:` | NTFS | sauvegarde de référence |
 
 Aucune commande du dépôt ne doit formater automatiquement un disque.
@@ -45,8 +45,6 @@ D:\
 ├── WSL\
 │   ├── Ubuntu-DevOps\
 │   └── swap\
-├── AI\
-│   └── OpenClaw\
 ├── ISO\
 └── EXPORTS\
 ```
@@ -56,10 +54,9 @@ Les emplacements contractuels importants sont notamment :
 ```text
 D:\WSL\Ubuntu-DevOps
 D:\WSL\swap\wsl-swap.vhdx
-D:\AI\OpenClaw
 ```
 
-OpenClaw est optionnel ; `D:\AI` peut rester absent tant que cette intégration n'est pas utilisée.
+Les emplacements appartenant à des projets externes ne font pas partie du contrat de stockage de `Windows_11_Pro_Custom`.
 
 ---
 
@@ -192,7 +189,7 @@ Pour une reconstruction complète : [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_
 
 ```text
 C: NTFS -> système Windows
-D: NTFS -> données + WSL2 + intégrations lourdes
+D: NTFS -> données + WSL2 + données lourdes
 VHDX    -> ext4 Linux interne
 USB     -> sauvegarde de référence externe
 ```

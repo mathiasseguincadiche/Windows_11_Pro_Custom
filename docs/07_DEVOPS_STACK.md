@@ -2,7 +2,7 @@
 
 Ce guide décrit **la chaîne Linux DevOps et la manière d'y accéder au quotidien depuis Windows**.
 
-Il ne documente pas le fonctionnement métier d'OpenClaw. Pour l'intégration IA Windows-native : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+OpenClaw/OpenRouter est un projet externe indépendant. Ce dépôt ne documente ni son installation ni sa configuration ; la frontière est fixée dans [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ## Frontière d'exécution
 
@@ -10,8 +10,7 @@ Il ne documente pas le fonctionnement métier d'OpenClaw. Pour l'intégration IA
 Windows 11 Pro
 ├── WezTerm
 ├── PowerShell 7
-├── VS Code Windows
-└── OpenClaw / clawops si utilisés
+└── VS Code Windows
 
 Ubuntu WSL2
 ├── Bash / Git
@@ -107,7 +106,7 @@ Référence WSL2 : [`06_WSL2.md`](06_WSL2.md).
 
 # WezTerm — point d'entrée terminal de la workstation
 
-WezTerm ne constitue pas un quatrième runtime. Il sert de **routeur explicite vers les environnements déjà définis par l'architecture**.
+WezTerm ne constitue pas un troisième runtime. Il sert de **routeur explicite vers les environnements possédés par la workstation**.
 
 La configuration de référence est :
 
@@ -115,13 +114,12 @@ La configuration de référence est :
 config/wezterm/wezterm.lua
 ```
 
-Le contrat courant expose exactement trois contextes :
+Le contrat courant expose exactement deux contextes :
 
 ```text
 WezTerm
-├── Ubuntu DevOps (WSL2)          <- défaut
-├── PowerShell 7                  <- Windows
-└── OpenClaw / clawops (Windows)  <- IA Windows-native
+├── Ubuntu DevOps (WSL2) <- défaut
+└── PowerShell 7         <- Windows
 ```
 
 ## Profil `Ubuntu DevOps (WSL2)`
@@ -149,28 +147,6 @@ Il sert notamment à :
 - l'administration Windows ;
 - les commandes et outils réellement Windows-native.
 
-## Profil `OpenClaw / clawops (Windows)`
-
-Ce profil ouvre lui aussi PowerShell 7 sous Windows, mais prépare la session pour le runtime IA installé sous :
-
-```text
-D:\AI\OpenClaw
-```
-
-La préparation reste **locale à la session WezTerm ouverte** :
-
-- recharge les variables utilisateur OpenClaw pertinentes ;
-- rend accessibles les répertoires CLI gérés sous `D:\AI\OpenClaw` lorsqu'ils existent ;
-- privilégie les launchers Windows `openclaw.cmd` et `clawops.exe` ;
-- se positionne sur la racine OpenClaw lorsqu'elle existe ;
-- indique si `openclaw` et `clawops` sont disponibles.
-
-Le profil ne réalise pas l'installation OpenClaw et ne lance pas automatiquement une opération métier. L'installation et la qualification restent sous la responsabilité de l'intégration OpenClaw.
-
-Cette séparation évite de déplacer OpenClaw dans WSL2 uniquement pour obtenir une expérience CLI homogène.
-
-Détails : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
-
 ---
 
 ## Contrat WezTerm et convergence
@@ -178,12 +154,13 @@ Détails : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.
 `scripts/windows/31_wezterm.ps1` vérifie que la configuration source conserve :
 
 ```text
-Ubuntu DevOps (WSL2)          comme défaut
-PowerShell 7                  comme contexte Windows
-OpenClaw / clawops (Windows)  comme contexte IA Windows-native
+Ubuntu DevOps (WSL2) comme défaut
+PowerShell 7         comme contexte Windows
 ```
 
 Il compare ensuite la configuration versionnée à `%USERPROFILE%\.wezterm.lua`.
+
+Le validateur refuse également qu'une intégration spécifique à OpenClaw/`clawops` soit ajoutée à la configuration WezTerm de la workstation : une telle expérience terminal, si elle est souhaitée, appartient au dépôt `openclaw_openrouter`.
 
 Le composant est géré avec les mêmes intentions que le reste de la workstation :
 
@@ -193,7 +170,7 @@ Apply -> converger
 Verify -> confirmer
 ```
 
-La validation générale de la workstation couvre la configuration WezTerm. `-ValidateOpenClawAI` reste nécessaire pour prouver que le runtime OpenClaw derrière le profil existe réellement.
+La validation générale de la workstation couvre la configuration WezTerm.
 
 ---
 
@@ -306,13 +283,7 @@ Validation du terminal WezTerm :
 .\install.ps1 -Mode Verify
 ```
 
-Validation OpenClaw lorsqu'il est utilisé :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
-Ces validations sont complémentaires : **terminal conforme**, **stack Linux conforme** et **runtime OpenClaw conforme** sont trois faits distincts.
+OpenClaw/OpenRouter possède sa propre installation, sa propre configuration et sa propre validation dans `mathiasseguincadiche/openclaw_openrouter`. Aucune commande `ValidateOpenClawAI` n'appartient à ce dépôt.
 
 Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 
@@ -321,11 +292,10 @@ Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 ## Règle à retenir
 
 ```text
-Windows = hôte et outils Windows-native
+Windows = hôte et outils Windows-native de la workstation
 Ubuntu  = backend et projets Linux DevOps
-WezTerm = routeur terminal entre les contextes
+WezTerm = routeur terminal Ubuntu / PowerShell 7
 VS Code = UI Windows reliée aux projets WSL2
-OpenClaw = runtime IA Windows-native optionnel
 ```
 
-L'ergonomie reste unifiée ; les responsabilités techniques restent séparées.
+L'ergonomie de la workstation reste cohérente ; les projets externes restent autonomes.

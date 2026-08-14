@@ -102,10 +102,12 @@ projets non poussés sur Git
 clés SSH
 fichiers de configuration locaux
 secrets / credentials
-état OpenClaw utile
 VHDX WSL ou export disponible
+données de projets externes importantes
 documents non synchronisés
 ```
+
+Pour les données applicatives appartenant à un projet externe, conserve-les si nécessaire mais utilise ensuite la procédure de restauration de ce projet. `Windows_11_Pro_Custom` ne possède pas leur reconstruction fonctionnelle.
 
 Ne mets jamais les secrets dans le dépôt Git pour les « sauver temporairement ».
 
@@ -156,7 +158,7 @@ La workstation utilise deux Crucial T705 similaires :
 
 ```text
 T705 #1 -> C: -> Windows 11 Pro
-T705 #2 -> D: -> données / WSL / OpenClaw
+T705 #2 -> D: -> données / WSL / données lourdes
 ```
 
 La meilleure protection contre une erreur de sélection est de déconnecter ou désactiver temporairement le SSD `D:` pendant l'installation Windows si cela peut être fait sans risque.
@@ -239,12 +241,13 @@ D:\
 ├── WSL\
 │   ├── Ubuntu-DevOps\
 │   └── swap\
-├── AI\
 ├── ISO\
 └── exports\
 ```
 
 Aucune partition EXT4 physique n'est nécessaire.
+
+Les projets externes peuvent utiliser d'autres dossiers sur `D:` mais ces emplacements ne sont pas créés ni gouvernés par ce dépôt.
 
 Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
@@ -316,6 +319,8 @@ Puis **Installation complète**.
 Le processus peut nécessiter plusieurs passages lorsque Windows ou WSL exige un redémarrage ou une création d'utilisateur.
 
 Ne considère pas un redémarrage nécessaire comme un échec : traite l'action puis relance l'audit/convergence.
+
+`-FullInstall` ne déclenche aucun projet externe.
 
 ---
 
@@ -442,30 +447,28 @@ clés et secrets depuis leur stockage sécurisé
    ↓
 données applicatives
    ↓
-OpenClaw si utilisé
+projets externes, chacun avec sa propre procédure
 ```
 
 Évite de recopier en bloc des anciens dossiers système ou caches qui pourraient réintroduire le problème initial.
 
 ---
 
-# Phase 17 — OpenClaw / OpenRouter
+# Phase 17 — projets externes
 
-Si cette intégration fait partie de la machine :
+Une fois la workstation Windows/WSL2/DevOps reconstruite et validée, les projets externes peuvent être restaurés ou réinstallés séparément.
+
+Pour OpenClaw/OpenRouter, utiliser exclusivement :
 
 ```text
-D:\AI\OpenClaw
+mathiasseguincadiche/openclaw_openrouter
 ```
 
-Le dépôt Windows prépare et vérifie l'intégration. Les données et secrets OpenClaw doivent être restaurés avec prudence depuis une sauvegarde appropriée.
+Ce dépôt possède l'installation OpenClaw, la configuration OpenRouter, `clawops`, Gateway, modèles, agents, runtime lock et les validations de sa plateforme.
 
-Validation :
+`Windows_11_Pro_Custom` ne crée pas son arborescence, ne clone pas son dépôt, ne déclenche pas son installateur et n'expose aucun `ValidateOpenClawAI`.
 
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
-Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+Guide de frontière : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
@@ -501,13 +504,9 @@ Commande recommandée :
   -ValidateDevOps
 ```
 
-Si OpenClaw est utilisé :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
 La validation doit reposer sur l'état réel, pas sur le fait que le script d'installation a été lancé.
+
+La validation d'un projet externe s'effectue ensuite dans son propre dépôt et ne modifie pas le verdict de la workstation.
 
 Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
 
@@ -534,6 +533,8 @@ Enfin :
 ```
 
 Le gestionnaire couvre Windows Update, WinGet, WSL, Ubuntu, outils DevOps épinglés et extensions VS Code sans forcer un reboot ni un flash firmware.
+
+Il ne met pas à jour les projets externes.
 
 Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
@@ -629,6 +630,7 @@ reboot forcé                NON
 wsl --unregister actif      NON
 bare-metal restore          NON
 secret vers Git             NON
+installation projet externe NON
 ```
 
 Ces limites protègent la machine pendant un moment où le risque d'erreur est déjà élevé.
