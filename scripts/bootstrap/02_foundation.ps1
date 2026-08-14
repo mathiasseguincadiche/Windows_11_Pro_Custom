@@ -147,7 +147,7 @@ foreach ($featureName in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachineP
 }
 
 if ($restartRequired) {
-    Write-Host '[ACTION REQUISE] Les composants WSL/VMP viennent d’être activés. Redémarre Windows puis relance exactement Installation complète.' -ForegroundColor Yellow
+    Write-Host "[ACTION REQUISE] Les composants WSL/VMP viennent d'être activés. Redémarre Windows puis relance exactement Installation complète." -ForegroundColor Yellow
     throw 'REDÉMARRAGE REQUIS: fondations WSL/VMP activées avec succès. Aucune convergence applicative/WSL ne doit continuer avant le redémarrage. Après reboot, relance menu.ps1 > Installation complète; les étapes déjà conformes seront ignorées.'
 }
 
@@ -155,10 +155,10 @@ $wingetFact = Get-WinGetFact
 if (-not $wingetFact.Ready) {
     $windowsPowerShell = Get-WindowsPowerShell51Path
     if (-not $windowsPowerShell) {
-        throw 'Windows PowerShell 5.1 introuvable; impossible de réparer l’enregistrement App Installer/WinGet de manière supportée.'
+        throw "Windows PowerShell 5.1 introuvable; impossible de réparer l'enregistrement App Installer/WinGet de manière supportée."
     }
 
-    Write-Host '[EN COURS] Tentative de réenregistrement App Installer / WinGet pour l’utilisateur courant...' -ForegroundColor Cyan
+    Write-Host "[EN COURS] Tentative de réenregistrement App Installer / WinGet pour l'utilisateur courant..." -ForegroundColor Cyan
     $registerCommand = "`$ErrorActionPreference='Stop'; Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
     $registerResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',$registerCommand)
     if ($registerResult.ExitCode -ne 0) {
@@ -171,10 +171,26 @@ if (-not $wingetFact.Ready) {
         $repairCommand = @'
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-Install-PackageProvider -Name NuGet -Force | Out-Null
-Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope AllUsers -AllowClobber | Out-Null
-Import-Module Microsoft.WinGet.Client -Force
-Repair-WinGetPackageManager -Force -Latest
+Install-PackageProvider -Name NuGet -Force -ForceBootstrap -Confirm:$false | Out-Null
+$gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+if (-not $gallery) {
+    Register-PSRepository -Default
+    $gallery = Get-PSRepository -Name PSGallery -ErrorAction Stop
+}
+$originalPolicy = [string]$gallery.InstallationPolicy
+try {
+    if ($originalPolicy -ne 'Trusted') {
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    }
+    Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope AllUsers -AllowClobber -Confirm:$false | Out-Null
+    Import-Module Microsoft.WinGet.Client -Force
+    Repair-WinGetPackageManager -Force -Latest
+}
+finally {
+    if ($originalPolicy -and $originalPolicy -ne 'Trusted') {
+        Set-PSRepository -Name PSGallery -InstallationPolicy $originalPolicy
+    }
+}
 '@
         $repairResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',$repairCommand)
         if ($repairResult.ExitCode -ne 0) {
