@@ -62,7 +62,7 @@ jobs:
           machine='scripts/bootstrap/01_machine_state.ps1'
           grep -Fq 'Exact fallback:' "$machine"
           grep -Fq 'Get-WpcWslRegistrationFact' "$machine"
-          grep -Fq "DetectionSource = 'registry'" "$machine"
+          grep -Fq "\$detectionSource = 'registry'" "$machine"
 
           for script in scripts/bootstrap/06_wsl.ps1 scripts/bootstrap/07_wsl_user.ps1 scripts/bootstrap/09_validate_devops.ps1; do
             grep -Fq 'wsl-detection.psm1' "$script"
