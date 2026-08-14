@@ -31,6 +31,8 @@ jobs:
             'scripts/bootstrap/02_physical_readiness.ps1'
             'scripts/bootstrap/03_apps.ps1'
             'scripts/windows/33_onedrive.ps1'
+            'scripts/updates/20_winget_update.ps1'
+            'scripts/updates/30_wsl_update.ps1'
           )
 
           test -f "$module"
@@ -48,7 +50,7 @@ jobs:
           fi
 
           if grep -RIn --include='*.ps1' -F '(& winget.exe' scripts; then
-            echo 'Direct captured WinGet invocation detected anywhere in scripts/; use Invoke-WpcNativeCapture.' >&2
+            echo 'Legacy direct WinGet capture detected anywhere in scripts/; use Invoke-WpcNativeCapture.' >&2
             exit 1
           fi
 
@@ -71,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Parse native capture and bootstrap PowerShell
+      - name: Parse native capture and WinGet consumers
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -80,7 +82,9 @@ jobs:
             '.\scripts\bootstrap\01_machine_state.ps1',
             '.\scripts\bootstrap\02_physical_readiness.ps1',
             '.\scripts\bootstrap\03_apps.ps1',
-            '.\scripts\windows\33_onedrive.ps1'
+            '.\scripts\windows\33_onedrive.ps1',
+            '.\scripts\updates\20_winget_update.ps1',
+            '.\scripts\updates\30_wsl_update.ps1'
           )) {
             $tokens = $null
             $errors = $null
