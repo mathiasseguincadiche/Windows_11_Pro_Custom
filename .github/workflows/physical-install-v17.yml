@@ -50,7 +50,7 @@ jobs:
           grep -Fq "if (\$Mode -in @('Apply','Verify'))" "$install"
           grep -Fq "Ensure-HardwareManualEvidence" "$install"
           grep -Fq "before toute convergence" "$install"
-          grep -Fq "-not \$PlanOnly" "$install"
+          grep -Fq -- "-not \$PlanOnly" "$install"
           grep -Fq "PowerShell 7 supporté" "$readiness"
           grep -Fq "7.4.0" "$readiness"
           grep -Fq "build -ge 22621" "$readiness"
