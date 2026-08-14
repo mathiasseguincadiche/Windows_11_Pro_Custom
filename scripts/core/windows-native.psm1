@@ -2,7 +2,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Test-WpcWindowsHost {
-    return ([string]$env:OS -eq 'Windows_NT')
+    # Ne jamais utiliser $env:OS comme source de vérité : cette variable peut être
+    # absente, altérée ou non transmise dans certains environnements PowerShell.
+    # PowerShell 7 expose $IsWindows de façon native ; Windows PowerShell 5.1
+    # utilise le fallback .NET historique.
+    if ($PSVersionTable.PSEdition -eq 'Core') {
+        return [bool]$IsWindows
+    }
+
+    return ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT)
 }
 
 function Get-WpcWindowsPowerShellModuleRoot {
@@ -105,7 +113,7 @@ function Initialize-WpcWindowsNativeModules {
     )
 
     if (-not (Test-WpcWindowsHost)) {
-        throw 'Windows 11 est requis pour initialiser les modules natifs de la workstation.'
+        throw 'Un hôte Windows est requis pour initialiser les modules natifs de la workstation.'
     }
 
     $results = [System.Collections.Generic.List[object]]::new()
