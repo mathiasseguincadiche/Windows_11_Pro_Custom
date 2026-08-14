@@ -25,7 +25,7 @@ Windows 11 Pro stable et qualifié
 + sauvegarde de référence vérifiée
 ```
 
-OpenClaw/OpenRouter est une intégration distincte dans l'architecture. **Attention : le raccourci `-FullInstall` l'inclut actuellement automatiquement.**
+OpenClaw/OpenRouter est une intégration distincte dans l'architecture. Le raccourci `-FullInstall` **OpenClaw inclus dans l'orchestration**, mais uniquement par délégation au control-plane `openclaw_openrouter` : l'installation du runtime IA, OpenRouter, `clawops`, Gateway, modèles et agents reste possédée par ce dépôt spécialisé.
 
 ---
 
@@ -33,7 +33,7 @@ OpenClaw/OpenRouter est une intégration distincte dans l'architecture. **Attent
 
 ### Workstation core, sans OpenClaw
 
-C'est le parcours recommandé lorsque l'intégration IA n'est pas souhaitée :
+C'est le parcours recommandé lorsque l'intégration IA n'est pas souhaitée ou lorsque l'on veut maintenir strictement le périmètre workstation :
 
 ```powershell
 .\install.ps1 `
@@ -44,7 +44,7 @@ C'est le parcours recommandé lorsque l'intégration IA n'est pas souhaitée :
   -ValidateHardware
 ```
 
-### Workstation complète, OpenClaw inclus
+### Agrégation complète, OpenClaw inclus par délégation
 
 Le code actuel de `install.ps1` définit `-FullInstall` comme un raccourci qui active :
 
@@ -63,7 +63,9 @@ Utiliser :
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-uniquement lorsque ce périmètre complet est voulu.
+lorsque l'on veut enchaîner la convergence de la workstation et l'intégration IA en une seule intention.
+
+Ce raccourci ne fusionne pas les dépôts : `InstallOpenClawAI` appelle le pont d'intégration Windows, qui synchronise le control-plane approuvé puis délègue l'installation au code de `openclaw_openrouter`.
 
 ---
 
@@ -110,7 +112,7 @@ Ne corrige pas plusieurs composants à l'aveugle lorsqu'un audit signale un éca
   -PlanOnly
 ```
 
-## Périmètre complet avec OpenClaw
+## Agrégation complète avec OpenClaw délégué
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
@@ -145,13 +147,13 @@ Pour le périmètre core :
   -ValidateHardware
 ```
 
-Pour le périmètre complet avec OpenClaw :
+Pour l'agrégation complète avec extension IA déléguée :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-Le moteur vérifie chaque composant, applique uniquement le delta puis re-vérifie les éléments demandés.
+Le moteur vérifie chaque composant, applique uniquement le delta puis re-vérifie les éléments demandés. Pour OpenClaw/OpenRouter, l'application réelle reste exécutée par le control-plane spécialisé.
 
 Lorsqu'une action humaine est demandée, la traiter puis relancer la même intention : les composants déjà conformes doivent rester idempotents.
 
@@ -231,13 +233,15 @@ Si l'intégration n'a pas été demandée dans le parcours core, elle peut être
 .\install.ps1 -Mode Apply -InstallOpenClawAI
 ```
 
-Puis validée :
+Cette commande est un **point de délégation** : `Windows_11_Pro_Custom` sélectionne le control-plane approuvé et lui transmet l'installation. Les procédures runtime et OpenRouter ne sont pas réimplémentées ici.
+
+Puis l'intégration locale peut être validée :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateOpenClawAI
 ```
 
-Si `-FullInstall` a été utilisé, ces deux intentions ont déjà été activées par le raccourci.
+Si `-FullInstall` a été utilisé, ces deux intentions ont déjà été activées par le raccourci, toujours par délégation au dépôt `openclaw_openrouter`.
 
 Une fois l'intégration validée :
 
@@ -307,7 +311,7 @@ Core :
   -PlanOnly
 ```
 
-Avec OpenClaw :
+Agrégation complète avec OpenClaw délégué :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
@@ -346,7 +350,7 @@ Voir [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) et [`21_REFERENCE_COMMANDES.
 Le projet peut être déclaré prêt lorsque :
 
 - l'audit initial est compris ;
-- le périmètre choisi, core ou complet, est explicite ;
+- le périmètre choisi, core ou agrégé, est explicite ;
 - le plan est cohérent ;
 - les écarts ont convergé ;
 - Windows et le matériel sont qualifiés ;
@@ -356,6 +360,7 @@ Le projet peut être déclaré prêt lorsque :
 - OpenClaw est qualifié si le périmètre l'inclut ;
 - le profil WezTerm OpenClaw est exploitable si OpenClaw est utilisé ;
 - les frontières Windows/Linux sont respectées ;
+- les responsabilités de `Windows_11_Pro_Custom` et `openclaw_openrouter` restent distinctes ;
 - les logs et rapports expliquent le verdict ;
 - le second plan démontre l'idempotence ;
 - la sauvegarde de référence est vérifiée.
