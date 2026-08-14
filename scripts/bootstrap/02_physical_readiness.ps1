@@ -114,7 +114,10 @@ Add-ReadinessCheck -Name 'Windows 11 22H2 ou ultérieur' -Passed ($isWindows11 -
 $editionId = [string](Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop)
 Add-ReadinessCheck -Name 'Édition Windows non-Home' -Passed ($editionId -notmatch '^Core') -Detail "EditionID=$editionId"
 
-$pendingReboot = Get-PendingRebootReasons
+# Une fonction PowerShell déroule sa collection dans le pipeline. Sans @(...),
+# 0 raison devient $null et 1 raison devient un scalaire ; sous StrictMode,
+# l'accès direct à .Count n'est alors pas fiable. Matérialiser explicitement.
+$pendingReboot = @(Get-PendingRebootReasons)
 Add-ReadinessCheck -Name 'Aucun redémarrage Windows en attente' -Passed ($pendingReboot.Count -eq 0) -Detail $(if ($pendingReboot.Count -eq 0) { 'Aucun marqueur de reboot détecté.' } else { $pendingReboot -join ', ' })
 
 $c = $null
