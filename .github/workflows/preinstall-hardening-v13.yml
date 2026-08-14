@@ -67,8 +67,11 @@ jobs:
           set -euo pipefail
           bash -n scripts/wsl/install-devops.sh
           grep -Fq 'FB5DB77FD5C118B80511ADA8A6310ACC4672475C' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
           grep -Fq 'gpg --batch --homedir "$aws_gnupg" --verify "$aws_sig" "$aws_zip"' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
           grep -Fq '${aws_archive}.sig' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
           grep -Fq '${kind_url}.sha256sum' scripts/wsl/install-devops.sh
           grep -Fq 'sha256sum -c kind-linux-amd64.sha256sum' scripts/wsl/install-devops.sh
 
