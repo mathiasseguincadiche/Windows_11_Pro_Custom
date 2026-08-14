@@ -102,13 +102,29 @@ Ubuntu fournit la chaîne Linux de référence : Docker Engine, Compose/Buildx, 
 
 ### OpenClaw/OpenRouter
 
-OpenClaw est une **extension optionnelle et externe à la workstation core**, Windows-native sous :
+OpenClaw est une **extension optionnelle de la workstation**, Windows-native sous :
 
 ```text
 D:\AI\OpenClaw
 ```
 
-Le dépôt `Windows_11_Pro_Custom` prépare l'hôte, le terminal et les frontières de stockage, peut déléguer explicitement vers un control-plane approuvé, puis valider l'intégration locale. Le dépôt `openclaw_openrouter` reste l'unique propriétaire de l'installation complète du runtime OpenClaw, de la configuration OpenRouter, de `clawops`, des modèles, agents, Gateway et fonctions métier. Le dépôt Windows ne recopie pas ces responsabilités.
+La frontière de responsabilité est stricte :
+
+```text
+Windows_11_Pro_Custom
+  -> prépare l'hôte Windows, D:, WezTerm et les frontières WSL2
+  -> référence un control-plane approuvé
+  -> peut déclencher ce control-plane
+  -> valide l'intégration locale
+
+openclaw_openrouter
+  -> installe et converge OpenClaw
+  -> configure OpenRouter
+  -> possède clawops, Gateway, modèles, agents et politiques IA
+  -> possède les contrats et procédures du runtime IA
+```
+
+**Déclencher le dépôt IA ne transfère pas sa propriété fonctionnelle au dépôt Windows.** `Windows_11_Pro_Custom` ne recopie ni le runtime lock, ni les modèles, ni les agents, ni l'onboarding OpenRouter.
 
 ## Modèle d'orchestration
 
@@ -140,32 +156,37 @@ update.ps1                 -> maintenance structurée
 
 Un composant déjà conforme doit rester `DÉJÀ OK`. Un ancien commit, un ancien rapport ou le simple fait qu'un script ait déjà tourné ne constitue pas une preuve de conformité actuelle.
 
-## Deux périmètres indépendants
+## Deux périmètres d'installation
 
-### Workstation complète
+### Workstation core
 
-Le parcours Windows construit et qualifie Windows + WSL2 + DevOps sans rendre OpenClaw obligatoire :
+Le parcours core construit Windows + WSL2 + DevOps sans rendre OpenClaw obligatoire :
+
+```powershell
+.\install.ps1 `
+  -Mode Apply `
+  -InstallDevOps `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateHardware
+```
+
+C'est le parcours à utiliser lorsque l'on veut gérer **uniquement la workstation**.
+
+### Agrégation complète avec extension IA
+
+Le raccourci `-FullInstall` conserve son comportement existant : il active la workstation complète puis **délègue** l'installation/validation OpenClaw au control-plane externe approuvé :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-`-FullInstall` reste le raccourci de la **workstation complète**. L'extension IA n'en fait pas partie par défaut.
+Ce raccourci est une commodité d'orchestration, pas une fusion des deux projets. L'installation complète OpenClaw/OpenRouter reste implémentée et documentée dans `openclaw_openrouter`.
 
-### Extension IA facultative
-
-Lorsque l'intégration OpenClaw est souhaitée, elle doit être demandée explicitement :
+L'extension IA peut aussi être demandée séparément :
 
 ```powershell
 .\install.ps1 -Mode Apply -InstallOpenClawAI
-```
-
-Ce point d'entrée ne transforme pas le dépôt Windows en installateur OpenClaw : il délègue au dépôt `openclaw_openrouter` approuvé par `config/openclaw/control-plane.json`.
-
-Pour enchaîner volontairement workstation + extension IA :
-
-```powershell
-.\install.ps1 -Mode Apply -FullInstall -InstallOpenClawAI
 ```
 
 ## Parcours recommandé
@@ -176,20 +197,24 @@ Pour enchaîner volontairement workstation + extension IA :
 .\install.ps1 -Mode Audit
 ```
 
-L'audit général reste centré sur la workstation. L'intégration IA est auditée seulement lorsqu'elle est explicitement incluse.
-
 ### 2. Prévisualiser
 
-Workstation complète :
+Workstation core :
+
+```powershell
+.\install.ps1 `
+  -Mode Apply `
+  -InstallDevOps `
+  -ValidateWsl `
+  -ValidateDevOps `
+  -ValidateHardware `
+  -PlanOnly
+```
+
+Agrégation complète avec OpenClaw :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
-```
-
-Avec délégation OpenClaw explicite :
-
-```powershell
-.\install.ps1 -Mode Apply -FullInstall -InstallOpenClawAI -PlanOnly
 ```
 
 ### 3. Faire converger
