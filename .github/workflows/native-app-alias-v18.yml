@@ -30,6 +30,7 @@ jobs:
             'scripts/bootstrap/01_machine_state.ps1'
             'scripts/bootstrap/02_physical_readiness.ps1'
             'scripts/bootstrap/03_apps.ps1'
+            'scripts/windows/33_onedrive.ps1'
           )
 
           test -f "$module"
@@ -78,7 +79,8 @@ jobs:
             '.\scripts\core\native-process.psm1',
             '.\scripts\bootstrap\01_machine_state.ps1',
             '.\scripts\bootstrap\02_physical_readiness.ps1',
-            '.\scripts\bootstrap\03_apps.ps1'
+            '.\scripts\bootstrap\03_apps.ps1',
+            '.\scripts\windows\33_onedrive.ps1'
           )) {
             $tokens = $null
             $errors = $null
