@@ -8,12 +8,18 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) { throw 'winget.exe est introuvable. Installe ou répare App Installer depuis Microsoft Store.' }
+$repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+$nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
+if (-not (Test-Path $nativeProcessModule)) { throw "Module d'exécution native introuvable: $nativeProcessModule" }
+Import-Module $nativeProcessModule
+
+$wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
+if (-not $wingetCommand) { throw 'winget.exe est introuvable. Installe ou répare App Installer depuis Microsoft Store.' }
 
 function Invoke-WinGetCapture {
     param([Parameter(Mandatory)][string[]]$Arguments)
-    $output = @(& winget.exe @Arguments 2>&1); $code = $LASTEXITCODE; $global:LASTEXITCODE = 0
-    return [pscustomobject]@{ Code=$code; Lines=@($output | ForEach-Object { [string]$_ }) }
+    $result = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList $Arguments
+    return [pscustomobject]@{ Code=$result.ExitCode; Lines=@($result.Lines) }
 }
 
 function Get-TableRows {
