@@ -39,7 +39,6 @@ jobs:
           grep -Fq 'EditionID' scripts/bootstrap/00_preflight.ps1
           grep -Fq "editionId -match '^Core'" scripts/bootstrap/00_preflight.ps1
           grep -Fq "Windows 11 Home n'est pas pris en charge" scripts/bootstrap/00_preflight.ps1
-          grep -Fq 'ProfessionalWorkstation' /dev/null || true
           grep -Fq 'PendingFileRenameOperations' scripts/bootstrap/00_preflight.ps1
           grep -Fq 'Un redémarrage Windows est en attente' scripts/bootstrap/00_preflight.ps1
           grep -Fq 'Windows11SupportedEdition' scripts/bootstrap/11_validate_v3.ps1
@@ -48,6 +47,18 @@ jobs:
             echo 'Edition validation must not reject ProfessionalWorkstation or other Windows 11 non-Home editions.' >&2
             exit 1
           fi
+
+      - name: Validate edition policy examples
+        shell: pwsh
+        run: |
+          $supported = @('Professional', 'ProfessionalWorkstation', 'Enterprise', 'Education')
+          $home = @('Core', 'CoreN', 'CoreSingleLanguage', 'CoreCountrySpecific')
+          foreach ($edition in $supported) {
+            if ($edition -match '^Core') { throw "Edition attendue supportée mais classée Home: $edition" }
+          }
+          foreach ($edition in $home) {
+            if ($edition -notmatch '^Core') { throw "Edition Home non détectée: $edition" }
+          }
 
       - name: Enforce fail-closed restore point
         shell: bash
