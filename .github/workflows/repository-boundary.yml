@@ -1,0 +1,59 @@
+name: Repository boundary
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  workstation-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Reject OpenClaw ownership in executable workstation surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e config/openclaw/control-plane.json
+          test ! -e scripts/bootstrap/15_openclaw_ai.ps1
+
+          for token in InstallOpenClawAI ValidateOpenClawAI OpenClawRoot OpenClawControlPlanePath OpenClawRepositoryRef; do
+            if grep -Fq "$token" install.ps1; then
+              echo "install.ps1 still owns external OpenClaw responsibility: $token" >&2
+              exit 1
+            fi
+          done
+
+          if grep -Fq 'InstallOpenClawAI' menu.ps1 || grep -Fq 'ValidateOpenClawAI' menu.ps1; then
+            echo 'menu.ps1 still exposes external OpenClaw actions.' >&2
+            exit 1
+          fi
+
+          if grep -Ei 'OpenClaw|openclaw|clawops|OPENCLAW_' config/wezterm/wezterm.lua; then
+            echo 'Workstation WezTerm config still contains OpenClaw-specific hooks.' >&2
+            exit 1
+          fi
+
+      - name: Reject obsolete OpenClaw commands in active documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '\\\.\\install\.ps1[^\n]*(InstallOpenClawAI|ValidateOpenClawAI)' README.md docs/*.md; then
+            echo 'Active documentation still exposes OpenClaw through the workstation orchestrator.' >&2
+            exit 1
+          fi
+          if grep -RInF 'OpenClaw / clawops (Windows)' README.md docs/*.md; then
+            echo 'Active documentation still defines an OpenClaw-specific workstation terminal profile.' >&2
+            exit 1
+          fi
+
+      - name: Require explicit ownership statement
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "n'installe pas, ne configure pas, ne met à jour et ne valide pas OpenClaw/OpenRouter" README.md
+          grep -Fq 'projet externe, hors périmètre de la workstation' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
