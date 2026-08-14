@@ -1,6 +1,7 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "distribution": "Ubuntu",
+  "sourceDistribution": "Ubuntu-26.04",
   "expectedVersionId": "26.04",
   "expectedCodename": "resolute",
   "installLocation": "D:\\WSL\\Ubuntu-DevOps",
