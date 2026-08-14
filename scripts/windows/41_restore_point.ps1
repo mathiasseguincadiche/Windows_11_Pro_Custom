@@ -62,6 +62,15 @@ function Get-WpcLatestRestorePoint {
     }
 }
 
+function Get-WpcWindowsPowerShell51Path {
+    $explicit = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path -LiteralPath $explicit) { return $explicit }
+
+    $command = Get-Command powershell.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return [string]$command.Source }
+    return $null
+}
+
 function New-WpcRestorePointCurrentHost {
     param([Parameter(Mandatory)][string]$RestorePointDescription)
 
@@ -80,7 +89,7 @@ function New-WpcRestorePointCurrentHost {
 function New-WpcRestorePointWindowsPowerShell {
     param([Parameter(Mandatory)][string]$RestorePointDescription)
 
-    $windowsPowerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    $windowsPowerShell = Get-WpcWindowsPowerShell51Path
     if (-not $windowsPowerShell) {
         throw 'Checkpoint-Computer est indisponible dans cet hôte et Windows PowerShell 5.1 est introuvable.'
     }
@@ -96,8 +105,10 @@ Checkpoint-Computer -Description '__DESCRIPTION__' -RestorePointType MODIFY_SETT
 '@
     $command = $command.Replace('__DESCRIPTION__', $escapedDescription)
 
-    & $windowsPowerShell.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -Command $command
-    $exitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    & $windowsPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command $command
+    $exitVariable = Get-Variable -Name LASTEXITCODE -ErrorAction SilentlyContinue
+    $exitCode = if ($null -eq $exitVariable) { 0 } else { [int]$exitVariable.Value }
     $global:LASTEXITCODE = 0
     if ($exitCode -ne 0) {
         throw "Windows PowerShell n'a pas pu créer le point de restauration (code=$exitCode)."
