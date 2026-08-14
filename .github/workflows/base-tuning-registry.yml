@@ -25,10 +25,10 @@ jobs:
           set -euo pipefail
           script='scripts/windows/10_tune.ps1'
           grep -Fq 'function Set-ManagedRegistryValue' "$script"
-          grep -Fq 'if (-not (Test-Path -LiteralPath $Path))' "$script"
-          grep -Fq 'New-ItemProperty -LiteralPath $Path' "$script"
+          grep -Fq "if (-not (Test-Path -LiteralPath \$Path))" "$script"
+          grep -Fq "New-ItemProperty -LiteralPath \$Path" "$script"
           grep -Fq "Écriture registre impossible pour" "$script"
-          if grep -Fq 'New-Item -Force -Path $tweak.Path' "$script"; then
+          if grep -Fq "New-Item -Force -Path \$tweak.Path" "$script"; then
             echo 'Base tuning must not recreate an existing registry key before every value write.' >&2
             exit 1
           fi
