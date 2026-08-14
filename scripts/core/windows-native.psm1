@@ -67,7 +67,7 @@ function Import-WpcWindowsModule {
     try {
         Import-Module -Name $ModuleName -ErrorAction Stop
     } catch {
-        $errors.Add("Import-Module $ModuleName: $($_.Exception.Message)")
+        $errors.Add("Import-Module ${ModuleName}: $($_.Exception.Message)")
     }
 
     $missingAfterName = @($RequiredCommands | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
@@ -77,7 +77,7 @@ function Import-WpcWindowsModule {
             try {
                 Import-Module -Name $manifest -ErrorAction Stop
             } catch {
-                $errors.Add("Import-Module $manifest: $($_.Exception.Message)")
+                $errors.Add("Import-Module ${manifest}: $($_.Exception.Message)")
             }
         }
     }
