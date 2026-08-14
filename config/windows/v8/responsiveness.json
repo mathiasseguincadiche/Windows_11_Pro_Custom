@@ -1,6 +1,6 @@
 {
   "version": "V8",
-  "reviewedAt": "2026-08-12",
+  "reviewedAt": "2026-08-14",
   "memory": {
     "memoryCompression": true,
     "applicationLaunchPrefetching": true,
@@ -18,11 +18,12 @@
     "activeScheme": "Balanced",
     "acPowerModeGuid": "ded574b5-45a0-4f42-8737-46345c09c238",
     "acPowerMode": "Best Performance",
+    "acPowerModeManagement": "observe-only",
     "keepDynamicProcessorManagement": true
   },
   "ui": {
-    "minimizeRestoreAnimation": false,
-    "clientAreaAnimations": false,
+    "minimizeRestoreAnimation": true,
+    "clientAreaAnimations": true,
     "keepFontSmoothing": true,
     "keepDesktopComposition": true
   },
@@ -53,6 +54,7 @@
     "force-hpet",
     "disable-dynamic-tick",
     "ultimate-performance-default",
+    "force-best-performance-power-mode",
     "disable-network-offloads",
     "mass-service-disable",
     "disable-defender",
