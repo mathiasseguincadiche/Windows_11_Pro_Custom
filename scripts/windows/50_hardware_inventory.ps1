@@ -8,6 +8,13 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports\hardware'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
+function Write-TextTable {
+    param([Parameter(Mandatory)]$InputObject)
+    foreach ($line in @($InputObject | Format-Table -AutoSize | Out-String -Stream)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$line)) { Write-Host $line }
+    }
+}
+
 $cpu = Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, VirtualizationFirmwareEnabled
 $board = Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer, Product, Version, SerialNumber
 $bios = Get-CimInstance Win32_BIOS | Select-Object Manufacturer, SMBIOSBIOSVersion, ReleaseDate
@@ -111,7 +118,7 @@ $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $path
 
 Write-Host "[OK] Inventaire matériel: $path" -ForegroundColor Green
 Write-Host $powerScheme
-$cpu | Format-Table -AutoSize
-$memory | Format-Table -AutoSize
-$video | Format-Table -AutoSize
-$physicalDisks | Select-Object FriendlyName, Model, HealthStatus, BusType, Size | Format-Table -AutoSize
+Write-TextTable -InputObject @($cpu)
+Write-TextTable -InputObject @($memory)
+Write-TextTable -InputObject @($video)
+Write-TextTable -InputObject @($physicalDisks | Select-Object FriendlyName, Model, HealthStatus, BusType, Size)
