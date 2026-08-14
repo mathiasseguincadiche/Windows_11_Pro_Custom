@@ -1,0 +1,38 @@
+name: runtime-empty-output
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  blank-child-output:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate managed scripts tolerate blank output lines
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\runtime.psm1 -Force
+          $repoRoot = (Resolve-Path '.').Path
+          $context = New-WpcRunContext -RepoRoot $repoRoot -Mode 'RuntimeEmptyOutputSmoke'
+          $fixture = Join-Path $env:RUNNER_TEMP 'wpc-empty-output-fixture.ps1'
+          @"
+          Write-Host '[INFO] before blank line'
+          Write-Host ''
+          Write-Host '[OK] after blank line'
+          "@ | Set-Content -LiteralPath $fixture -Encoding UTF8
+
+          $result = Invoke-WpcManagedScript -Context $context -Path $fixture -DisplayName 'Blank child output smoke' -Phase 'Smoke'
+          if (-not $result.Success) {
+            throw "Managed script failed on blank output: $($result.Error)"
+          }
+
+          $log = Get-Content -Raw -LiteralPath $result.LogPath
+          if ($log -notmatch '\[INFO\] before blank line' -or $log -notmatch '\[OK\] after blank line') {
+            throw 'Managed script did not preserve the non-empty output around the blank line.'
+          }
