@@ -71,6 +71,7 @@ jobs:
             exit 1
           fi
 
+          # shellcheck disable=SC2016
           mapfile -t uninstall_files < <(grep -RIlE 'winget(\.exe)?[[:space:]]+uninstall|\$winget\.Source[[:space:]]+uninstall' scripts --include='*.ps1' || true)
           for file in "${uninstall_files[@]}"; do
             if [[ "$file" != "$script" ]]; then
