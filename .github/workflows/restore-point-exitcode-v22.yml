@@ -1,0 +1,98 @@
+name: Restore point exit-code V22
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/restore-point-exitcode-v22.yml'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
+      - 'scripts/core/native-process.psm1'
+      - 'scripts/windows/41_restore_point.ps1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/restore-point-exitcode-v22.yml'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
+      - 'scripts/core/native-process.psm1'
+      - 'scripts/windows/41_restore_point.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enforce exit-code capability contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          readiness='scripts/bootstrap/02_physical_readiness.ps1'
+          grep -Fq "exit 3" "$readiness"
+          grep -Fq "ProbeExitCode=" "$readiness"
+          grep -Fq "Version = 'V22'" "$readiness"
+          if grep -Fq 'checkpointName -eq' "$readiness"; then
+            echo 'Text comparison is forbidden for Checkpoint-Computer capability.' >&2
+            exit 1
+          fi
+
+  windows-host-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse readiness PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\scripts\bootstrap\02_physical_readiness.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if (@($errors).Count -gt 0) {
+            throw ($errors.Message -join '; ')
+          }
+
+      - name: Prove Checkpoint-Computer capability by exit code only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          Import-Module .\scripts\core\native-process.psm1 -Force
+
+          $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          if (-not (Test-Path -LiteralPath $windowsPowerShell)) {
+            throw "Windows PowerShell 5.1 missing at $windowsPowerShell"
+          }
+
+          $probe = 'if ($null -eq (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) { exit 3 } else { exit 0 }'
+          $result = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @(
+            '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $probe
+          ) -SuppressErrorOutput
+
+          if ($result.ExitCode -ne 0) {
+            throw "Checkpoint-Computer should be available; probe exit code=$($result.ExitCode)."
+          }
+          if (-not [string]::IsNullOrWhiteSpace($result.Text)) {
+            throw "Capability probe must not depend on stdout. Unexpected text='$($result.Text)'"
+          }
+
+      - name: Prove missing command returns deterministic exit 3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          Import-Module .\scripts\core\native-process.psm1 -Force
+
+          $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $probe = 'if ($null -eq (Get-Command WpcDefinitelyMissingCommandV22 -ErrorAction SilentlyContinue)) { exit 3 } else { exit 0 }'
+          $result = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @(
+            '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $probe
+          ) -SuppressErrorOutput
+
+          if ($result.ExitCode -ne 3) {
+            throw "Expected deterministic exit code 3 for missing command; got $($result.ExitCode)."
+          }
