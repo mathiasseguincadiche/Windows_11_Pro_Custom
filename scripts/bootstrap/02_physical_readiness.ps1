@@ -191,10 +191,10 @@ $restorePointDetail = ''
 try {
     [void](Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop)
     $windowsPowerShell = Get-Command powershell.exe -ErrorAction Stop
-    & $windowsPowerShell.Source -NoLogo -NoProfile -NonInteractive -Command "if (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"
+    $checkpointName = (& $windowsPowerShell.Source -NoLogo -NoProfile -NonInteractive -Command "(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name" 2>$null | Out-String).Trim()
     $restoreCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    $restorePointProviderReady = ($restoreCode -eq 0)
+    $restorePointProviderReady = ($restoreCode -eq 0 -and $checkpointName -eq 'Checkpoint-Computer')
     $restorePointDetail = "SystemRestore WMI présent; powershell.exe=$($windowsPowerShell.Source); Checkpoint-Computer=$restorePointProviderReady"
 } catch { $restorePointDetail = $_.Exception.Message }
 Add-ReadinessCheck -Name 'Garde-fou point de restauration disponible' -Passed $restorePointProviderReady -Detail $restorePointDetail
