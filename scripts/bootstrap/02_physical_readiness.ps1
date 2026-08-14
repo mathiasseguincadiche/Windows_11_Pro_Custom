@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$Strict
+    [switch]$Strict,
+    [switch]$RequireFoundation
 )
 
 Set-StrictMode -Version Latest
@@ -75,9 +76,21 @@ function Get-OptionalFeatureStateSafe {
     }
 }
 
+function Get-WindowsPowerShell51Path {
+    $explicit = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (Test-Path -LiteralPath $explicit) { return $explicit }
+    $command = Get-WpcNativeApplication -Name 'powershell.exe'
+    if ($command) { return [string]$command.Source }
+    return $null
+}
+
 function Get-WslNames {
     try {
         $wslCommand = Get-WpcNativeApplication -Name 'wsl.exe'
+        if (-not $wslCommand) {
+            $explicit = Join-Path $env:WINDIR 'System32\wsl.exe'
+            if (Test-Path -LiteralPath $explicit) { $wslCommand = [pscustomobject]@{ Source=$explicit } }
+        }
         if (-not $wslCommand) { return @() }
         $result = Invoke-WpcNativeCapture -FilePath $wslCommand.Source -ArgumentList @('--list', '--quiet') -SuppressErrorOutput
         if ($result.ExitCode -ne 0) { return @() }
@@ -168,13 +181,15 @@ if (@($memory | Where-Object { [int]$_.ConfiguredClockSpeed -lt [int]$hardwareTa
 if ([string]$board.Product -notlike "*$($hardwareTarget.motherboard.productContains)*") { $hardwareFailures.Add("Carte mère=$($board.Product)") }
 $arc = @($video | Where-Object { [string]$_.Name -match [string]$hardwareTarget.gpu.nameRegex })
 if ($arc.Count -eq 0) { $hardwareFailures.Add('Intel Arc B580 non détectée') }
+Add-ReadinessCheck -Name 'Matériel cible V5 essentiel détecté' -Passed ($hardwareFailures.Count -eq 0) -Detail $(if ($hardwareFailures.Count -eq 0) { 'CPU, RAM 6000, carte mère et Arc B580 correspondent à la cible.' } else { $hardwareFailures -join '; ' })
+
 $displayMatch = @($video | Where-Object {
     [int]$_.CurrentHorizontalResolution -eq [int]$hardwareTarget.display.width -and
     [int]$_.CurrentVerticalResolution -eq [int]$hardwareTarget.display.height -and
     [int]$_.CurrentRefreshRate -ge [int]$hardwareTarget.display.minimumRefreshHz
 })
-if ($displayMatch.Count -eq 0) { $hardwareFailures.Add('Affichage 2560x1440 >=239 Hz non détecté') }
-Add-ReadinessCheck -Name 'Matériel cible V5 détecté' -Passed ($hardwareFailures.Count -eq 0) -Detail $(if ($hardwareFailures.Count -eq 0) { 'CPU, RAM 6000, carte mère, Arc B580 et affichage correspondent à la cible.' } else { $hardwareFailures -join '; ' })
+$displayObserved = @($video | ForEach-Object { "$($_.Name): $($_.CurrentHorizontalResolution)x$($_.CurrentVerticalResolution) @$($_.CurrentRefreshRate)Hz" }) -join ' | '
+Add-ReadinessCheck -Name 'Affichage cible V5 1440p240' -Passed ($displayMatch.Count -gt 0) -Detail $(if ($displayMatch.Count -gt 0) { 'Affichage 2560x1440 >=239 Hz détecté.' } else { "Non détecté avant bootstrap/pilotes. Observé: $displayObserved. La qualification matérielle finale V5 reste stricte." }) -Blocking $false
 
 $symbiosisReady = $false
 $symbiosisDetail = 'Qualification non exécutée.'
@@ -187,35 +202,38 @@ try {
 }
 Add-ReadinessCheck -Name 'Symbiose matériel/pilotes' -Passed $symbiosisReady -Detail $symbiosisDetail
 
+$foundationBlocking = [bool]$RequireFoundation
 $wslFeatureState = Get-OptionalFeatureStateSafe -FeatureName 'Microsoft-Windows-Subsystem-Linux'
 $vmpFeatureState = Get-OptionalFeatureStateSafe -FeatureName 'VirtualMachinePlatform'
-Add-ReadinessCheck -Name 'Fonctionnalité Windows WSL active' -Passed ($wslFeatureState -eq 'Enabled') -Detail "Microsoft-Windows-Subsystem-Linux=$wslFeatureState. Si désactivée: active-la puis redémarre Windows avant FullInstall."
-Add-ReadinessCheck -Name 'VirtualMachinePlatform active' -Passed ($vmpFeatureState -eq 'Enabled') -Detail "VirtualMachinePlatform=$vmpFeatureState. Si désactivée: active-la puis redémarre Windows avant FullInstall."
+Add-ReadinessCheck -Name 'Fonctionnalité Windows WSL active' -Passed ($wslFeatureState -eq 'Enabled') -Detail "Microsoft-Windows-Subsystem-Linux=$wslFeatureState. FullInstall peut l’activer puis demander un redémarrage." -Blocking $foundationBlocking
+Add-ReadinessCheck -Name 'VirtualMachinePlatform active' -Passed ($vmpFeatureState -eq 'Enabled') -Detail "VirtualMachinePlatform=$vmpFeatureState. FullInstall peut l’activer puis demander un redémarrage." -Blocking $foundationBlocking
 
 $restorePointProviderReady = $false
 $restorePointDetail = ''
 try {
     [void](Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop)
-    $windowsPowerShell = Get-WpcNativeApplication -Name 'powershell.exe'
-    if (-not $windowsPowerShell) { throw 'powershell.exe introuvable.' }
-    $checkpointResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell.Source -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name") -SuppressErrorOutput
+    $windowsPowerShell = Get-WindowsPowerShell51Path
+    if (-not $windowsPowerShell) { throw 'Windows PowerShell 5.1 introuvable.' }
+    $checkpointResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name") -SuppressErrorOutput
     $checkpointName = $checkpointResult.Text.Trim()
     $restorePointProviderReady = ($checkpointResult.ExitCode -eq 0 -and $checkpointName -eq 'Checkpoint-Computer')
-    $restorePointDetail = "SystemRestore WMI présent; powershell.exe=$($windowsPowerShell.Source); Checkpoint-Computer=$restorePointProviderReady"
+    $restorePointDetail = "SystemRestore WMI présent; powershell.exe=$windowsPowerShell; Checkpoint-Computer=$restorePointProviderReady"
 } catch { $restorePointDetail = $_.Exception.Message }
 Add-ReadinessCheck -Name 'Garde-fou point de restauration disponible' -Passed $restorePointProviderReady -Detail $restorePointDetail
 
 $winget = Get-WpcNativeApplication -Name 'winget.exe'
+if (-not $winget) {
+    $wingetAlias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
+    if (Test-Path -LiteralPath $wingetAlias) { $winget = [pscustomobject]@{ Source=$wingetAlias } }
+}
 $wingetReady = $null -ne $winget
 $wingetVersion = ''
 if ($wingetReady) {
-    # WinGet est généralement un App Execution Alias sous WindowsApps. Il doit
-    # être exécuté seul, puis sa sortie est transformée après son retour.
     $versionResult = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('--version') -SuppressErrorOutput
     $wingetVersion = $versionResult.Text.Trim()
     $wingetReady = ($versionResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($wingetVersion))
 }
-Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) { "Version=$wingetVersion Path=$($winget.Source)" } else { 'WinGet/App Installer absent ou non fonctionnel.' })
+Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) { "Version=$wingetVersion Path=$($winget.Source)" } else { 'WinGet/App Installer absent ou non fonctionnel; FullInstall tentera le réenregistrement ou la réparation supportée.' }) -Blocking $foundationBlocking
 
 $unresolvedApps = [System.Collections.Generic.List[string]]::new()
 if ($wingetReady) {
@@ -225,21 +243,25 @@ if ($wingetReady) {
         if ($showResult.ExitCode -ne 0) { $unresolvedApps.Add("$($app.name) [$id]") }
     }
 }
-Add-ReadinessCheck -Name 'Catalogue WinGet résolvable' -Passed ($wingetReady -and $unresolvedApps.Count -eq 0) -Detail $(if (-not $wingetReady) { 'WinGet indisponible.' } elseif ($unresolvedApps.Count -eq 0) { 'Tous les IDs autoInstall sont résolus avant toute mutation.' } else { $unresolvedApps -join '; ' })
+Add-ReadinessCheck -Name 'Catalogue WinGet résolvable' -Passed ($wingetReady -and $unresolvedApps.Count -eq 0) -Detail $(if (-not $wingetReady) { 'WinGet indisponible avant bootstrap.' } elseif ($unresolvedApps.Count -eq 0) { 'Tous les IDs autoInstall sont résolus avant convergence applicative.' } else { $unresolvedApps -join '; ' }) -Blocking $foundationBlocking
 
 $wsl = Get-WpcNativeApplication -Name 'wsl.exe'
+if (-not $wsl) {
+    $wslExplicit = Join-Path $env:WINDIR 'System32\wsl.exe'
+    if (Test-Path -LiteralPath $wslExplicit) { $wsl = [pscustomobject]@{ Source=$wslExplicit } }
+}
 $wslVersionReady = $false
 $wslVersionText = ''
 if ($wsl) {
     $wslVersionResult = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--version')
     $wslVersionText = $wslVersionResult.Text.Trim()
-    $wslVersionReady = ($wslVersionResult.ExitCode -eq 0)
+    $wslVersionReady = ($wslVersionResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($wslVersionText))
 }
-Add-ReadinessCheck -Name 'Runtime WSL Store opérationnel' -Passed ($null -ne $wsl -and $wslVersionReady) -Detail $(if ($wslVersionReady) { ($wslVersionText -split "`r?`n" | Select-Object -First 1) } else { 'wsl --version a échoué. Exécute wsl --update après activation des fonctionnalités Windows.' })
+Add-ReadinessCheck -Name 'Runtime WSL Store opérationnel' -Passed ($null -ne $wsl -and $wslVersionReady) -Detail $(if ($wslVersionReady) { ($wslVersionText -split "`r?`n" | Select-Object -First 1) } else { 'wsl --version a échoué; FullInstall tentera wsl --update --web-download après activation des fonctionnalités.' }) -Blocking $foundationBlocking
 
 $distribution = [string]$wslContract.distribution
 $sourceDistribution = [string]$wslContract.sourceDistribution
-$wslNames = if ($wsl) { Get-WslNames } else { @() }
+$wslNames = if ($wsl -and $wslVersionReady) { Get-WslNames } else { @() }
 $distributionPresent = $wslNames -contains $distribution
 Add-ReadinessCheck -Name 'Nom de distribution WSL cible cohérent' -Passed (-not [string]::IsNullOrWhiteSpace($distribution) -and -not [string]::IsNullOrWhiteSpace($sourceDistribution)) -Detail "Nom enregistré=$distribution ; source épinglée=$sourceDistribution"
 
@@ -247,12 +269,12 @@ if (-not $distributionPresent -and $wslVersionReady) {
     $wslHelpResult = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--help')
     $wslHelp = $wslHelpResult.Text
     $installCapabilities = ($wslHelp -match '--location' -and $wslHelp -match '--name' -and $wslHelp -match '--no-launch')
-    Add-ReadinessCheck -Name 'WSL sait installer avec nom et emplacement explicites' -Passed $installCapabilities -Detail 'Options requises: --location, --name, --no-launch. Si absentes: wsl --update puis redémarrage.'
+    Add-ReadinessCheck -Name 'WSL sait installer avec nom et emplacement explicites' -Passed $installCapabilities -Detail 'Options requises: --location, --name, --no-launch. Le bootstrap tente wsl --update --web-download si nécessaire.' -Blocking $foundationBlocking
 
     $onlineResult = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--list', '--online')
     $online = $onlineResult.Text -replace "`0", ''
     $sourceAvailable = ($onlineResult.ExitCode -eq 0 -and $online -match "(?m)^\s*$([regex]::Escape($sourceDistribution))\s")
-    Add-ReadinessCheck -Name 'Ubuntu 26.04 explicite disponible dans WSL' -Passed $sourceAvailable -Detail "Source attendue=$sourceDistribution"
+    Add-ReadinessCheck -Name 'Ubuntu 26.04 explicite disponible dans WSL' -Passed $sourceAvailable -Detail "Source attendue=$sourceDistribution" -Blocking $foundationBlocking
 } elseif ($distributionPresent) {
     Add-ReadinessCheck -Name 'Distribution WSL déjà enregistrée' -Passed $true -Detail "$distribution est déjà présente; sa version et son emplacement seront revalidés par 06_wsl.ps1."
 }
@@ -279,9 +301,10 @@ $blockers = @($checks | Where-Object { $_.Blocking -and -not $_.Passed })
 $warnings = @($checks | Where-Object { -not $_.Blocking -and -not $_.Passed })
 
 [ordered]@{
-    Version = 'V17'
+    Version = 'V20'
     Timestamp = (Get-Date).ToString('o')
     Strict = [bool]$Strict
+    RequireFoundation = [bool]$RequireFoundation
     Computer = $env:COMPUTERNAME
     User = $env:USERNAME
     PowerShell = [ordered]@{ Edition=[string]$PSVersionTable.PSEdition; Version=$psVersion.ToString() }
@@ -316,4 +339,8 @@ if ($blockers.Count -gt 0) {
     return
 }
 
-Write-Host "VERDICT: PHYSICAL INSTALL READY ($($warnings.Count) avertissement(s))" -ForegroundColor Green
+if ($warnings.Count -gt 0 -and -not $RequireFoundation) {
+    Write-Host "VERDICT: PHYSICAL INSTALL READY FOR FOUNDATION BOOTSTRAP ($($warnings.Count) élément(s) à préparer avant convergence)" -ForegroundColor Green
+} else {
+    Write-Host "VERDICT: PHYSICAL INSTALL READY ($($warnings.Count) avertissement(s))" -ForegroundColor Green
+}

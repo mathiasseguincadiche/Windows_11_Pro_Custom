@@ -184,15 +184,39 @@ try {
         return
     }
 
-    # La vérité machine est relue à chaque exécution avant toute décision.
+    # Première passe: les prérequis physiques non réparables restent bloquants.
+    # En Apply, les fondations WSL/WinGet sont seulement observées car FullInstall
+    # doit pouvoir les amorcer lui-même. Verify exige au contraire leur présence.
     $preflightArgs = @{}
     if ($Mode -in @('Apply','Verify')) { $preflightArgs.StrictPhysicalReadiness = [switch]::Present }
+    if ($Mode -eq 'Verify') { $preflightArgs.RequireFoundation = [switch]::Present }
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\00_preflight.ps1' -Arguments $preflightArgs -Name 'Préflight Windows' -Phase 'Discovery')
 
     # En FullInstall/ValidateHardware, les preuves BIOS/placement/stabilité sont exigées
     # avant la première mutation système. PlanOnly reste strictement non mutatif.
     if ($Mode -eq 'Apply' -and $ValidateHardware -and -not $PlanOnly) {
         Ensure-HardwareManualEvidence
+    }
+
+    # Bootstrap V20: les composants que l'installation complète est censée fournir
+    # ne sont plus des prérequis manuels. Un point de restauration est créé avant
+    # toute mutation de fondation; si WSL/VMP viennent d'être activés, le script
+    # s'arrête explicitement pour reboot puis la relance idempotente reprend ici.
+    if ($Mode -eq 'Apply' -and -not $PlanOnly) {
+        $foundationPath = Get-RepoScript -RelativePath 'scripts\bootstrap\02_foundation.ps1'
+        $foundationReady = Test-WpcManagedScript -Context $context -Path $foundationPath -Arguments @{ Mode='Verify' } -DisplayName 'Fondations Windows'
+        if (-not $foundationReady) {
+            if (-not $SkipV4RestorePoint) {
+                [void](Invoke-Step -RelativePath 'scripts\windows\41_restore_point.ps1' -Name 'Point de restauration pré-fondations' -Phase 'Safety')
+            } else {
+                Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Point de restauration pré-fondations ignoré explicitement' -Detail '-SkipV4RestorePoint a été fourni.' -Context $context
+            }
+            [void](Invoke-Step -RelativePath 'scripts\bootstrap\02_foundation.ps1' -Arguments @{ Mode='Apply' } -Name 'Bootstrap fondations Windows' -Phase 'Foundation')
+        } else {
+            Write-WpcStatus -Status 'DEJA_OK' -Message 'Fondations Windows' -Detail 'WSL/VMP, WinGet et runtime WSL sont déjà opérationnels.' -Context $context
+        }
+
+        [void](Invoke-Step -RelativePath 'scripts\bootstrap\00_preflight.ps1' -Arguments @{ StrictPhysicalReadiness=[switch]::Present; RequireFoundation=[switch]::Present } -Name 'Revalidation fondations Windows' -Phase 'FoundationValidation')
     }
 
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\01_machine_state.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; WslInstallLocation=$WslInstallLocation } -Name 'État réel de la machine' -Phase 'Discovery')
@@ -250,7 +274,7 @@ try {
         return
     }
 
-    # APPLY: établir tout le plan depuis Verify AVANT la première mutation.
+    # APPLY: établir tout le plan depuis Verify AVANT la première mutation de convergence.
     $script:plan = @()
     Add-PlanItem -Name 'Applications WinGet' -VerifyRelativePath 'scripts\bootstrap\03_apps.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\bootstrap\03_apps.ps1' -ApplyArguments @{ Mode='Apply' }
     Add-PlanItem -Name 'Réglages Windows de base' -VerifyRelativePath 'scripts\windows\10_tune.ps1' -VerifyArguments @{ Mode='Verify' } -ApplyRelativePath 'scripts\windows\10_tune.ps1' -ApplyArguments @{ Mode='Apply' }
