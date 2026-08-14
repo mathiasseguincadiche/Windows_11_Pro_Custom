@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
-          grep -Fq "exit 3" "$readiness"
+          grep -Fq '[Environment]::Exit(3)' "$readiness"
           grep -Fq "ProbeExitCode=" "$readiness"
           grep -Fq "Version = 'V22'" "$readiness"
           if grep -Fq 'checkpointName -eq' "$readiness"; then
@@ -68,7 +68,7 @@ jobs:
             throw "Windows PowerShell 5.1 missing at $windowsPowerShell"
           }
 
-          $probe = 'if ($null -eq (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) { exit 3 } else { exit 0 }'
+          $probe = 'if ($null -eq (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) { [Environment]::Exit(3) } else { [Environment]::Exit(0) }'
           $result = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @(
             '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $probe
           ) -SuppressErrorOutput
@@ -88,7 +88,7 @@ jobs:
           Import-Module .\scripts\core\native-process.psm1 -Force
 
           $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-          $probe = 'if ($null -eq (Get-Command WpcDefinitelyMissingCommandV22 -ErrorAction SilentlyContinue)) { exit 3 } else { exit 0 }'
+          $probe = 'if ($null -eq (Get-Command WpcDefinitelyMissingCommandV22 -ErrorAction SilentlyContinue)) { [Environment]::Exit(3) } else { [Environment]::Exit(0) }'
           $result = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @(
             '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $probe
           ) -SuppressErrorOutput
