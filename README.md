@@ -20,44 +20,41 @@ Le dépôt applique une approche **workstation-as-code** : l'état réel de la m
         ▼                     ▼                     ▼
  desktop / sécurité      VS Code Windows          WezTerm
  pilotes / gaming               │                    │
- PowerShell / WinGet            │            ┌───────┼────────┐
- Windows Update                 │            │       │        │
-                               │            ▼       ▼        ▼
-                               │         Ubuntu   PowerShell  OpenClaw
-                               │          WSL2       7       / clawops
-                               │            │                  │
-                               └── WSL ─────┤                  │
-                                            ▼                  ▼
-                                      Linux DevOps       D:\AI\OpenClaw
-                                      Docker / K8s       Windows-native
-                                      Terraform          control-plane
-                                      Ansible / AWS      état / workspace
+ PowerShell / WinGet            │              ┌─────┴─────┐
+ Windows Update                 │              │           │
+                               │              ▼           ▼
+                               │           Ubuntu     PowerShell 7
+                               │            WSL2
+                               │              │
+                               └── WSL ───────┤
+                                              ▼
+                                        Linux DevOps
+                                        Docker / K8s
+                                        Terraform
+                                        Ansible / AWS
 ```
 
 La séparation fonctionnelle est volontaire :
 
 ```text
-Windows = hôte, desktop, sécurité, pilotes, administration et capacité d'accueil OpenClaw
+Windows = hôte, desktop, sécurité, pilotes et administration
 Ubuntu  = backend Linux DevOps et workspaces Linux
-WezTerm = point d'entrée terminal vers les contextes sans mélanger les runtimes
+WezTerm = point d'entrée terminal vers Ubuntu DevOps et PowerShell 7
 VS Code = interface Windows reliée aux projets WSL2
 ```
 
 ### WezTerm comme routeur de contextes
 
-WezTerm expose trois profils explicites :
+WezTerm expose deux profils explicites :
 
 ```text
-Ubuntu DevOps (WSL2)          -> profil par défaut, Bash et outils Linux
-PowerShell 7                  -> administration Windows
-OpenClaw / clawops (Windows)  -> CLI IA Windows-native
+Ubuntu DevOps (WSL2) -> profil par défaut, Bash et outils Linux
+PowerShell 7         -> administration Windows
 ```
 
-Le profil OpenClaw prépare uniquement **sa session PowerShell** pour retrouver les variables et launchers gérés sous `D:\AI\OpenClaw`, puis vérifie la disponibilité de `openclaw` et `clawops`. Il n'installe rien et ne lance aucune opération métier automatiquement.
+Cette règle évite d'utiliser les projets Linux depuis un filesystem Windows comme racine quotidienne et maintient une frontière claire entre administration Windows et charges DevOps Linux.
 
-Cette règle évite deux erreurs d'architecture : déplacer OpenClaw dans WSL2 uniquement pour l'ergonomie du terminal, ou utiliser les projets Linux depuis un filesystem Windows comme racine quotidienne.
-
-Références : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) pour l'expérience terminal et [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) pour l'intégration OpenClaw.
+Référence : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md).
 
 ## Contrats principaux
 
@@ -65,7 +62,7 @@ Références : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md) pour l'expé
 
 ```text
 C: NTFS -> Windows 11 Pro et composants système
-D: NTFS -> données, WSL2, OpenClaw, ISO et exports
+D: NTFS -> données, WSL2, ISO et exports
 ```
 
 Ubuntu utilise ext4 **dans son VHDX WSL2** stocké sous :
@@ -100,31 +97,19 @@ Réseau       : mirrored
 
 Ubuntu fournit la chaîne Linux de référence : Docker Engine, Compose/Buildx, Kubernetes CLI, Helm, Minikube, kind, Terraform, Ansible, AWS CLI, GitHub CLI et les outils qualité pilotés par les contrats du dépôt.
 
-### OpenClaw/OpenRouter
+### OpenClaw/OpenRouter : hors périmètre
 
-OpenClaw est une **extension optionnelle de la workstation**, Windows-native sous :
+`Windows_11_Pro_Custom` **n'installe pas, ne configure pas, ne met à jour et ne valide pas OpenClaw/OpenRouter**.
 
-```text
-D:\AI\OpenClaw
-```
-
-La frontière de responsabilité est stricte :
+La plateforme IA est un projet autonome, maintenu dans :
 
 ```text
-Windows_11_Pro_Custom
-  -> prépare l'hôte Windows, D:, WezTerm et les frontières WSL2
-  -> référence un control-plane approuvé
-  -> peut déclencher ce control-plane
-  -> valide l'intégration locale
-
-openclaw_openrouter
-  -> installe et converge OpenClaw
-  -> configure OpenRouter
-  -> possède clawops, Gateway, modèles, agents et politiques IA
-  -> possède les contrats et procédures du runtime IA
+mathiasseguincadiche/openclaw_openrouter
 ```
 
-**Déclencher le dépôt IA ne transfère pas sa propriété fonctionnelle au dépôt Windows.** `Windows_11_Pro_Custom` ne recopie ni le runtime lock, ni les modèles, ni les agents, ni l'onboarding OpenRouter.
+Ce dépôt spécialisé possède intégralement l'installation OpenClaw, la configuration OpenRouter, `clawops`, Gateway, modèles, agents, politiques et validations de la plateforme IA.
+
+Le dépôt Windows se limite à construire et maintenir la workstation. Il ne clone pas le dépôt IA, ne référence pas son runtime lock et ne déclenche pas son installateur.
 
 ## Modèle d'orchestration
 
@@ -156,38 +141,24 @@ update.ps1                 -> maintenance structurée
 
 Un composant déjà conforme doit rester `DÉJÀ OK`. Un ancien commit, un ancien rapport ou le simple fait qu'un script ait déjà tourné ne constitue pas une preuve de conformité actuelle.
 
-## Deux périmètres d'installation
+## Installation de la workstation
 
-### Workstation core
-
-Le parcours core construit Windows + WSL2 + DevOps sans rendre OpenClaw obligatoire :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware
-```
-
-C'est le parcours à utiliser lorsque l'on veut gérer **uniquement la workstation**.
-
-### Agrégation complète avec extension IA
-
-Le raccourci `-FullInstall` conserve son comportement existant : il active la workstation complète puis **délègue** l'installation/validation OpenClaw au control-plane externe approuvé :
+Le parcours complet construit et qualifie Windows + WSL2 + DevOps :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-Ce raccourci est une commodité d'orchestration, pas une fusion des deux projets. L'installation complète OpenClaw/OpenRouter reste implémentée et documentée dans `openclaw_openrouter`.
+`-FullInstall` active :
 
-L'extension IA peut aussi être demandée séparément :
-
-```powershell
-.\install.ps1 -Mode Apply -InstallOpenClawAI
+```text
+InstallDevOps
+ValidateDevOps
+ValidateWsl
+ValidateHardware
 ```
+
+Il ne déclenche aucun projet externe.
 
 ## Parcours recommandé
 
@@ -199,31 +170,17 @@ L'extension IA peut aussi être demandée séparément :
 
 ### 2. Prévisualiser
 
-Workstation core :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware `
-  -PlanOnly
-```
-
-Agrégation complète avec OpenClaw :
-
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
 ### 3. Faire converger
 
-Appliquer le même périmètre sans `-PlanOnly`.
+```powershell
+.\install.ps1 -Mode Apply -FullInstall
+```
 
 ### 4. Prouver la conformité
-
-Workstation :
 
 ```powershell
 .\install.ps1 `
@@ -233,15 +190,15 @@ Workstation :
   -ValidateDevOps
 ```
 
-Si OpenClaw est utilisé :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
 ### 5. Prouver l'idempotence
 
-Recalculer ensuite le même plan. Une workstation stabilisée doit tendre vers `DÉJÀ OK` et ne pas reproposer arbitrairement les mêmes mutations.
+Recalculer ensuite le même plan :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Une workstation stabilisée doit tendre vers `DÉJÀ OK` et ne pas reproposer arbitrairement les mêmes mutations.
 
 Le parcours complet est décrit dans [`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md).
 
@@ -259,8 +216,6 @@ WSL2 conforme
 stack DevOps conforme
 +
 terminal WezTerm conforme
-+
-OpenClaw qualifié si utilisé
 +
 idempotence démontrée
 +
@@ -297,7 +252,7 @@ Le README présente le projet. Les procédures, contrats et diagnostics vivent d
 | Guide WSL2 pédagogique | [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) |
 | Centre de contrôle | [`docs/17_CONTROL_CENTER.md`](docs/17_CONTROL_CENTER.md) |
 | Vue consolidée | [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md) |
-| Intégration facultative OpenClaw/OpenRouter | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+| Frontière avec OpenClaw/OpenRouter | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
 | Runbook opérationnel | [`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md) |
 | Référence des commandes | [`docs/21_REFERENCE_COMMANDES.md`](docs/21_REFERENCE_COMMANDES.md) |
 | Troubleshooting | [`docs/22_TROUBLESHOOTING.md`](docs/22_TROUBLESHOOTING.md) |
@@ -318,9 +273,9 @@ Windows_11_Pro_Custom/
 ├── menu.ps1
 ├── install.ps1
 ├── update.ps1
-├── config/        # contrats versionnés
+├── config/        # contrats versionnés de la workstation
 ├── manifests/     # catalogues déclaratifs
-├── scripts/       # implémentation
+├── scripts/       # implémentation workstation
 ├── docs/          # documentation officielle
 ├── logs/          # preuves d'exécution
 ├── reports/       # rapports structurés
