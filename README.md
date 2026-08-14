@@ -37,7 +37,7 @@ Le dépôt applique une approche **workstation-as-code** : l'état réel de la m
 La séparation fonctionnelle est volontaire :
 
 ```text
-Windows = hôte, desktop, sécurité, pilotes, administration et runtime OpenClaw
+Windows = hôte, desktop, sécurité, pilotes, administration et capacité d'accueil OpenClaw
 Ubuntu  = backend Linux DevOps et workspaces Linux
 WezTerm = point d'entrée terminal vers les contextes sans mélanger les runtimes
 VS Code = interface Windows reliée aux projets WSL2
@@ -108,7 +108,23 @@ OpenClaw est une **extension optionnelle de la workstation**, Windows-native sou
 D:\AI\OpenClaw
 ```
 
-Le dépôt `Windows_11_Pro_Custom` prépare et valide l'intégration locale ; le control-plane `openclaw_openrouter` reste propriétaire du runtime OpenClaw, de `clawops`, des modèles, agents et fonctions métier. Le dépôt Windows ne duplique pas ces responsabilités.
+La frontière de responsabilité est stricte :
+
+```text
+Windows_11_Pro_Custom
+  -> prépare l'hôte Windows, D:, WezTerm et les frontières WSL2
+  -> référence un control-plane approuvé
+  -> peut déclencher ce control-plane
+  -> valide l'intégration locale
+
+openclaw_openrouter
+  -> installe et converge OpenClaw
+  -> configure OpenRouter
+  -> possède clawops, Gateway, modèles, agents et politiques IA
+  -> possède les contrats et procédures du runtime IA
+```
+
+**Déclencher le dépôt IA ne transfère pas sa propriété fonctionnelle au dépôt Windows.** `Windows_11_Pro_Custom` ne recopie ni le runtime lock, ni les modèles, ni les agents, ni l'onboarding OpenRouter.
 
 ## Modèle d'orchestration
 
@@ -155,15 +171,23 @@ Le parcours core construit Windows + WSL2 + DevOps sans rendre OpenClaw obligato
   -ValidateHardware
 ```
 
-### Workstation complète
+C'est le parcours à utiliser lorsque l'on veut gérer **uniquement la workstation**.
 
-Le raccourci `-FullInstall` active actuellement DevOps, les validations WSL/matériel et l'installation/validation OpenClaw :
+### Agrégation complète avec extension IA
+
+Le raccourci `-FullInstall` conserve son comportement existant : il active la workstation complète puis **délègue** l'installation/validation OpenClaw au control-plane externe approuvé :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-Il doit donc être utilisé uniquement lorsque ce périmètre complet est réellement souhaité.
+Ce raccourci est une commodité d'orchestration, pas une fusion des deux projets. L'installation complète OpenClaw/OpenRouter reste implémentée et documentée dans `openclaw_openrouter`.
+
+L'extension IA peut aussi être demandée séparément :
+
+```powershell
+.\install.ps1 -Mode Apply -InstallOpenClawAI
+```
 
 ## Parcours recommandé
 
@@ -175,7 +199,7 @@ Il doit donc être utilisé uniquement lorsque ce périmètre complet est réell
 
 ### 2. Prévisualiser
 
-Core :
+Workstation core :
 
 ```powershell
 .\install.ps1 `
@@ -187,7 +211,7 @@ Core :
   -PlanOnly
 ```
 
-Complet avec OpenClaw :
+Agrégation complète avec OpenClaw :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
@@ -199,7 +223,7 @@ Appliquer le même périmètre sans `-PlanOnly`.
 
 ### 4. Prouver la conformité
 
-Core :
+Workstation :
 
 ```powershell
 .\install.ps1 `
@@ -209,7 +233,7 @@ Core :
   -ValidateDevOps
 ```
 
-Si OpenClaw fait partie du périmètre :
+Si OpenClaw est utilisé :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateOpenClawAI
@@ -273,7 +297,7 @@ Le README présente le projet. Les procédures, contrats et diagnostics vivent d
 | Guide WSL2 pédagogique | [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) |
 | Centre de contrôle | [`docs/17_CONTROL_CENTER.md`](docs/17_CONTROL_CENTER.md) |
 | Vue consolidée | [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md) |
-| OpenClaw/OpenRouter Windows | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+| Intégration facultative OpenClaw/OpenRouter | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
 | Runbook opérationnel | [`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md) |
 | Référence des commandes | [`docs/21_REFERENCE_COMMANDES.md`](docs/21_REFERENCE_COMMANDES.md) |
 | Troubleshooting | [`docs/22_TROUBLESHOOTING.md`](docs/22_TROUBLESHOOTING.md) |
