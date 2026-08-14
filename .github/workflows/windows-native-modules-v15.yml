@@ -31,7 +31,7 @@ jobs:
           grep -Fq 'Add-WpcWindowsPowerShellModulePath' "$module"
           grep -Fq "ModuleName 'Storage'" "$module"
           grep -Fq "Get-Volume','Get-PhysicalDisk','Get-StorageReliabilityCounter" "$module"
-          grep -Fq '$IsWindows' "$module"
+          grep -Fq "\$IsWindows" "$module"
           if grep -Fq "return ([string]\$env:OS -eq 'Windows_NT')" "$module"; then
             echo 'Host detection must not depend exclusively on env:OS.' >&2
             exit 1
