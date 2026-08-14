@@ -68,7 +68,7 @@ $c = Get-Volume -DriveLetter C -ErrorAction Stop
 $d = Get-Volume -DriveLetter D -ErrorAction Stop
 
 if ($c.FileSystem -ne 'NTFS') { throw 'C: doit être NTFS.' }
-if ($d.FileSystem -ne 'NTFS') { throw 'D: doit être NTFS. Aucun EXT4 physique n’est attendu.' }
+if ($d.FileSystem -ne 'NTFS') { throw 'D: doit être NTFS. Aucun EXT4 physique n est attendu.' }
 
 if ($pendingReboot.Pending -and -not $AllowPendingReboot) {
     throw "Un redémarrage Windows est en attente ($($pendingReboot.Reasons -join ', ')). Redémarre Windows avant de lancer la convergence. Le bypass n'est autorisé que pour un diagnostic volontaire via -AllowPendingReboot."
