@@ -104,21 +104,31 @@ function Invoke-PlannedItems {
     }
 }
 
-function Invoke-HardwareQualification {
+function Ensure-HardwareManualEvidence {
     $manualPath = Get-RepoScript -RelativePath 'scripts\windows\51_hardware_manual_checks.ps1'
     $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Preuves matérielles manuelles'
-    if (-not $manualReady) {
-        Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves matérielles manuelles incomplètes' -Detail 'Ces données BIOS/placement/stabilité ne peuvent pas être inventées par Windows.' -Context $context
-        if ($context.NonInteractive) {
-            throw 'Validation matérielle requiert des preuves manuelles. Exécute: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive puis relance Verify -ValidateHardware.'
-        }
-        $answer = (Read-Host 'Veux-tu enregistrer maintenant les contrôles matériels manuels ? [O/N]').Trim().ToLowerInvariant()
-        if ($answer -in @('o','oui','y','yes')) {
-            [void](Invoke-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Record'; Interactive=[switch]::Present } -DisplayName 'Saisie guidée des preuves matérielles' -Phase 'ManualEvidence')
-        } else {
-            throw 'Qualification matérielle laissée incomplète par choix utilisateur. Aucun verdict positif ne sera déclaré.'
-        }
+    if ($manualReady) { return }
+
+    Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves matérielles manuelles incomplètes' -Detail 'ReBAR, Above 4G, placement/refroidissement T705, stabilité DDR5, BIOS et pilotes doivent être confirmés avant une installation physique complète.' -Context $context
+    if ($context.NonInteractive) {
+        throw 'Validation matérielle requiert des preuves manuelles. Exécute: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive puis relance.'
     }
+
+    $answer = (Read-Host 'Veux-tu enregistrer maintenant les contrôles matériels manuels avant toute convergence ? [O/N]').Trim().ToLowerInvariant()
+    if ($answer -notin @('o','oui','y','yes')) {
+        throw 'Qualification matérielle laissée incomplète. Aucune convergence physique complète ne sera lancée.'
+    }
+
+    [void](Invoke-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Record'; Interactive=[switch]::Present } -DisplayName 'Saisie guidée des preuves matérielles' -Phase 'ManualEvidence')
+    $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Revalidation des preuves matérielles'
+    if (-not $manualReady) {
+        throw 'Les preuves matérielles restent incomplètes après la saisie guidée. Corrige les points non confirmés avant de relancer.'
+    }
+    Write-WpcStatus -Status 'OK' -Message 'Preuves matérielles prêtes avant convergence' -Detail 'Les contrôles impossibles à déduire depuis Windows sont maintenant explicitement confirmés.' -Context $context
+}
+
+function Invoke-HardwareQualification {
+    Ensure-HardwareManualEvidence
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\13_validate_hardware_v5.ps1' -Arguments @{ RequireManualChecks=[switch]::Present } -Name 'Qualification matérielle' -Phase 'FinalValidation')
 }
 
@@ -175,7 +185,16 @@ try {
     }
 
     # La vérité machine est relue à chaque exécution avant toute décision.
-    [void](Invoke-Step -RelativePath 'scripts\bootstrap\00_preflight.ps1' -Name 'Préflight Windows' -Phase 'Discovery')
+    $preflightArgs = @{}
+    if ($Mode -in @('Apply','Verify')) { $preflightArgs.StrictPhysicalReadiness = [switch]::Present }
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\00_preflight.ps1' -Arguments $preflightArgs -Name 'Préflight Windows' -Phase 'Discovery')
+
+    # En FullInstall/ValidateHardware, les preuves BIOS/placement/stabilité sont exigées
+    # avant la première mutation système. PlanOnly reste strictement non mutatif.
+    if ($Mode -eq 'Apply' -and $ValidateHardware -and -not $PlanOnly) {
+        Ensure-HardwareManualEvidence
+    }
+
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\01_machine_state.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; WslInstallLocation=$WslInstallLocation } -Name 'État réel de la machine' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\20_system_audit.ps1' -Name 'Audit système Windows' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\50_hardware_inventory.ps1' -Name 'Inventaire matériel' -Phase 'Discovery')

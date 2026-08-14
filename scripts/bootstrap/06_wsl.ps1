@@ -27,10 +27,14 @@ if (-not (Test-Path $runtimeContractPath)) { throw "Contrat runtime WSL absent: 
 
 $runtimeContract = Get-Content -Raw $runtimeContractPath | ConvertFrom-Json
 $expectedDistribution = [string]$runtimeContract.distribution
+$sourceDistribution = [string]$runtimeContract.sourceDistribution
 $expectedVersionId = [string]$runtimeContract.expectedVersionId
 $expectedCodename = [string]$runtimeContract.expectedCodename
 $expectedInstallLocation = [string]$runtimeContract.installLocation
 
+if ([string]::IsNullOrWhiteSpace($sourceDistribution)) {
+    throw 'Le contrat WSL doit définir sourceDistribution pour éviter toute dérive de la distribution installée.'
+}
 if ($Distribution -ne $expectedDistribution) {
     throw "Distribution non conforme au contrat WSL. Demandée=$Distribution Attendue=$expectedDistribution"
 }
@@ -111,6 +115,27 @@ function Get-WslState {
     }
 }
 
+function Assert-WslInstallCapabilities {
+    $help = (& wsl.exe --help 2>&1 | Out-String)
+    $missing = [System.Collections.Generic.List[string]]::new()
+    foreach ($option in @('--location', '--name', '--no-launch')) {
+        if ($help -notmatch [regex]::Escape($option)) { $missing.Add($option) }
+    }
+    if ($missing.Count -gt 0) {
+        throw "Runtime WSL trop ancien pour l’installation déterministe requise. Options absentes: $($missing -join ', '). Exécute wsl --update, redémarre Windows si demandé, puis relance."
+    }
+
+    $online = (& wsl.exe --list --online 2>&1 | Out-String) -replace "`0", ''
+    $onlineCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($onlineCode -ne 0) {
+        throw "Impossible d’interroger le catalogue WSL en ligne (code=$onlineCode). Vérifie la connexion réseau et le runtime WSL."
+    }
+    if ($online -notmatch "(?m)^\s*$([regex]::Escape($sourceDistribution))(?:\s|$)") {
+        throw "Source WSL épinglée indisponible: $sourceDistribution. Aucune autre version Ubuntu ne sera substituée silencieusement."
+    }
+}
+
 $dVolume = Get-Volume -DriveLetter D -ErrorAction Stop
 if ($dVolume.FileSystem -ne 'NTFS') { throw 'D: doit rester NTFS.' }
 if ($Mode -eq 'Apply' -and $dVolume.SizeRemaining -lt 50GB) { throw "D: dispose de moins de 50 Go libres. Libère de lʼespace avant lʼinstallation WSL." }
@@ -120,7 +145,8 @@ $state = Get-WslState -ReadRelease:$readRelease
 
 if ($Mode -eq 'Audit') {
     Write-Host "WSL executable: $((Get-Command wsl.exe).Source)"
-    Write-Host "Distribution $Distribution présente: $($state.Present)"
+    Write-Host "Distribution enregistrée $Distribution présente: $($state.Present)"
+    Write-Host "Source d’installation épinglée: $sourceDistribution"
     Write-Host "Version WSL de la distribution: $($state.Version)"
     Write-Host "Profil $Profile conforme: $($state.ConfigMatches)"
     Write-Host "Emplacement observé: $(if ($state.BasePath) { $state.BasePath } else { '<non disponible>' })"
@@ -174,19 +200,20 @@ if ($UpdateWsl -or -not $state.Present) {
 }
 
 if (-not $state.Present) {
-    Write-Host "[EN COURS] Installation de $Distribution dans $InstallLocation" -ForegroundColor Cyan
+    Assert-WslInstallCapabilities
+    Write-Host "[EN COURS] Installation de $sourceDistribution sous le nom $Distribution dans $InstallLocation" -ForegroundColor Cyan
     wsl.exe --set-default-version 2
     $defaultCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($defaultCode -ne 0) { throw 'Échec de wsl --set-default-version 2.' }
 
-    wsl.exe --install --distribution $Distribution --location $InstallLocation --no-launch
+    wsl.exe --install --distribution $sourceDistribution --name $Distribution --location $InstallLocation --no-launch
     $installCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($installCode -ne 0) {
         throw 'Installation WSL interrompue. Si Windows demande un redémarrage: redémarre Windows puis relance exactement la même commande; les étapes déjà conformes seront ignorées.'
     }
-    $changes.Add("distribution $Distribution installée")
+    $changes.Add("source $sourceDistribution installée sous le nom $Distribution")
     $state = Get-WslState
 } elseif ($state.Version -ne 2) {
     Write-Host "[EN COURS] Conversion de $Distribution vers WSL2..." -ForegroundColor Cyan
@@ -219,4 +246,4 @@ if ($changes.Count -gt 0) {
 } else {
     Write-Host '[DÉJÀ OK] WSL2 conforme; aucune mutation requise.' -ForegroundColor Green
 }
-Write-Host "[OK] Contrat Ubuntu validé: $Distribution $($release.VersionId) ($($release.Codename))" -ForegroundColor Green
+Write-Host "[OK] Contrat Ubuntu validé: $Distribution -> $sourceDistribution, $($release.VersionId) ($($release.Codename))" -ForegroundColor Green

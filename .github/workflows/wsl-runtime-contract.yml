@@ -6,7 +6,9 @@ on:
     paths:
       - 'config/wsl/**'
       - 'config/devops/**'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
@@ -15,7 +17,9 @@ on:
     paths:
       - 'config/wsl/**'
       - 'config/devops/**'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
@@ -36,8 +40,9 @@ jobs:
           set -euo pipefail
           contract='config/wsl/runtime-contract.json'
           jq -e '
-            (.schemaVersion == "1.0") and
+            (.schemaVersion == "1.1") and
             (.distribution == "Ubuntu") and
+            (.sourceDistribution == "Ubuntu-26.04") and
             (.expectedVersionId == "26.04") and
             (.expectedCodename == "resolute") and
             (.installLocation == "D:\\WSL\\Ubuntu-DevOps") and
@@ -45,19 +50,60 @@ jobs:
             (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
             (.forbiddenRoots == ["/mnt/c", "/mnt/d"])
           ' "$contract" >/dev/null
-      - name: Validate runtime wiring
+
+      - name: Validate deterministic WSL source wiring
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'config\wsl\runtime-contract.json' scripts/bootstrap/06_wsl.ps1
+          wsl='scripts/bootstrap/06_wsl.ps1'
+          readiness='scripts/bootstrap/02_physical_readiness.ps1'
+          grep -Fq 'config\wsl\runtime-contract.json' "$wsl"
           grep -Fq 'config\wsl\runtime-contract.json' scripts/bootstrap/14_validate_wsl_v6.ps1
-          grep -Fq 'expectedVersionId' scripts/bootstrap/06_wsl.ps1
+          grep -Fq 'sourceDistribution' "$wsl"
+          grep -Fq 'sourceDistribution' "$readiness"
+          grep -Fq -- "--name \$Distribution" "$wsl"
+          grep -Fq -- "--location \$InstallLocation" "$wsl"
+          grep -Fq -- "--distribution \$sourceDistribution" "$wsl"
+          grep -Fq 'expectedVersionId' "$wsl"
           grep -Fq 'expectedVersionId' scripts/bootstrap/14_validate_wsl_v6.ps1
-          grep -Fq 'Aucune suppression automatique nʼest effectuée' scripts/bootstrap/06_wsl.ps1
+          grep -Fq 'Aucune suppression automatique nʼest effectuée' "$wsl"
           if grep -RInE 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
             echo 'Destructive WSL automation detected.' >&2
             exit 1
           fi
+
+      - name: Enforce Docker session refresh before immediate revalidation
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/bootstrap/08_devops.ps1'
+          install_line="$(grep -nF "LogIdentity 'scripts/wsl/install-devops.sh'" "$script" | head -n1 | cut -d: -f1)"
+          restart_line="$(grep -nF 'Restart-WslSessionAfterDockerGroupChange' "$script" | tail -n1 | cut -d: -f1)"
+          terminal_line="$(grep -nF "Write-Host '[3/4] Terminal Bash DevOps'" "$script" | head -n1 | cut -d: -f1)"
+          grep -Fq "wsl.exe --terminate \$Distribution" "$script"
+          grep -Fq "Command 'id -nG'" "$script" || grep -Fq -- "-Command 'id -nG'" "$script"
+          grep -Fq 'docker info >/dev/null 2>&1' "$script"
+          if [[ -z "$install_line" || -z "$restart_line" || -z "$terminal_line" || "$restart_line" -le "$install_line" || "$restart_line" -ge "$terminal_line" ]]; then
+            echo 'Docker group-session refresh must happen after install-devops.sh and before terminal/Verify work.' >&2
+            exit 1
+          fi
+
+  microsoft-wsl-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify Ubuntu 26.04 remains an explicit WSL source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 5 --retry-all-errors -fsSL \
+            https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json \
+            -o DistributionInfo.json
+          source_name="$(jq -r '.ModernDistributions.Ubuntu[] | select(.Name == "Ubuntu-26.04") | .Name' DistributionInfo.json)"
+          source_url="$(jq -r '.ModernDistributions.Ubuntu[] | select(.Name == "Ubuntu-26.04") | .Amd64Url.Url' DistributionInfo.json)"
+          test "$source_name" = 'Ubuntu-26.04'
+          echo "$source_url" | grep -F '/26.04/'
+          curl --retry 3 --retry-all-errors -fsSI "$source_url" >/dev/null
 
   ubuntu-2604-devops-compatibility:
     runs-on: ubuntu-latest
@@ -174,8 +220,10 @@ jobs:
           chmod +x "$tmpdir/minikube"
           "$tmpdir/minikube" version --short | grep -F "$MINIKUBE_VERSION"
 
-          curl --retry 5 --retry-all-errors -fsSL \
-            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" -o "$tmpdir/kind"
+          kind_url="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          curl --retry 5 --retry-all-errors -fsSL "$kind_url" -o "$tmpdir/kind"
+          curl --retry 5 --retry-all-errors -fsSL "${kind_url}.sha256sum" -o "$tmpdir/kind.sha256sum"
+          (cd "$tmpdir" && cp kind kind-linux-amd64 && sha256sum -c kind.sha256sum)
           chmod +x "$tmpdir/kind"
           "$tmpdir/kind" version | grep -F "$KIND_VERSION"
 
