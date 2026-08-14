@@ -23,13 +23,26 @@ function Invoke-WpcNativeCapture {
     # sa sortie, puis on la transforme dans un second temps. Ne pas écrire
     # `& $FilePath ... | Out-String` ici : PowerShell peut refuser l'alias MSIX
     # avec CantActivateDocumentInPipeline.
+    #
+    # Sous Set-StrictMode, $LASTEXITCODE peut ne pas encore exister dans une
+    # session fraîche. On initialise donc explicitement l'état natif avant
+    # l'appel et on le relit via Get-Variable pour ne jamais déréférencer une
+    # variable automatique absente.
+    $global:LASTEXITCODE = 0
+
     $raw = if ($SuppressErrorOutput) {
         @(& $FilePath @ArgumentList 2>$null)
     } else {
         @(& $FilePath @ArgumentList 2>&1)
     }
 
-    $exitCode = [int]$LASTEXITCODE
+    $lastExitVariable = Get-Variable -Name LASTEXITCODE -ErrorAction SilentlyContinue
+    $exitCode = if ($null -eq $lastExitVariable) {
+        0
+    } else {
+        [int]$lastExitVariable.Value
+    }
+
     $global:LASTEXITCODE = 0
     $lines = @($raw | ForEach-Object { [string]$_ })
 
