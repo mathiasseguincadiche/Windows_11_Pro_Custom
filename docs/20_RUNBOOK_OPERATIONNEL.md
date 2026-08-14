@@ -19,53 +19,12 @@ Windows 11 Pro stable et qualifié
 + projets Linux sur ext4
 + stack DevOps qualifiée
 + terminal / VS Code cohérents
-+ OpenClaw CLI via WezTerm si l'intégration est utilisée
 + logs et rapports exploitables
 + idempotence démontrée
 + sauvegarde de référence vérifiée
 ```
 
-OpenClaw/OpenRouter est une intégration distincte dans l'architecture. Le raccourci `-FullInstall` **OpenClaw inclus dans l'orchestration**, mais uniquement par délégation au control-plane `openclaw_openrouter` : l'installation du runtime IA, OpenRouter, `clawops`, Gateway, modèles et agents reste possédée par ce dépôt spécialisé.
-
----
-
-## Deux parcours d'installation
-
-### Workstation core, sans OpenClaw
-
-C'est le parcours recommandé lorsque l'intégration IA n'est pas souhaitée ou lorsque l'on veut maintenir strictement le périmètre workstation :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware
-```
-
-### Agrégation complète, OpenClaw inclus par délégation
-
-Le code actuel de `install.ps1` définit `-FullInstall` comme un raccourci qui active :
-
-```text
-InstallDevOps
-ValidateDevOps
-ValidateWsl
-ValidateHardware
-InstallOpenClawAI
-ValidateOpenClawAI
-```
-
-Utiliser :
-
-```powershell
-.\install.ps1 -Mode Apply -FullInstall
-```
-
-lorsque l'on veut enchaîner la convergence de la workstation et l'intégration IA en une seule intention.
-
-Ce raccourci ne fusionne pas les dépôts : `InstallOpenClawAI` appelle le pont d'intégration Windows, qui synchronise le control-plane approuvé puis délègue l'installation au code de `openclaw_openrouter`.
+OpenClaw/OpenRouter ne fait pas partie de ce périmètre. Son installation et sa configuration appartiennent au dépôt `mathiasseguincadiche/openclaw_openrouter`.
 
 ---
 
@@ -100,22 +59,17 @@ Ne corrige pas plusieurs composants à l'aveugle lorsqu'un audit signale un éca
 
 # Étape 3 — calculer le plan sans modifier
 
-## Core sans OpenClaw
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware `
-  -PlanOnly
-```
-
-## Agrégation complète avec OpenClaw délégué
-
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Le raccourci `-FullInstall` active uniquement :
+
+```text
+InstallDevOps
+ValidateDevOps
+ValidateWsl
+ValidateHardware
 ```
 
 `-PlanOnly` calcule le plan depuis l'état réel puis s'arrête avant l'application.
@@ -136,24 +90,11 @@ Une machine déjà partiellement conforme doit produire un plan partiel, pas une
 
 # Étape 4 — faire converger la workstation
 
-Pour le périmètre core :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware
-```
-
-Pour l'agrégation complète avec extension IA déléguée :
-
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-Le moteur vérifie chaque composant, applique uniquement le delta puis re-vérifie les éléments demandés. Pour OpenClaw/OpenRouter, l'application réelle reste exécutée par le control-plane spécialisé.
+Le moteur vérifie chaque composant, applique uniquement le delta puis re-vérifie les éléments demandés.
 
 Lorsqu'une action humaine est demandée, la traiter puis relancer la même intention : les composants déjà conformes doivent rester idempotents.
 
@@ -205,7 +146,12 @@ La configuration WezTerm appartient à la workstation elle-même et est vérifi�
 .\install.ps1 -Mode Verify
 ```
 
-Le résultat attendu conserve les trois contextes : Ubuntu DevOps par défaut, PowerShell 7 Windows et OpenClaw/clawops Windows lorsque l'intégration IA est utilisée.
+Le résultat attendu conserve deux contextes :
+
+```text
+Ubuntu DevOps (WSL2) -> profil par défaut
+PowerShell 7         -> administration Windows
+```
 
 Les versions reproductibles DevOps sont définies dans `config/devops/tool-versions.env`.
 
@@ -225,42 +171,17 @@ Voir [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-# Étape 8 — OpenClaw/OpenRouter et accès CLI
+# Étape 8 — vérifier la frontière avec les projets externes
 
-Si l'intégration n'a pas été demandée dans le parcours core, elle peut être ajoutée explicitement :
+`Windows_11_Pro_Custom` ne doit pas installer ou configurer OpenClaw/OpenRouter.
 
-```powershell
-.\install.ps1 -Mode Apply -InstallOpenClawAI
-```
+Vérifier notamment que :
 
-Cette commande est un **point de délégation** : `Windows_11_Pro_Custom` sélectionne le control-plane approuvé et lui transmet l'installation. Les procédures runtime et OpenRouter ne sont pas réimplémentées ici.
-
-Puis l'intégration locale peut être validée :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
-Si `-FullInstall` a été utilisé, ces deux intentions ont déjà été activées par le raccourci, toujours par délégation au dépôt `openclaw_openrouter`.
-
-Une fois l'intégration validée :
-
-1. ouvrir WezTerm ;
-2. choisir `OpenClaw / clawops (Windows)` ;
-3. confirmer que le profil indique les deux CLI disponibles ;
-4. effectuer le smoke test CLI.
-
-```powershell
-openclaw --version
-clawops version
-clawops platform check
-```
-
-Le profil recharge lui-même dans sa session les variables et chemins gérés nécessaires ; une relance préalable de WezTerm n'est pas requise uniquement pour rafraîchir cet environnement.
-
-Ce smoke test prouve l'accès utilisateur aux CLI depuis le terminal prévu. Il ne remplace pas `-ValidateOpenClawAI`.
-
-Les secrets restent hors de Git.
+- `install.ps1` n'expose pas de paramètre OpenClaw ;
+- le menu ne propose pas d'installation OpenClaw/OpenRouter ;
+- aucun bootstrap ne clone ou n'exécute `openclaw_openrouter` ;
+- WezTerm ne contient pas de profil OpenClaw spécifique ;
+- la conformité de la workstation ne dépend pas de `D:\AI\OpenClaw`.
 
 Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
@@ -268,25 +189,12 @@ Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 # Étape 9 — validation finale
 
-Core :
-
 ```powershell
 .\install.ps1 `
   -Mode Verify `
   -ValidateHardware `
   -ValidateWsl `
   -ValidateDevOps
-```
-
-Avec OpenClaw :
-
-```powershell
-.\install.ps1 `
-  -Mode Verify `
-  -ValidateHardware `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateOpenClawAI
 ```
 
 Un `Apply` terminé n'est pas une preuve suffisante. La validation repose sur l'état réellement observé.
@@ -297,21 +205,7 @@ Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 
 # Étape 10 — prouver l'idempotence
 
-Rejouer le même périmètre en `PlanOnly`.
-
-Core :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware `
-  -PlanOnly
-```
-
-Agrégation complète avec OpenClaw délégué :
+Rejouer le même périmètre en `PlanOnly` :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
@@ -350,17 +244,14 @@ Voir [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) et [`21_REFERENCE_COMMANDES.
 Le projet peut être déclaré prêt lorsque :
 
 - l'audit initial est compris ;
-- le périmètre choisi, core ou agrégé, est explicite ;
 - le plan est cohérent ;
 - les écarts ont convergé ;
 - Windows et le matériel sont qualifiés ;
 - WSL2 respecte son contrat ;
 - la stack DevOps est qualifiée ;
-- WezTerm respecte le contrat des trois contextes ;
-- OpenClaw est qualifié si le périmètre l'inclut ;
-- le profil WezTerm OpenClaw est exploitable si OpenClaw est utilisé ;
+- WezTerm respecte le contrat Ubuntu DevOps + PowerShell 7 ;
 - les frontières Windows/Linux sont respectées ;
-- les responsabilités de `Windows_11_Pro_Custom` et `openclaw_openrouter` restent distinctes ;
+- les projets externes restent hors du périmètre de l'orchestrateur ;
 - les logs et rapports expliquent le verdict ;
 - le second plan démontre l'idempotence ;
 - la sauvegarde de référence est vérifiée.
