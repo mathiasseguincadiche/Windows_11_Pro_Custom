@@ -24,13 +24,37 @@ function Assert-Administrator {
 
 function Get-RegistryState {
     param([Parameter(Mandatory)]$Entry)
-    if (-not (Test-Path $Entry.path)) { return [pscustomobject]@{ Exists=$false; Value=$null; Kind=$null } }
+    if (-not (Test-Path -LiteralPath $Entry.path)) { return [pscustomobject]@{ Exists=$false; Value=$null; Kind=$null } }
     $item = Get-Item -LiteralPath $Entry.path
     try {
         $value = $item.GetValue($Entry.property, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
         if ($null -eq $value) { return [pscustomobject]@{ Exists=$false; Value=$null; Kind=$null } }
         return [pscustomobject]@{ Exists=$true; Value=$value; Kind=$item.GetValueKind($Entry.property).ToString() }
     } catch { return [pscustomobject]@{ Exists=$false; Value=$null; Kind=$null } }
+}
+
+function Set-ManagedRegistryValue {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Property,
+        [Parameter(Mandatory)][string]$Type,
+        [Parameter(Mandatory)]$Value
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try {
+            New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
+        } catch {
+            throw "Création de clé registre impossible pour '$Name' [$Path]: $($_.Exception.Message)"
+        }
+    }
+
+    try {
+        New-ItemProperty -LiteralPath $Path -Name $Property -PropertyType $Type -Value $Value -Force -ErrorAction Stop | Out-Null
+    } catch {
+        throw "Écriture registre impossible pour '$Name' [$Path\$Property]: $($_.Exception.Message)"
+    }
 }
 
 function Test-RegistryMatch {
@@ -114,8 +138,7 @@ switch ($Mode) {
 
         foreach ($entry in @($pending.Registry)) {
             Write-Host "[EN COURS] REG $($entry.name)" -ForegroundColor Cyan
-            New-Item -Force -Path $entry.path | Out-Null
-            New-ItemProperty -Path $entry.path -Name $entry.property -PropertyType $entry.type -Value $entry.value -Force | Out-Null
+            Set-ManagedRegistryValue -Name ([string]$entry.name) -Path ([string]$entry.path) -Property ([string]$entry.property) -Type ([string]$entry.type) -Value $entry.value
             $now = Get-RegistryState -Entry $entry
             if (-not (Test-RegistryMatch -Entry $entry -State $now)) { throw "Revalidation registre échouée: $($entry.name)" }
             Write-Host "[FAIT] REG $($entry.name)" -ForegroundColor Green
@@ -127,7 +150,11 @@ switch ($Mode) {
                 continue
             }
             Write-Host "[EN COURS] SVC $($entry.name) -> $($entry.startupType)" -ForegroundColor Cyan
-            Set-Service -Name $entry.name -StartupType $entry.startupType
+            try {
+                Set-Service -Name $entry.name -StartupType $entry.startupType -ErrorAction Stop
+            } catch {
+                throw "Modification du service '$($entry.name)' impossible: $($_.Exception.Message)"
+            }
             $after = Get-ServiceState -Entry $entry
             $target = Convert-StartupTypeToCimMode -StartupType $entry.startupType
             if ($after.StartMode -ne $target) { throw "Revalidation service échouée: $($entry.name)" }
@@ -157,15 +184,22 @@ switch ($Mode) {
         $backup = Get-Content -Raw $statePath | ConvertFrom-Json
         foreach ($entry in @($backup.Registry)) {
             if ($entry.Exists) {
-                New-Item -Force -Path $entry.Path | Out-Null
                 $kind = if ($entry.Kind) { [string]$entry.Kind } else { 'DWord' }
-                New-ItemProperty -Path $entry.Path -Name $entry.Property -PropertyType $kind -Value $entry.Value -Force | Out-Null
-            } elseif (Test-Path $entry.Path) { Remove-ItemProperty -Path $entry.Path -Name $entry.Property -ErrorAction SilentlyContinue }
+                Set-ManagedRegistryValue -Name "Rollback $($entry.Name)" -Path ([string]$entry.Path) -Property ([string]$entry.Property) -Type $kind -Value $entry.Value
+            } elseif (Test-Path -LiteralPath $entry.Path) {
+                Remove-ItemProperty -LiteralPath $entry.Path -Name $entry.Property -ErrorAction SilentlyContinue
+            }
         }
         foreach ($entry in @($backup.Services)) {
             if (-not $entry.Exists) { continue }
             $startupType = switch ([string]$entry.StartMode) { 'Auto' { 'Automatic' } 'Manual' { 'Manual' } 'Disabled' { 'Disabled' } default { $null } }
-            if ($startupType) { Set-Service -Name $entry.Name -StartupType $startupType }
+            if ($startupType) {
+                try {
+                    Set-Service -Name $entry.Name -StartupType $startupType -ErrorAction Stop
+                } catch {
+                    throw "Rollback du service '$($entry.Name)' impossible: $($_.Exception.Message)"
+                }
+            }
         }
         Write-Host "[FAIT] Profil '$Profile' restauré depuis lʼétat initial." -ForegroundColor Green
     }
