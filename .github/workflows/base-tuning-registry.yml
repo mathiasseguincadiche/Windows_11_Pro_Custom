@@ -1,0 +1,68 @@
+name: Base tuning registry
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/base-tuning-registry.yml'
+      - 'scripts/windows/10_tune.ps1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/base-tuning-registry.yml'
+      - 'scripts/windows/10_tune.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enforce idempotent registry write contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/windows/10_tune.ps1'
+          grep -Fq 'function Set-ManagedRegistryValue' "$script"
+          grep -Fq "if (-not (Test-Path -LiteralPath \$Path))" "$script"
+          grep -Fq "New-ItemProperty -LiteralPath \$Path" "$script"
+          grep -Fq "Écriture registre impossible pour" "$script"
+          if grep -Fq "New-Item -Force -Path \$tweak.Path" "$script"; then
+            echo 'Base tuning must not recreate an existing registry key before every value write.' >&2
+            exit 1
+          fi
+
+  windows-existing-key-write:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reproduce existing HKCU key and validate managed write
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . .\scripts\windows\10_tune.ps1 -Mode Audit
+
+          $root = 'HKCU:\Software\Windows11ProCustom\CI'
+          $key = Join-Path $root 'BaseTuning'
+          try {
+            New-Item -Path $key -Force -ErrorAction Stop | Out-Null
+
+            Set-ManagedRegistryValue -Name 'CI existing key write' -Path $key -Property 'Hidden' -Type 'DWord' -Value 1
+            $first = Get-ItemPropertyValue -LiteralPath $key -Name 'Hidden' -ErrorAction Stop
+            if ([int]$first -ne 1) { throw "Unexpected first registry value: $first" }
+
+            Set-ManagedRegistryValue -Name 'CI idempotent rewrite' -Path $key -Property 'Hidden' -Type 'DWord' -Value 1
+            $second = Get-ItemPropertyValue -LiteralPath $key -Name 'Hidden' -ErrorAction Stop
+            if ([int]$second -ne 1) { throw "Unexpected second registry value: $second" }
+
+            $missingKey = Join-Path $root 'CreatedByHelper'
+            Set-ManagedRegistryValue -Name 'CI missing key creation' -Path $missingKey -Property 'Enabled' -Type 'DWord' -Value 1
+            $created = Get-ItemPropertyValue -LiteralPath $missingKey -Name 'Enabled' -ErrorAction Stop
+            if ([int]$created -ne 1) { throw "Unexpected created-key value: $created" }
+          }
+          finally {
+            if (Test-Path -LiteralPath $root) {
+              Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }

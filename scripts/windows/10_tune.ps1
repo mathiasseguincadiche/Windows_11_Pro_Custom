@@ -27,7 +27,7 @@ $tweaks = @(
 
 function Get-RegistryState {
     param([hashtable]$Tweak)
-    if (-not (Test-Path $Tweak.Path)) { return [pscustomobject]@{ Exists=$false; Value=$null; Kind=$null } }
+    if (-not (Test-Path -LiteralPath $Tweak.Path)) { return [pscustomobject]@{ Exists=$false; Value=$null; Kind=$null } }
     $item = Get-Item -LiteralPath $Tweak.Path
     try {
         $value = $item.GetValue($Tweak.Property, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
@@ -46,6 +46,30 @@ function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Ce mode doit être exécuté dans PowerShell administrateur.' }
+}
+
+function Set-ManagedRegistryValue {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Property,
+        [Parameter(Mandatory)][string]$Type,
+        [Parameter(Mandatory)]$Value
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        try {
+            New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
+        } catch {
+            throw "Création de clé registre impossible pour '$Name' [$Path]: $($_.Exception.Message)"
+        }
+    }
+
+    try {
+        New-ItemProperty -LiteralPath $Path -Name $Property -PropertyType $Type -Value $Value -Force -ErrorAction Stop | Out-Null
+    } catch {
+        throw "Écriture registre impossible pour '$Name' [$Path\\$Property]: $($_.Exception.Message)"
+    }
 }
 
 function Show-Status {
@@ -83,8 +107,7 @@ switch ($Mode) {
 
         foreach ($tweak in $pending) {
             Write-Host "[EN COURS] $($tweak.Name)" -ForegroundColor Cyan
-            New-Item -Force -Path $tweak.Path | Out-Null
-            New-ItemProperty -Path $tweak.Path -Name $tweak.Property -PropertyType $tweak.Type -Value $tweak.Value -Force | Out-Null
+            Set-ManagedRegistryValue -Name $tweak.Name -Path $tweak.Path -Property $tweak.Property -Type $tweak.Type -Value $tweak.Value
             if (-not (Test-TweakMatch -Tweak $tweak)) { throw "Revalidation échouée après écriture: $($tweak.Name)" }
             Write-Host "[FAIT] $($tweak.Name)" -ForegroundColor Green
         }
@@ -112,11 +135,10 @@ switch ($Mode) {
         $backup = Get-Content -Raw $statePath | ConvertFrom-Json
         foreach ($entry in $backup) {
             if ($entry.Exists) {
-                New-Item -Force -Path $entry.Path | Out-Null
                 $kind = if ($entry.Kind) { $entry.Kind } else { 'DWord' }
-                New-ItemProperty -Path $entry.Path -Name $entry.Property -PropertyType $kind -Value $entry.Value -Force | Out-Null
-            } elseif (Test-Path $entry.Path) {
-                Remove-ItemProperty -Path $entry.Path -Name $entry.Property -ErrorAction SilentlyContinue
+                Set-ManagedRegistryValue -Name "Rollback $($entry.Property)" -Path $entry.Path -Property $entry.Property -Type $kind -Value $entry.Value
+            } elseif (Test-Path -LiteralPath $entry.Path) {
+                Remove-ItemProperty -LiteralPath $entry.Path -Name $entry.Property -ErrorAction SilentlyContinue
             }
         }
         Write-Host '[FAIT] Réglages Windows restaurés depuis la sauvegarde initiale.' -ForegroundColor Green
