@@ -32,10 +32,10 @@ Les réglages gérés couvrent notamment :
 - options de confidentialité ;
 - Game Mode et captures en arrière-plan ;
 - quelques services explicitement bornés ;
-- animations et perception de réactivité ;
+- état des animations Windows et perception de réactivité ;
 - comportement de lancement des applications ;
 - état du pagefile et de la compression mémoire ;
-- plan d'alimentation et mode de puissance ;
+- plan d'alimentation et observation du mode de puissance ;
 - inventaire des applications de démarrage.
 
 Les profils disponibles sont :
@@ -84,6 +84,8 @@ Application PreLaunch         actif
 pagefile                       géré par le système
 crash dump                     automatique
 plan d'alimentation            Balanced
+mode de puissance secteur      observé, non forcé
+animations Windows             conservées
 TRIM / optimisation SSD        actifs
 ```
 
@@ -94,6 +96,7 @@ Cela évite les recettes populaires mais fragiles du type :
 - utiliser un RAM cleaner ;
 - modifier HPET / BCD sans preuve ;
 - désactiver core parking ou C-States globalement ;
+- forcer un mode de puissance maximal en permanence ;
 - supprimer des services à grande échelle ;
 - lancer des benchmarks SSD d'écriture massifs.
 
@@ -126,7 +129,7 @@ Pourquoi :
 - le poste est utilisé à la fois en desktop, DevOps et gaming ;
 - un plan maximal permanent augmente consommation/chaleur sans bénéfice démontré pour tous les usages.
 
-Le projet peut utiliser les API Windows modernes pour ajuster la perception de performance secteur sans remplacer arbitrairement le plan global.
+Le mode de puissance secteur reste observable dans les rapports, mais le profil standard ne le force pas. Windows conserve ainsi sa gestion dynamique normale au lieu d'imposer en permanence `Best Performance`.
 
 ## SSD et I/O
 

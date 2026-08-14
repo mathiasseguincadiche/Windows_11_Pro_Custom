@@ -90,12 +90,18 @@ jobs:
             (.pageFile.crashDumpEnabled == 7) and
             (.power.activeScheme == "Balanced") and
             (.power.acPowerMode == "Best Performance") and
+            (.power.acPowerModeManagement == "observe-only") and
+            (.ui.minimizeRestoreAnimation == true) and
+            (.ui.clientAreaAnimations == true) and
+            ((.forbiddenTweaks | index("force-best-performance-power-mode")) != null) and
             (.startup.automaticDisable == false) and
             (.backgroundApps.globalDisable == false)
           ' config/windows/v8/responsiveness.json >/dev/null
           grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
           grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
           grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
+          grep -Fq "acPowerModeManagement -eq 'enforce'" scripts/windows/53_responsiveness_v8.ps1
+          grep -Fq 'Mode de puissance secteur observé uniquement' scripts/windows/53_responsiveness_v8.ps1
 
   windows-runtime:
     runs-on: windows-latest
@@ -123,6 +129,9 @@ jobs:
           $responsiveness = Get-Content -Raw .\reports\windows\v8-responsiveness.json | ConvertFrom-Json
           if ($responsiveness.Version -ne 'V8' -or $null -eq $responsiveness.State) {
             throw 'Internal responsiveness report is incomplete.'
+          }
+          if ($responsiveness.AcPowerModeManagement -ne 'observe-only') {
+            throw 'Responsiveness policy must preserve the current Windows AC power mode.'
           }
           if ($responsiveness.StartupAutomaticDisable -ne $false -or $responsiveness.BackgroundGlobalDisable -ne $false) {
             throw 'Responsiveness policy must not automatically disable startup or background apps.'
