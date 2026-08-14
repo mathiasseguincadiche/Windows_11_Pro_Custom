@@ -19,12 +19,6 @@ param(
     [switch]$ValidateHardware,
     [switch]$SkipV4RestorePoint,
 
-    [switch]$InstallOpenClawAI,
-    [switch]$ValidateOpenClawAI,
-    [string]$OpenClawRoot = 'D:\AI\OpenClaw',
-    [string]$OpenClawControlPlanePath = 'D:\AI\OpenClaw\control-plane',
-    [string]$OpenClawRepositoryRef = '',
-
     [ValidateSet('None', 'Create', 'Verify', 'RestorePlan')]
     [string]$BackupAction = 'None',
     [string]$BackupTargetDrive = '',
@@ -134,16 +128,6 @@ try {
         $ValidateDevOps = $true
         $ValidateWsl = $true
         $ValidateHardware = $true
-        $InstallOpenClawAI = $true
-        $ValidateOpenClawAI = $true
-    }
-
-    $openClawConfigPath = Join-Path $RepoRoot 'config\openclaw\control-plane.json'
-    if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) {
-        if (-not (Test-Path $openClawConfigPath)) { throw "OpenClaw control-plane pin absent: $openClawConfigPath" }
-        $openClawConfig = Get-Content -Raw $openClawConfigPath | ConvertFrom-Json
-        $OpenClawRepositoryRef = [string]$openClawConfig.ref
-        if ([string]::IsNullOrWhiteSpace($OpenClawRepositoryRef)) { throw 'OpenClaw control-plane pin vide.' }
     }
 
     Write-WpcBanner -Context $context -Title "Windows 11 Pro Custom — Orchestrateur — $Mode"
@@ -153,7 +137,6 @@ try {
     Write-Host "Utilisateur WSL      : $(if ($WslUser) { $WslUser } else { '<détection/prompt si nécessaire>' })"
     Write-Host "Profils optimisation : $($OptimizationProfiles -join ', ')"
     Write-Host "DevOps demandé        : $([bool]$InstallDevOps)"
-    Write-Host "OpenClaw demandé      : $([bool]$InstallOpenClawAI)"
     Write-Host "Mode non interactif   : $([bool]$NonInteractive)"
 
     if ($BackupAction -ne 'None') {
@@ -187,14 +170,13 @@ try {
         foreach ($profile in $profilesToRollback) { [void](Invoke-Step -RelativePath 'scripts\windows\40_v4_optimize.ps1' -Arguments @{ Mode='Rollback'; Profile=$profile } -Name "Profil optimisation $profile" -Phase 'Rollback') }
         [void](Invoke-Step -RelativePath 'scripts\windows\10_tune.ps1' -Arguments @{ Mode='Rollback' } -Name 'Réglages Windows de base' -Phase 'Rollback')
         [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Rollback' } -Name 'Exclusions Defender' -Phase 'Rollback')
-        Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'OpenClaw non supprimé automatiquement' -Detail 'Son état et ses identifiants sur D: nécessitent une décision explicite; le rollback ne les efface jamais.' -Context $context
         $runSuccess = $true
         return
     }
 
     # La vérité machine est relue à chaque exécution avant toute décision.
     [void](Invoke-Step -RelativePath 'scripts\bootstrap\00_preflight.ps1' -Name 'Préflight Windows' -Phase 'Discovery')
-    [void](Invoke-Step -RelativePath 'scripts\bootstrap\01_machine_state.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; WslInstallLocation=$WslInstallLocation; OpenClawRoot=$OpenClawRoot } -Name 'État réel de la machine' -Phase 'Discovery')
+    [void](Invoke-Step -RelativePath 'scripts\bootstrap\01_machine_state.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution; WslInstallLocation=$WslInstallLocation } -Name 'État réel de la machine' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\20_system_audit.ps1' -Name 'Audit système Windows' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\50_hardware_inventory.ps1' -Name 'Inventaire matériel' -Phase 'Discovery')
     [void](Invoke-Step -RelativePath 'scripts\windows\52_hardware_symbiosis.ps1' -Arguments @{ Mode='Audit' } -Name 'Symbiose matérielle' -Phase 'Discovery')
@@ -212,7 +194,6 @@ try {
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\10_workstation.ps1' -Arguments @{ Mode='Audit' } -Name 'Poste de travail' -Phase 'Audit')
         [void](Invoke-Step -RelativePath 'scripts\bootstrap\05_defender.ps1' -Name 'Microsoft Defender' -Phase 'Audit')
         [void](Invoke-Step -RelativePath 'scripts\defender\03_apply_approved_exclusions.ps1' -Arguments @{ Mode='Audit' } -Name 'Exclusions Defender' -Phase 'Audit')
-        [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Audit'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'OpenClaw/OpenRouter' -Phase 'Audit')
         $runSuccess = $true
         return
     }
@@ -246,9 +227,6 @@ try {
 
         if ($ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\09_validate_devops.ps1' -Arguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Qualification stack DevOps' -Phase 'FinalValidation') }
         else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification DevOps non demandée' -Detail 'Ajoute -ValidateDevOps après installation de la stack.' -Context $context }
-
-        if ($ValidateOpenClawAI) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'Qualification OpenClaw/OpenRouter' -Phase 'FinalValidation') }
-        else { Write-WpcStatus -Status 'IGNORE' -Message 'Qualification OpenClaw non demandée' -Detail 'Ajoute -ValidateOpenClawAI.' -Context $context }
         $runSuccess = $true
         return
     }
@@ -270,12 +248,6 @@ try {
         Add-PlanItem -Name 'Stack DevOps WSL' -VerifyRelativePath 'scripts\bootstrap\09_validate_devops.ps1' -VerifyArguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -ApplyRelativePath 'scripts\bootstrap\08_devops.ps1' -ApplyArguments @{ Distribution=$Distribution; LinuxUser=$WslUser }
     } else {
         Write-WpcStatus -Status 'IGNORE' -Message 'Stack DevOps non demandée dans cet Apply' -Detail 'Ajoute -InstallDevOps ou utilise -FullInstall pour lʼinclure.' -Context $context
-    }
-
-    if ($InstallOpenClawAI) {
-        Add-PlanItem -Name 'OpenClaw/OpenRouter' -VerifyRelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -VerifyArguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -ApplyRelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -ApplyArguments @{ Mode='Apply'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef }
-    } else {
-        Write-WpcStatus -Status 'IGNORE' -Message 'OpenClaw/OpenRouter non demandé dans cet Apply' -Detail 'Ajoute -InstallOpenClawAI ou utilise -FullInstall.' -Context $context
     }
 
     Show-Plan
@@ -324,7 +296,6 @@ try {
 
     if ($ValidateWsl -or $ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\14_validate_wsl_v6.ps1' -Arguments @{ WslProfile=$WslProfile; Distribution=$Distribution } -Name 'Qualification runtime WSL2' -Phase 'FinalValidation') }
     if ($ValidateDevOps) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\09_validate_devops.ps1' -Arguments @{ Distribution=$Distribution; LinuxUser=$WslUser } -Name 'Qualification stack DevOps' -Phase 'FinalValidation') }
-    if ($ValidateOpenClawAI) { [void](Invoke-Step -RelativePath 'scripts\bootstrap\15_openclaw_ai.ps1' -Arguments @{ Mode='Verify'; Root=$OpenClawRoot; ControlPlanePath=$OpenClawControlPlanePath; RepositoryRef=$OpenClawRepositoryRef } -Name 'Qualification OpenClaw/OpenRouter' -Phase 'FinalValidation') }
 
     $runSuccess = $true
 }
