@@ -13,12 +13,14 @@ $hardwareTargetPath = Join-Path $repoRoot 'config\hardware\target-v5.json'
 $wslContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
 $appsManifestPath = Join-Path $repoRoot 'manifests\winget\apps-core.json'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
+$nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
 
-foreach ($path in @($hardwareTargetPath, $wslContractPath, $appsManifestPath, $windowsNativeModule)) {
+foreach ($path in @($hardwareTargetPath, $wslContractPath, $appsManifestPath, $windowsNativeModule, $nativeProcessModule)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" }
 }
 
 Import-Module $windowsNativeModule
+Import-Module $nativeProcessModule
 [void]@(Initialize-WpcWindowsNativeModules -Profile Full)
 
 $hardwareTarget = Get-Content -Raw $hardwareTargetPath | ConvertFrom-Json
@@ -75,10 +77,11 @@ function Get-OptionalFeatureStateSafe {
 
 function Get-WslNames {
     try {
-        $names = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-        $code = $LASTEXITCODE
-        $global:LASTEXITCODE = 0
-        if ($code -ne 0) { return @() }
+        $wslCommand = Get-WpcNativeApplication -Name 'wsl.exe'
+        if (-not $wslCommand) { return @() }
+        $result = Invoke-WpcNativeCapture -FilePath $wslCommand.Source -ArgumentList @('--list', '--quiet') -SuppressErrorOutput
+        if ($result.ExitCode -ne 0) { return @() }
+        $names = @(($result.Lines -replace "`0", '') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         return @($names)
     } catch { return @() }
 }
@@ -193,23 +196,24 @@ $restorePointProviderReady = $false
 $restorePointDetail = ''
 try {
     [void](Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop)
-    $windowsPowerShell = Get-Command powershell.exe -ErrorAction Stop
-    $checkpointName = (& $windowsPowerShell.Source -NoLogo -NoProfile -NonInteractive -Command "(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name" 2>$null | Out-String).Trim()
-    $restoreCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    $restorePointProviderReady = ($restoreCode -eq 0 -and $checkpointName -eq 'Checkpoint-Computer')
+    $windowsPowerShell = Get-WpcNativeApplication -Name 'powershell.exe'
+    if (-not $windowsPowerShell) { throw 'powershell.exe introuvable.' }
+    $checkpointResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell.Source -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name") -SuppressErrorOutput
+    $checkpointName = $checkpointResult.Text.Trim()
+    $restorePointProviderReady = ($checkpointResult.ExitCode -eq 0 -and $checkpointName -eq 'Checkpoint-Computer')
     $restorePointDetail = "SystemRestore WMI présent; powershell.exe=$($windowsPowerShell.Source); Checkpoint-Computer=$restorePointProviderReady"
 } catch { $restorePointDetail = $_.Exception.Message }
 Add-ReadinessCheck -Name 'Garde-fou point de restauration disponible' -Passed $restorePointProviderReady -Detail $restorePointDetail
 
-$winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+$winget = Get-WpcNativeApplication -Name 'winget.exe'
 $wingetReady = $null -ne $winget
 $wingetVersion = ''
 if ($wingetReady) {
-    $wingetVersion = (& winget.exe --version 2>&1 | Out-String).Trim()
-    $versionCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    $wingetReady = ($versionCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($wingetVersion))
+    # WinGet est généralement un App Execution Alias sous WindowsApps. Il doit
+    # être exécuté seul, puis sa sortie est transformée après son retour.
+    $versionResult = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('--version') -SuppressErrorOutput
+    $wingetVersion = $versionResult.Text.Trim()
+    $wingetReady = ($versionResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($wingetVersion))
 }
 Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) { "Version=$wingetVersion Path=$($winget.Source)" } else { 'WinGet/App Installer absent ou non fonctionnel.' })
 
@@ -217,22 +221,19 @@ $unresolvedApps = [System.Collections.Generic.List[string]]::new()
 if ($wingetReady) {
     foreach ($app in @($appsManifest.apps | Where-Object { [bool]$_.autoInstall })) {
         $id = [string]$app.wingetId
-        & winget.exe show --id $id --exact --source winget --accept-source-agreements --disable-interactivity *> $null
-        $code = $LASTEXITCODE
-        $global:LASTEXITCODE = 0
-        if ($code -ne 0) { $unresolvedApps.Add("$($app.name) [$id]") }
+        $showResult = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('show', '--id', $id, '--exact', '--source', 'winget', '--accept-source-agreements', '--disable-interactivity')
+        if ($showResult.ExitCode -ne 0) { $unresolvedApps.Add("$($app.name) [$id]") }
     }
 }
 Add-ReadinessCheck -Name 'Catalogue WinGet résolvable' -Passed ($wingetReady -and $unresolvedApps.Count -eq 0) -Detail $(if (-not $wingetReady) { 'WinGet indisponible.' } elseif ($unresolvedApps.Count -eq 0) { 'Tous les IDs autoInstall sont résolus avant toute mutation.' } else { $unresolvedApps -join '; ' })
 
-$wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
+$wsl = Get-WpcNativeApplication -Name 'wsl.exe'
 $wslVersionReady = $false
 $wslVersionText = ''
 if ($wsl) {
-    $wslVersionText = (& wsl.exe --version 2>&1 | Out-String).Trim()
-    $wslVersionCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    $wslVersionReady = ($wslVersionCode -eq 0)
+    $wslVersionResult = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--version')
+    $wslVersionText = $wslVersionResult.Text.Trim()
+    $wslVersionReady = ($wslVersionResult.ExitCode -eq 0)
 }
 Add-ReadinessCheck -Name 'Runtime WSL Store opérationnel' -Passed ($null -ne $wsl -and $wslVersionReady) -Detail $(if ($wslVersionReady) { ($wslVersionText -split "`r?`n" | Select-Object -First 1) } else { 'wsl --version a échoué. Exécute wsl --update après activation des fonctionnalités Windows.' })
 
@@ -243,14 +244,14 @@ $distributionPresent = $wslNames -contains $distribution
 Add-ReadinessCheck -Name 'Nom de distribution WSL cible cohérent' -Passed (-not [string]::IsNullOrWhiteSpace($distribution) -and -not [string]::IsNullOrWhiteSpace($sourceDistribution)) -Detail "Nom enregistré=$distribution ; source épinglée=$sourceDistribution"
 
 if (-not $distributionPresent -and $wslVersionReady) {
-    $wslHelp = (& wsl.exe --help 2>&1 | Out-String)
+    $wslHelpResult = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--help')
+    $wslHelp = $wslHelpResult.Text
     $installCapabilities = ($wslHelp -match '--location' -and $wslHelp -match '--name' -and $wslHelp -match '--no-launch')
     Add-ReadinessCheck -Name 'WSL sait installer avec nom et emplacement explicites' -Passed $installCapabilities -Detail 'Options requises: --location, --name, --no-launch. Si absentes: wsl --update puis redémarrage.'
 
-    $online = (& wsl.exe --list --online 2>&1 | Out-String) -replace "`0", ''
-    $onlineCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    $sourceAvailable = ($onlineCode -eq 0 -and $online -match "(?m)^\s*$([regex]::Escape($sourceDistribution))\s")
+    $onlineResult = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--list', '--online')
+    $online = $onlineResult.Text -replace "`0", ''
+    $sourceAvailable = ($onlineResult.ExitCode -eq 0 -and $online -match "(?m)^\s*$([regex]::Escape($sourceDistribution))\s")
     Add-ReadinessCheck -Name 'Ubuntu 26.04 explicite disponible dans WSL' -Passed $sourceAvailable -Detail "Source attendue=$sourceDistribution"
 } elseif ($distributionPresent) {
     Add-ReadinessCheck -Name 'Distribution WSL déjà enregistrée' -Passed $true -Detail "$distribution est déjà présente; sa version et son emplacement seront revalidés par 06_wsl.ps1."
