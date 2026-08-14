@@ -41,6 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2016
           offenders="$(grep -RIn --include='*.ps1' -E 'Import-Module .*runtime\.psm1.*-Force|Import-Module \$runtimeModule -Force' scripts || true)"
           if [[ -n "$offenders" ]]; then
             echo 'Child scripts must never reload scripts/core/runtime.psm1 with -Force while the orchestrator is using it.' >&2
@@ -54,6 +55,7 @@ jobs:
           set -euo pipefail
           grep -Fq 'Get-WingetInventory' scripts/bootstrap/01_machine_state.ps1
           grep -Fq 'winget.exe list --accept-source-agreements --disable-interactivity' scripts/bootstrap/01_machine_state.ps1
+          # shellcheck disable=SC2016
           if grep -Fq 'winget.exe list --id $Id' scripts/bootstrap/01_machine_state.ps1; then
             echo 'Machine-state discovery must not execute one winget list call per application.' >&2
             exit 1
