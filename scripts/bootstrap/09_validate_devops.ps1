@@ -9,6 +9,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1')
+Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $windowsScript = Join-Path $repoRoot 'scripts\wsl\validate-devops.sh'
 $terminalScript = Join-Path $repoRoot 'scripts\wsl\validate-devops-terminal.sh'
@@ -17,9 +18,14 @@ foreach ($path in @($windowsScript, $terminalScript)) {
     if (-not (Test-Path $path)) { throw "Script absent: $path" }
 }
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe introuvable.' }
-$installed = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$global:LASTEXITCODE = 0
-if ($installed -notcontains $Distribution) { throw "Distribution WSL absente: $Distribution" }
+$registration = Get-WpcWslRegistrationFact -Distribution $Distribution
+if ($registration.Known) {
+    if (-not $registration.Present) { throw "Distribution WSL absente: $Distribution" }
+} else {
+    $installed = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $global:LASTEXITCODE = 0
+    if ($installed -notcontains $Distribution) { throw "Distribution WSL absente: $Distribution" }
+}
 
 if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $LinuxUser = (& wsl.exe -d $Distribution -- sh -lc 'id -un' 2>$null | Out-String).Trim()
