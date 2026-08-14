@@ -9,8 +9,12 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
+$physicalReadinessScript = Join-Path $repoRoot 'scripts\bootstrap\02_physical_readiness.ps1'
 if (-not (Test-Path -LiteralPath $windowsNativeModule)) {
     throw "Bootstrap des modules Windows introuvable: $windowsNativeModule"
+}
+if (-not (Test-Path -LiteralPath $physicalReadinessScript)) {
+    throw "Préqualification physique introuvable: $physicalReadinessScript"
 }
 Import-Module $windowsNativeModule
 $nativeModules = @(Initialize-WpcWindowsNativeModules -Profile Full)
@@ -96,3 +100,5 @@ if ($pendingReboot.Pending) {
 $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module)
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
+Write-Host '[ANALYSE] Préqualification physique complète avant toute convergence...' -ForegroundColor Cyan
+& $physicalReadinessScript -Strict
