@@ -57,6 +57,7 @@ jobs:
           ' config/orchestration/v9.json >/dev/null
 
           test -f scripts/core/runtime.psm1
+          test -f scripts/core/native-process.psm1
           test -f scripts/bootstrap/01_machine_state.ps1
           test -f scripts/bootstrap/07_wsl_user.ps1
           test -f logs/README.md
@@ -91,7 +92,9 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq "ValidateSet('Audit', 'Apply', 'Verify')" scripts/bootstrap/03_apps.ps1
-          grep -Fq 'winget.exe list --id' scripts/bootstrap/03_apps.ps1
+          grep -Fq 'native-process.psm1' scripts/bootstrap/03_apps.ps1
+          grep -Fq 'Invoke-WpcNativeCapture' scripts/bootstrap/03_apps.ps1
+          grep -Fq "ArgumentList @('list', '--id', \$Id, '--exact'" scripts/bootstrap/03_apps.ps1
           grep -Fq 'aucune installation relancée' scripts/bootstrap/03_apps.ps1
 
           grep -Fq "ValidateSet('Audit', 'Apply', 'Verify')" scripts/bootstrap/06_wsl.ps1
