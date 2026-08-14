@@ -8,7 +8,7 @@
     { "name": "Notion", "wingetId": "Notion.Notion", "autoInstall": true },
     { "name": "Firefox", "wingetId": "Mozilla.Firefox", "autoInstall": true },
     { "name": "Brave", "wingetId": "Brave.Brave", "autoInstall": true },
-    { "name": "FileZilla", "wingetId": "TimKosse.FileZilla.Client", "autoInstall": true },
+    { "name": "FileZilla", "wingetId": null, "autoInstall": false },
     { "name": "WezTerm", "wingetId": "wez.wezterm", "autoInstall": true },
     { "name": "Microsoft Office", "wingetId": null, "autoInstall": false },
     { "name": "LibreOffice", "wingetId": "TheDocumentFoundation.LibreOffice", "autoInstall": true },
