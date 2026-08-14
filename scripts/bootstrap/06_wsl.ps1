@@ -13,6 +13,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
@@ -38,6 +39,9 @@ if ([System.IO.Path]::GetFullPath($InstallLocation).TrimEnd('\') -ne [System.IO.
 }
 
 function Get-WslNames {
+    $registration = Get-WpcWslRegistrationFact -Distribution $Distribution
+    if ($registration.Known) { return @($registration.Names) }
+
     try {
         $names = @((wsl.exe --list --quiet 2>$null) -replace "`0", '') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
         $global:LASTEXITCODE = 0
@@ -62,12 +66,8 @@ function Test-WslConfigMatch {
 }
 
 function Get-WslBasePath {
-    try {
-        foreach ($key in Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction Stop) {
-            $item = Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue
-            if ([string]$item.DistributionName -eq $Distribution) { return [string]$item.BasePath }
-        }
-    } catch {}
+    $registration = Get-WpcWslRegistrationFact -Distribution $Distribution
+    if ($registration.Known) { return [string]$registration.BasePath }
     return $null
 }
 
