@@ -66,6 +66,7 @@ jobs:
           grep -Fq "sourceDistribution" "$readiness"
           grep -Fq "VERDICT: PHYSICAL INSTALL READY" "$readiness"
           grep -Fq "aucune convergence ne doit commencer avant un verdict READY" "$readiness"
+          grep -Fq "\$pendingReboot = @(Get-PendingRebootReasons)" "$readiness"
 
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|DisableRealtimeMonitoring|--unregister|Remove-AppxPackage'
           if grep -InE "$forbidden" "$readiness"; then
@@ -129,6 +130,37 @@ jobs:
           }
           finally {
             if ($hadOS) { $env:OS = $originalOS } else { Remove-Item Env:OS -ErrorAction SilentlyContinue }
+          }
+
+      - name: Prove StrictMode collection cardinality for reboot reasons
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          function Get-RebootReasonFixture {
+            param([string[]]$Items)
+            $reasons = [System.Collections.Generic.List[string]]::new()
+            foreach ($item in @($Items)) { $reasons.Add($item) }
+            return @($reasons)
+          }
+
+          $cases = @(
+            @{ Items = @(); Expected = 0 },
+            @{ Items = @('CBS'); Expected = 1 },
+            @{ Items = @('CBS','WindowsUpdate','PendingFileRenameOperations'); Expected = 3 }
+          )
+          foreach ($case in $cases) {
+            $actual = @(Get-RebootReasonFixture -Items $case.Items)
+            if ($actual.Count -ne $case.Expected) {
+              throw "StrictMode collection cardinality mismatch: expected=$($case.Expected) actual=$($actual.Count)"
+            }
+          }
+
+          $readiness = Get-Content -Raw .\scripts\bootstrap\02_physical_readiness.ps1
+          $required = '$pendingReboot = @(Get-PendingRebootReasons)'
+          if (-not $readiness.Contains($required)) {
+            throw 'Physical readiness must materialize pending reboot reasons before using .Count.'
           }
 
       - name: Validate Windows optional-feature inspection API
