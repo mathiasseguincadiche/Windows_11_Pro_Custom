@@ -23,8 +23,7 @@ Crucial T705 #2
 └── D: NTFS
     ├── données
     ├── D:\WSL\Ubuntu-DevOps
-    ├── D:\WSL\swap
-    └── D:\AI\OpenClaw       # si l'intégration IA est utilisée
+    └── D:\WSL\swap
 
 UEFI
 ├── démarrage UEFI
@@ -366,12 +365,11 @@ D:\
 ├── WSL\
 │   ├── Ubuntu-DevOps\
 │   └── swap\
-├── AI\
 ├── ISO\
 └── exports\
 ```
 
-Les dossiers seront créés ou utilisés progressivement selon les composants activés.
+Les dossiers seront créés ou utilisés progressivement selon les composants activés par la workstation. Les projets externes utilisent leurs propres conventions et ne font pas partie de ce contrat.
 
 Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
@@ -463,6 +461,8 @@ Si tu préfères voir explicitement la commande :
 ```
 
 L'orchestrateur applique uniquement les écarts détectés et revalide les composants après modification.
+
+Le raccourci `-FullInstall` active la stack DevOps ainsi que les validations WSL, DevOps et matérielles prévues par la workstation. Il ne déclenche aucun projet externe.
 
 La liste exacte des composants peut évoluer, mais l'objectif reste :
 
@@ -581,35 +581,25 @@ Quand la workstation semble prête :
   -ValidateDevOps
 ```
 
-Si OpenClaw est utilisé :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
 Puis :
 
 ```powershell
 .\update.ps1 -Mode Verify
 ```
 
+La validation d'OpenClaw/OpenRouter n'appartient pas à cette commande ni à ce dépôt. Si la plateforme IA est utilisée sur la machine, suivre exclusivement `mathiasseguincadiche/openclaw_openrouter`.
+
 Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ---
 
-## Installer ou qualifier OpenClaw / OpenRouter
+## Frontière avec OpenClaw / OpenRouter
 
-Cette intégration est optionnelle.
+`Windows_11_Pro_Custom` ne prépare pas, n'installe pas, ne configure pas et ne qualifie pas OpenClaw/OpenRouter.
 
-Elle utilise l'espace :
+Le dépôt `mathiasseguincadiche/openclaw_openrouter` possède ses propres chemins, contrats, procédures et validateurs. Les deux projets peuvent être utilisés sur la même machine sans qu'un dépôt orchestre l'autre.
 
-```text
-D:\AI\OpenClaw
-```
-
-Le dépôt Windows prépare l'environnement et les contrats d'intégration. Le fonctionnement détaillé d'OpenClaw/OpenRouter appartient au dépôt dédié.
-
-Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+Guide de frontière : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
@@ -655,7 +645,8 @@ Le gestionnaire traite les couches qu'il connaît sans :
 - installer arbitrairement tous les drivers facultatifs ;
 - forcer un redémarrage ;
 - faire un changement majeur Ubuntu ;
-- remplacer les outils DevOps épinglés par `latest`.
+- remplacer les outils DevOps épinglés par `latest` ;
+- mettre à jour un projet externe OpenClaw/OpenRouter.
 
 Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
