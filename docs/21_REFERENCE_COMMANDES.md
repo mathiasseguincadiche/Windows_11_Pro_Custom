@@ -66,7 +66,7 @@ Construit le plan à partir de `Verify`, applique les écarts du périmètre dem
 .\install.ps1 -Mode Verify
 ```
 
-Contrôle la conformité actuelle. Les options `-ValidateHardware`, `-ValidateWsl`, `-ValidateDevOps` et `-ValidateOpenClawAI` étendent la qualification.
+Contrôle la conformité actuelle. Les options `-ValidateHardware`, `-ValidateWsl` et `-ValidateDevOps` étendent la qualification.
 
 ## `-Mode Rollback`
 
@@ -94,7 +94,7 @@ Avec la stack DevOps :
 .\install.ps1 -Mode Apply -InstallDevOps -PlanOnly
 ```
 
-Périmètre complet :
+Workstation complète :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
@@ -104,15 +104,13 @@ Périmètre complet :
 
 # 4. `-FullInstall` — comportement exact
 
-Le code actuel active automatiquement :
+Le code active automatiquement :
 
 ```text
 InstallDevOps
 ValidateDevOps
 ValidateWsl
 ValidateHardware
-InstallOpenClawAI
-ValidateOpenClawAI
 ```
 
 Donc :
@@ -121,18 +119,9 @@ Donc :
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-correspond à **la workstation complète avec OpenClaw/OpenRouter inclus**.
+correspond à **la workstation Windows/WSL2/DevOps complète**.
 
-Pour une workstation core sans OpenClaw, préférer :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware
-```
+Aucun projet externe n'est installé ou configuré par `-FullInstall`.
 
 ---
 
@@ -245,29 +234,21 @@ Ce switch n'est pas recommandé dans le parcours normal.
 
 ---
 
-# 9. OpenClaw/OpenRouter
+# 9. Projets externes
 
-Installer :
+OpenClaw/OpenRouter n'est pas une interface publique de `install.ps1`.
 
-```powershell
-.\install.ps1 -Mode Apply -InstallOpenClawAI
-```
-
-Valider :
-
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
-
-Paramètres publics associés :
+Les anciens paramètres suivants ne font plus partie du dépôt Windows :
 
 ```text
+-InstallOpenClawAI
+-ValidateOpenClawAI
 -OpenClawRoot
 -OpenClawControlPlanePath
 -OpenClawRepositoryRef
 ```
 
-Les valeurs par défaut placent l'intégration sous `D:\AI\OpenClaw`. Le ref du control-plane est normalement fourni par `config/openclaw/control-plane.json`.
+L'installation et la configuration de la plateforme IA sont gérées par `mathiasseguincadiche/openclaw_openrouter`.
 
 Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
@@ -417,20 +398,11 @@ reports\updates\latest-run.json
 
 ## Commandes usuelles
 
-Core sans OpenClaw :
-
 ```powershell
 .\install.ps1 -Mode Audit
-.\install.ps1 -Mode Apply -InstallDevOps -ValidateWsl -ValidateDevOps -ValidateHardware -PlanOnly
-.\install.ps1 -Mode Apply -InstallDevOps -ValidateWsl -ValidateDevOps -ValidateHardware
-.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
-```
-
-Périmètre complet avec OpenClaw :
-
-```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 .\install.ps1 -Mode Apply -FullInstall
+.\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
 ```
 
 Pour l'ordre exact des opérations, voir [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
