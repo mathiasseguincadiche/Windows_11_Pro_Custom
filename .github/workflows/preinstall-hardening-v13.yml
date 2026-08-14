@@ -65,7 +65,7 @@ jobs:
           fi
           # The exact command must stay after the fast global-match return path.
           global_hit_line="$(grep -nF "State='INSTALLED'; Evidence=[string]\$line[0]" "$script" | head -n1 | cut -d: -f1)"
-          exact_line="$(grep -nF 'winget.exe list --id $Id --exact' "$script" | head -n1 | cut -d: -f1)"
+          exact_line="$(grep -nF "winget.exe list --id \$Id --exact" "$script" | head -n1 | cut -d: -f1)"
           if [[ -z "$global_hit_line" || -z "$exact_line" || "$exact_line" -le "$global_hit_line" ]]; then
             echo 'Targeted exact WinGet fallback must execute only after the global inventory lookup misses.' >&2
             exit 1
