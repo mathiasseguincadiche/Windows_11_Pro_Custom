@@ -28,7 +28,39 @@ function Get-WingetPackageFact {
     }
 }
 
+function Test-WingetIdResolved {
+    param([Parameter(Mandatory)][string]$Id)
+
+    & winget.exe show --id $Id --exact --source winget --accept-source-agreements --disable-interactivity *> $null
+    $showCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    return ($showCode -eq 0)
+}
+
 $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
+$automaticApps = @($manifest.apps | Where-Object { [bool]$_.autoInstall })
+
+foreach ($app in $automaticApps) {
+    if ([string]::IsNullOrWhiteSpace([string]$app.wingetId)) {
+        throw "Manifest incohérent: $($app.name) est autoInstall=true mais wingetId est vide."
+    }
+}
+
+if ($Mode -eq 'Apply') {
+    Write-Host '[ANALYSE] Préflight WinGet: validation de tous les identifiants avant la première installation.' -ForegroundColor Cyan
+    $unresolved = [System.Collections.Generic.List[string]]::new()
+    foreach ($app in $automaticApps) {
+        $id = [string]$app.wingetId
+        if (-not (Test-WingetIdResolved -Id $id)) {
+            $unresolved.Add("$($app.name) ($id)")
+        }
+    }
+    if ($unresolved.Count -gt 0) {
+        throw "Préflight WinGet échoué avant toute mutation: identifiants non résolus: $($unresolved -join '; '). Corrige le manifest ou les sources WinGet puis relance."
+    }
+    Write-Host "[OK] Préflight WinGet: $($automaticApps.Count) identifiant(s) résolu(s)." -ForegroundColor Green
+}
+
 $missing = [System.Collections.Generic.List[string]]::new()
 $manual = [System.Collections.Generic.List[string]]::new()
 $changed = [System.Collections.Generic.List[string]]::new()
@@ -42,16 +74,15 @@ foreach ($app in @($manifest.apps)) {
         Write-Host "[ACTION REQUISE] $name : installation volontairement manuelle (autoInstall=false)."
         continue
     }
-    if ([string]::IsNullOrWhiteSpace($id)) {
-        throw "Manifest incohérent: $name est autoInstall=true mais wingetId est vide."
-    }
 
-    & winget.exe show --id $id --exact --source winget --accept-source-agreements *> $null
-    $showCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    if ($showCode -ne 0) {
-        if ($Mode -eq 'Verify') { $missing.Add("$name ($id) - ID WinGet non résolu") }
-        else { Write-Warning "Identifiant WinGet non résolu: $name [$id]" }
+    $resolved = if ($Mode -eq 'Apply') { $true } else { Test-WingetIdResolved -Id $id }
+    if (-not $resolved) {
+        $missing.Add("$name ($id) - ID WinGet non résolu")
+        if ($Mode -eq 'Audit') {
+            Write-Warning "Identifiant WinGet non résolu: $name [$id]"
+        } else {
+            Write-Host "[KO] Identifiant WinGet non résolu: $name [$id]" -ForegroundColor Red
+        }
         continue
     }
 
