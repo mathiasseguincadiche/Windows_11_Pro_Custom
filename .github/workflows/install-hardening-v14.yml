@@ -1,0 +1,149 @@
+name: Install hardening V14
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/install-hardening-v14.yml'
+      - 'scripts/core/wsl-detection.psm1'
+      - 'scripts/bootstrap/01_machine_state.ps1'
+      - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/07_wsl_user.ps1'
+      - 'scripts/bootstrap/09_validate_devops.ps1'
+      - 'scripts/windows/20_system_audit.ps1'
+      - 'scripts/windows/40_v4_optimize.ps1'
+      - 'scripts/windows/41_restore_point.ps1'
+      - 'scripts/windows/50_hardware_inventory.ps1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-hardening-v14.yml'
+      - 'scripts/core/wsl-detection.psm1'
+      - 'scripts/bootstrap/01_machine_state.ps1'
+      - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/07_wsl_user.ps1'
+      - 'scripts/bootstrap/09_validate_devops.ps1'
+      - 'scripts/windows/20_system_audit.ps1'
+      - 'scripts/windows/40_v4_optimize.ps1'
+      - 'scripts/windows/41_restore_point.ps1'
+      - 'scripts/windows/50_hardware_inventory.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enforce hardening contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          optimize='scripts/windows/40_v4_optimize.ps1'
+          grep -Fq 'function Set-ManagedRegistryValue' "$optimize"
+          grep -Fq "New-ItemProperty -LiteralPath \$Path" "$optimize"
+          grep -Fq "Écriture registre impossible pour" "$optimize"
+          if grep -Fq "New-Item -Force -Path \$entry.path" "$optimize"; then
+            echo 'V4 optimization must not recreate registry keys before every value write.' >&2
+            exit 1
+          fi
+
+          restore='scripts/windows/41_restore_point.ps1'
+          grep -Fq 'Get-WpcLatestRestorePoint' "$restore"
+          grep -Fq 'Point de restauration récent déjà présent' "$restore"
+          grep -Fq 'Point de restauration Windows créé et vérifié' "$restore"
+
+          for script in scripts/windows/20_system_audit.ps1 scripts/windows/50_hardware_inventory.ps1; do
+            grep -Fq 'Out-String -Stream' "$script"
+            grep -Fq 'function Write-TextTable' "$script"
+          done
+
+          machine='scripts/bootstrap/01_machine_state.ps1'
+          grep -Fq 'Exact fallback:' "$machine"
+          grep -Fq 'Get-WpcWslRegistrationFact' "$machine"
+          grep -Fq "DetectionSource = 'registry'" "$machine"
+
+          for script in scripts/bootstrap/06_wsl.ps1 scripts/bootstrap/07_wsl_user.ps1 scripts/bootstrap/09_validate_devops.ps1; do
+            grep -Fq 'wsl-detection.psm1' "$script"
+            grep -Fq 'Get-WpcWslRegistrationFact' "$script"
+          done
+
+  windows-regression:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse changed PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths = @(
+            '.\scripts\core\wsl-detection.psm1',
+            '.\scripts\bootstrap\01_machine_state.ps1',
+            '.\scripts\bootstrap\06_wsl.ps1',
+            '.\scripts\bootstrap\07_wsl_user.ps1',
+            '.\scripts\bootstrap\09_validate_devops.ps1',
+            '.\scripts\windows\20_system_audit.ps1',
+            '.\scripts\windows\40_v4_optimize.ps1',
+            '.\scripts\windows\41_restore_point.ps1',
+            '.\scripts\windows\50_hardware_inventory.ps1'
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
+          }
+
+      - name: Validate safe V4 registry writes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile standard
+          $root = 'HKCU:\Software\Windows11ProCustom\CI\V4'
+          try {
+            New-Item -Path $root -Force -ErrorAction Stop | Out-Null
+            Set-ManagedRegistryValue -Name 'CI existing V4 key' -Path $root -Property 'Existing' -Type 'DWord' -Value 1
+            if ((Get-ItemPropertyValue -LiteralPath $root -Name 'Existing') -ne 1) { throw 'Existing-key V4 write failed.' }
+
+            $missing = Join-Path $root 'CreatedByHelper'
+            Set-ManagedRegistryValue -Name 'CI missing V4 key' -Path $missing -Property 'Created' -Type 'DWord' -Value 1
+            if ((Get-ItemPropertyValue -LiteralPath $missing -Name 'Created') -ne 1) { throw 'Missing-key V4 write failed.' }
+          }
+          finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Validate WSL registry fast path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\wsl-detection.psm1 -Force
+          $root = 'HKCU:\Software\Windows11ProCustom\CI\Lxss'
+          try {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+            $absent = Get-WpcWslRegistrationFact -Distribution Ubuntu -RegistryRoot $root
+            if (-not $absent.Known -or $absent.Present -or $absent.Names.Count -ne 0) { throw 'Absent WSL registration fast path failed.' }
+
+            $key = Join-Path $root '{00000000-0000-0000-0000-000000000001}'
+            New-Item -Path $key -Force | Out-Null
+            New-ItemProperty -LiteralPath $key -Name DistributionName -PropertyType String -Value Ubuntu -Force | Out-Null
+            New-ItemProperty -LiteralPath $key -Name BasePath -PropertyType String -Value 'D:\WSL\Ubuntu-DevOps' -Force | Out-Null
+            $present = Get-WpcWslRegistrationFact -Distribution Ubuntu -RegistryRoot $root
+            if (-not $present.Known -or -not $present.Present) { throw 'Present WSL registration detection failed.' }
+            if ($present.BasePath -ne 'D:\WSL\Ubuntu-DevOps') { throw "Unexpected WSL BasePath: $($present.BasePath)" }
+          }
+          finally {
+            if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Reject PowerShell formatting objects in audit output
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($script in @('.\scripts\windows\20_system_audit.ps1', '.\scripts\windows\50_hardware_inventory.ps1')) {
+            $output = @(& $script *>&1 | ForEach-Object { [string]$_ })
+            if ($output -match 'Microsoft\.PowerShell\.Commands\.Internal\.Format\.') {
+              throw "$script leaked internal PowerShell formatting objects."
+            }
+          }
