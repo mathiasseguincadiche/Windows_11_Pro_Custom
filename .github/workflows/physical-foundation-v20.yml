@@ -43,7 +43,7 @@ jobs:
           grep -Fq 'RequireFoundation' "$preflight"
           grep -Fq -- "-RequireFoundation:\$RequireFoundation" "$preflight"
           grep -Fq 'RequireFoundation' "$readiness"
-          grep -Fq 'Version = '\''V20'\''' "$readiness"
+          grep -Eq "Version = 'V(2[0-9]|[3-9][0-9])'" "$readiness"
           grep -Fq 'Matériel cible V5 essentiel détecté' "$readiness"
           grep -Fq 'Affichage cible V5 1440p240' "$readiness"
           grep -Fq -- "-Blocking \$false" "$readiness"

@@ -214,10 +214,15 @@ try {
     [void](Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop)
     $windowsPowerShell = Get-WindowsPowerShell51Path
     if (-not $windowsPowerShell) { throw 'Windows PowerShell 5.1 introuvable.' }
-    $checkpointResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name") -SuppressErrorOutput
-    $checkpointName = $checkpointResult.Text.Trim()
-    $restorePointProviderReady = ($checkpointResult.ExitCode -eq 0 -and $checkpointName -eq 'Checkpoint-Computer')
-    $restorePointDetail = "SystemRestore WMI présent; powershell.exe=$windowsPowerShell; Checkpoint-Computer=$restorePointProviderReady"
+
+    # V22: ne jamais déduire la disponibilité de Checkpoint-Computer depuis
+    # sa sortie texte. Windows PowerShell 5.1 peut produire un flux encodé
+    # différemment selon l'hôte physique. Le contrat est désormais binaire:
+    # code 0 = cmdlet présent, code 3 = cmdlet absent.
+    $checkpointProbe = 'if ($null -eq (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) { [Environment]::Exit(3) } else { [Environment]::Exit(0) }'
+    $checkpointResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $checkpointProbe) -SuppressErrorOutput
+    $restorePointProviderReady = ($checkpointResult.ExitCode -eq 0)
+    $restorePointDetail = "SystemRestore WMI présent; powershell.exe=$windowsPowerShell; Checkpoint-Computer=$restorePointProviderReady; ProbeExitCode=$($checkpointResult.ExitCode)"
 } catch { $restorePointDetail = $_.Exception.Message }
 Add-ReadinessCheck -Name 'Garde-fou point de restauration disponible' -Passed $restorePointProviderReady -Detail $restorePointDetail
 
@@ -301,7 +306,7 @@ $blockers = @($checks | Where-Object { $_.Blocking -and -not $_.Passed })
 $warnings = @($checks | Where-Object { -not $_.Blocking -and -not $_.Passed })
 
 [ordered]@{
-    Version = 'V20'
+    Version = 'V22'
     Timestamp = (Get-Date).ToString('o')
     Strict = [bool]$Strict
     RequireFoundation = [bool]$RequireFoundation
