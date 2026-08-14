@@ -9,8 +9,11 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $manifestPath = Join-Path $repoRoot 'manifests\winget\apps-core.json'
+$nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
+Import-Module $nativeProcessModule
 
-if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+$wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
+if (-not $wingetCommand) {
     throw 'WinGet est introuvable. Ouvre Microsoft Store > Bibliothèque > App Installer, mets-le à jour, puis relance exactement la même commande.'
 }
 if (-not (Test-Path $manifestPath)) { throw "Manifest applications introuvable: $manifestPath" }
@@ -18,12 +21,10 @@ if (-not (Test-Path $manifestPath)) { throw "Manifest applications introuvable: 
 function Get-WingetPackageFact {
     param([Parameter(Mandatory)][string]$Id)
 
-    $text = (& winget.exe list --id $Id --exact --accept-source-agreements --disable-interactivity 2>$null | Out-String)
-    $code = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    $line = @($text -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
+    $result = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('list', '--id', $Id, '--exact', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
+    $line = @($result.Text -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
     return [pscustomobject]@{
-        Installed = ($code -eq 0 -and $line.Count -gt 0)
+        Installed = ($result.ExitCode -eq 0 -and $line.Count -gt 0)
         Evidence = if ($line.Count -gt 0) { [string]$line[0] } else { 'Identifiant exact absent de winget list.' }
     }
 }
@@ -31,10 +32,8 @@ function Get-WingetPackageFact {
 function Test-WingetIdResolved {
     param([Parameter(Mandatory)][string]$Id)
 
-    & winget.exe show --id $Id --exact --source winget --accept-source-agreements --disable-interactivity *> $null
-    $showCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    return ($showCode -eq 0)
+    $result = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('show', '--id', $Id, '--exact', '--source', 'winget', '--accept-source-agreements', '--disable-interactivity')
+    return ($result.ExitCode -eq 0)
 }
 
 $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
@@ -104,7 +103,7 @@ foreach ($app in @($manifest.apps)) {
     }
 
     Write-Host "[EN COURS] Installation: $name [$id]" -ForegroundColor Cyan
-    & winget.exe install --id $id --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+    & $wingetCommand.Source install --id $id --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
     $installCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($installCode -ne 0) {
