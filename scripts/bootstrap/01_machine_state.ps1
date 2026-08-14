@@ -11,7 +11,9 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
+$wslDetectionModule = Join-Path $repoRoot 'scripts\core\wsl-detection.psm1'
 Import-Module $runtimeModule
+Import-Module $wslDetectionModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $reportDir = Join-Path $repoRoot 'reports\orchestration'
 $reportPath = Join-Path $reportDir 'machine-state.json'
@@ -80,11 +82,23 @@ function Get-WingetPackageFact {
     if (-not $Inventory.Success) {
         return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence=$Inventory.Error }
     }
+
     $line = @($Inventory.Lines | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
     if ($line.Count -gt 0) {
         return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence=[string]$line[0] }
     }
-    return [pscustomobject]@{ Id=$Id; State='MISSING'; Evidence='Exact WinGet ID not found in global inventory' }
+
+    # Le tableau global WinGet peut tronquer un identifiant selon la largeur du terminal.
+    # On ne paie donc le coût d'un appel exact que pour les candidats apparemment absents.
+    $exactText = (& winget.exe list --id $Id --exact --accept-source-agreements --disable-interactivity 2>$null | Out-String)
+    $exactCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    $exactLine = @($exactText -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
+    if ($exactCode -eq 0 -and $exactLine.Count -gt 0) {
+        return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence="Exact fallback: $([string]$exactLine[0])" }
+    }
+
+    return [pscustomobject]@{ Id=$Id; State='MISSING'; Evidence='Exact WinGet ID absent après vérification ciblée' }
 }
 
 function Get-WslFacts {
@@ -93,19 +107,34 @@ function Get-WslFacts {
         return [pscustomobject]@{
             Executable = $null
             DistributionPresent = $false
+            DistributionNames = @()
             Version = $null
             ConfigPresent = $false
             ConfigMatches = $false
+            InstallLocationRequested = $WslInstallLocation
             InstallLocationObserved = $null
+            DetectionSource = 'wsl.exe absent'
         }
     }
 
+    $registration = Get-WpcWslRegistrationFact -Distribution $Distribution
     $names = @()
-    try {
-        $names = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-        $global:LASTEXITCODE = 0
-    } catch {}
-    $present = $names -contains $Distribution
+    $present = $false
+    $basePath = $null
+    $detectionSource = 'registry'
+
+    if ($registration.Known) {
+        $names = @($registration.Names)
+        $present = [bool]$registration.Present
+        $basePath = [string]$registration.BasePath
+    } else {
+        $detectionSource = 'wsl.exe fallback'
+        try {
+            $names = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $global:LASTEXITCODE = 0
+        } catch {}
+        $present = $names -contains $Distribution
+    }
 
     $version = $null
     if ($present) {
@@ -125,18 +154,6 @@ function Get-WslFacts {
         $configMatches = (Get-FileHash $source -Algorithm SHA256).Hash -eq (Get-FileHash $target -Algorithm SHA256).Hash
     }
 
-    $basePath = $null
-    try {
-        $lxss = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction Stop
-        foreach ($key in $lxss) {
-            $item = Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue
-            if ([string]$item.DistributionName -eq $Distribution) {
-                $basePath = [string]$item.BasePath
-                break
-            }
-        }
-    } catch {}
-
     return [pscustomobject]@{
         Executable = $wsl.Source
         DistributionPresent = $present
@@ -146,6 +163,7 @@ function Get-WslFacts {
         ConfigMatches = $configMatches
         InstallLocationRequested = $WslInstallLocation
         InstallLocationObserved = $basePath
+        DetectionSource = $detectionSource
     }
 }
 
@@ -274,7 +292,7 @@ if ($unknownApps -gt 0) {
 } else {
     Write-WpcStatus -Status 'DEJA_OK' -Message 'Applications WinGet' -Detail "$installedApps/$($appFacts.Count) applications automatiques détectées." -Context $context
 }
-Write-WpcStatus -Status $(if ($wslFacts.DistributionPresent -and $wslFacts.Version -eq 2 -and $wslFacts.ConfigMatches) { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'WSL2' -Detail "Distribution=$($wslFacts.DistributionPresent) Version=$($wslFacts.Version) Profil=$($wslFacts.ConfigMatches)" -Context $context
+Write-WpcStatus -Status $(if ($wslFacts.DistributionPresent -and $wslFacts.Version -eq 2 -and $wslFacts.ConfigMatches) { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'WSL2' -Detail "Distribution=$($wslFacts.DistributionPresent) Version=$($wslFacts.Version) Profil=$($wslFacts.ConfigMatches) Détection=$($wslFacts.DetectionSource)" -Context $context
 Write-WpcStatus -Status $(if (-not $oneDrive.Installed) { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'OneDrive' -Detail "Installé=$($oneDrive.Installed) Actif=$($oneDrive.Running)" -Context $context
 if ($pendingReboot.Pending) {
     Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Redémarrage Windows en attente' -Detail ($pendingReboot.Reasons -join ', ') -Context $context

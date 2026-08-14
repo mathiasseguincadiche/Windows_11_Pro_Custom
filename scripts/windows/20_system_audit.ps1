@@ -8,6 +8,13 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports\windows'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
+function Write-TextTable {
+    param([Parameter(Mandatory)]$InputObject)
+    foreach ($line in @($InputObject | Format-Table -AutoSize | Out-String -Stream)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$line)) { Write-Host $line }
+    }
+}
+
 $cpu = Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
 $memory = Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, ConfiguredClockSpeed
 $gpu = Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate
@@ -49,5 +56,5 @@ $report | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $path
 Write-Host "[OK] Audit matériel / Windows: $path" -ForegroundColor Green
 Write-Host $powerScheme
 Write-Host $trim
-$volumes | Format-Table -AutoSize
-$gpu | Format-Table -AutoSize
+Write-TextTable -InputObject @($volumes)
+Write-TextTable -InputObject @($gpu)
