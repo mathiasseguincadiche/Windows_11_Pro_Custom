@@ -11,13 +11,19 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1')
+Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $usernamePattern = '^[a-z_][a-z0-9_-]{0,31}$'
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe introuvable.' }
-$installed = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$global:LASTEXITCODE = 0
-if ($installed -notcontains $Distribution) { throw "Distribution WSL absente: $Distribution" }
+$registration = Get-WpcWslRegistrationFact -Distribution $Distribution
+if ($registration.Known) {
+    if (-not $registration.Present) { throw "Distribution WSL absente: $Distribution" }
+} else {
+    $installed = @((wsl.exe --list --quiet 2>$null) -replace "`0", '' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $global:LASTEXITCODE = 0
+    if ($installed -notcontains $Distribution) { throw "Distribution WSL absente: $Distribution" }
+}
 
 function Invoke-WslText {
     param(
