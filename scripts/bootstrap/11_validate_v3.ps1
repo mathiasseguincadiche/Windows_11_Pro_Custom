@@ -18,9 +18,10 @@ $details = [ordered]@{}
 $os = Get-CimInstance Win32_OperatingSystem
 $editionId = [string](Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop)
 $checks.Windows11 = ($os.Caption -match 'Windows 11')
-$checks.Windows11Pro = ($checks.Windows11 -and $editionId -eq 'Professional')
+$checks.Windows11SupportedEdition = ($checks.Windows11 -and $editionId -notmatch '^Core')
 $details.Windows = $os.Caption
 $details.WindowsEditionId = $editionId
+$details.WindowsHomeEdition = ($editionId -match '^Core')
 $cVolume = Get-Volume -DriveLetter C
 $dVolume = Get-Volume -DriveLetter D
 $checks.C_NTFS = ($cVolume.FileSystem -eq 'NTFS')
@@ -72,5 +73,5 @@ if ($failed.Count -gt 0) {
     Write-Host "VERDICT: WINDOWS KO ($($failed.Count) contrôle(s))" -ForegroundColor Red
     throw "Windows non conforme: $($failed -join ', '). Rapport: $reportPath"
 }
-Write-Host 'VERDICT: WINDOWS 11 PRO READY' -ForegroundColor Green
+Write-Host "VERDICT: WINDOWS 11 NON-HOME READY ($editionId)" -ForegroundColor Green
 Write-Host "Rapport: $reportPath"
