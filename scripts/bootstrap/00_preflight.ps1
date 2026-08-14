@@ -41,12 +41,16 @@ $computer = Get-CimInstance Win32_ComputerSystem
 $volumes = Get-Volume | Where-Object DriveLetter | Select-Object DriveLetter, FileSystem, HealthStatus, SizeRemaining, Size
 $editionId = [string](Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop)
 $pendingReboot = Get-PendingRebootState
+$isWindows11 = ($os.Caption -match 'Windows 11')
+$isHomeEdition = ($editionId -match '^Core')
 
 $result = [ordered]@{
     Timestamp = (Get-Date).ToString('o')
     IsAdministrator = $isAdmin
     Caption = $os.Caption
     EditionID = $editionId
+    IsWindows11 = $isWindows11
+    IsHomeEdition = $isHomeEdition
     Version = $os.Version
     BuildNumber = $os.BuildNumber
     TotalMemoryGB = [math]::Round($computer.TotalPhysicalMemory / 1GB, 2)
@@ -60,8 +64,12 @@ if (-not $isAdmin) {
     throw 'PowerShell doit être lancé en administrateur.'
 }
 
-if ($os.Caption -notmatch 'Windows 11' -or $editionId -ne 'Professional') {
-    throw "Windows 11 Pro est requis. Détecté: Caption='$($os.Caption)' EditionID='$editionId'."
+if (-not $isWindows11) {
+    throw "Windows 11 est requis. Détecté: Caption='$($os.Caption)' EditionID='$editionId'."
+}
+
+if ($isHomeEdition) {
+    throw "Windows 11 Home n'est pas pris en charge par cette workstation. Détecté: Caption='$($os.Caption)' EditionID='$editionId'. Une édition Windows 11 non-Home est requise."
 }
 
 $c = Get-Volume -DriveLetter C -ErrorAction Stop
@@ -78,4 +86,4 @@ if ($pendingReboot.Pending) {
     Write-Warning "Redémarrage Windows en attente: $($pendingReboot.Reasons -join ', '). Le préflight a été explicitement autorisé en mode diagnostic."
 }
 
-Write-Host '[OK] Preflight Windows 11 Pro / C: NTFS / D: NTFS / aucun reboot pending bloquant' -ForegroundColor Green
+Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
