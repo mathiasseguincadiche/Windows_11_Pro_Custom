@@ -107,6 +107,16 @@ jobs:
           grep -Fq 'Préflight WinGet: validation de tous les identifiants avant la première installation.' scripts/bootstrap/03_apps.ps1
           grep -Fq 'Préflight WinGet échoué avant toute mutation' scripts/bootstrap/03_apps.ps1
 
+      - name: Enforce FileZilla manual fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content -Raw 'manifests/winget/apps-core.json' | ConvertFrom-Json
+          $fileZilla = @($manifest.apps | Where-Object { $_.name -eq 'FileZilla' })
+          if ($fileZilla.Count -ne 1) { throw 'FileZilla must have exactly one manifest entry.' }
+          if ($fileZilla[0].autoInstall -ne $false) { throw 'FileZilla must remain manual while no supported WinGet package exists.' }
+          if (-not [string]::IsNullOrWhiteSpace([string]$fileZilla[0].wingetId)) { throw 'FileZilla must not reference the removed TimKosse WinGet identifier.' }
+
       - name: Enforce supply-chain verification for AWS CLI and kind
         shell: bash
         run: |
