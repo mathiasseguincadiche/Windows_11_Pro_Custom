@@ -146,8 +146,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $wsl = Get-Command wsl.exe -ErrorAction Stop
           $help = (& $wsl.Source --help 2>&1 | Out-String)
+          $observedExitCode = $LASTEXITCODE
+          $global:LASTEXITCODE = 0
+          Write-Host "Hosted runner wsl --help exit code = $observedExitCode"
           foreach ($option in @('--location','--name','--no-launch')) {
             $present = $help -match [regex]::Escape($option)
             Write-Host "Hosted runner capability $option = $present"
           }
           Write-Host 'The hosted Windows image is not treated as the Store WSL source of truth. scripts/bootstrap/02_physical_readiness.ps1 enforces these switches on the real workstation before mutation.'
+          exit 0
