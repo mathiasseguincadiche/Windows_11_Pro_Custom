@@ -13,31 +13,27 @@ Pour une vue courte : [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md). Pour le parcou
         │                     │                     │
         ▼                     ▼                     ▼
  desktop / pilotes       VS Code Windows          WezTerm
- PowerShell / WinGet            │                    │
- Windows Update                 │            ┌───────┼────────┐
-                               │            │       │        │
-                               ▼            ▼       ▼        ▼
-                              WSL2        Ubuntu   PS7    OpenClaw
-                               │          DevOps          / clawops
-                               │            │                │
-                               └────────────┤                │
-                                            ▼                ▼
-                                      Linux DevOps     D:\AI\OpenClaw
-                                      Docker / K8s     Windows-native
-                                      Terraform        control-plane
-                                      Ansible / AWS
+ PowerShell / WinGet            │                ┌──┴─────┐
+ Windows Update                 │                │        │
+                               ▼                ▼        ▼
+                              WSL2           Ubuntu    PowerShell 7
+                               │             DevOps
+                               └───────────────┤
+                                               ▼
+                                         Linux DevOps
+                                         Docker / K8s
+                                         Terraform
+                                         Ansible / AWS
 ```
 
 La séparation de responsabilités est :
 
 ```text
-Windows  -> hôte, applications, pilotes, administration et runtime WSL
-Ubuntu   -> backend Linux DevOps et workspaces Linux
-WezTerm  -> point d'entrée vers les contextes appropriés
-OpenClaw -> extension IA Windows-native, optionnelle
+Windows -> hôte, applications, pilotes, administration et runtime WSL
+Ubuntu  -> backend Linux DevOps et workspaces Linux
+WezTerm -> point d'entrée vers Ubuntu DevOps et PowerShell 7
+VS Code -> interface Windows reliée aux projets WSL2
 ```
-
-Une interface terminal commune ne transforme pas ces environnements en un runtime unique.
 
 ## Stockage
 
@@ -48,7 +44,6 @@ C: NTFS
 D: NTFS
 ├── données
 ├── D:\WSL\Ubuntu-DevOps
-├── D:\AI\OpenClaw
 ├── ISO
 └── exports
 ```
@@ -84,22 +79,19 @@ outils qualité
 
 Guide : [`06_WSL2.md`](06_WSL2.md).
 
-## WezTerm : un point d'entrée, trois contextes
+## WezTerm : un point d'entrée, deux contextes
 
 La source versionnée est `config/wezterm/wezterm.lua`.
 
 ```text
 WezTerm
-├── Ubuntu DevOps (WSL2)          <- profil par défaut
-├── PowerShell 7                  <- administration Windows
-└── OpenClaw / clawops (Windows)  <- CLI IA Windows-native
+├── Ubuntu DevOps (WSL2) <- profil par défaut
+└── PowerShell 7         <- administration Windows
 ```
 
 Le profil Ubuntu exécute les outils Linux dans WSL2. Le profil PowerShell reste le contexte Windows général.
 
-Le profil OpenClaw ouvre PowerShell 7 sous Windows, prépare uniquement la session terminal avec les chemins et variables OpenClaw déjà gérés par la workstation, puis vérifie la disponibilité de `openclaw` et `clawops`.
-
-Il ne remplace ni l'installation ni la validation OpenClaw. `scripts/windows/31_wezterm.ps1` vérifie le contrat des trois profils et la conformité de la configuration utilisateur.
+`scripts/windows/31_wezterm.ps1` vérifie ce contrat et la conformité de la configuration utilisateur.
 
 Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
@@ -119,27 +111,13 @@ outils Linux du projet
 
 VS Code reste une application Windows tandis que le runtime des projets Linux reste dans Ubuntu.
 
-## OpenClaw/OpenRouter
+## Projets externes
 
-L'intégration optionnelle vit sous :
+OpenClaw/OpenRouter n'est pas une brique de cette architecture. Le projet autonome `mathiasseguincadiche/openclaw_openrouter` peut être utilisé sur la même machine, mais il possède sa propre installation, sa propre configuration et ses propres validations.
 
-```text
-D:\AI\OpenClaw
-```
+`Windows_11_Pro_Custom` ne clone pas, ne déclenche pas et ne valide pas ce projet externe.
 
-Répartition des responsabilités :
-
-```text
-Windows_11_Pro_Custom
-└── hôte + stockage + WSL2 + WezTerm + validation d'intégration
-
-openclaw_openrouter
-└── runtime OpenClaw + clawops + logique fonctionnelle IA
-```
-
-Le profil WezTerm OpenClaw fournit un accès CLI au runtime déjà installé sans déplacer OpenClaw vers WSL2.
-
-Guide : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
+La frontière est documentée dans [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ## Orchestration
 
@@ -171,7 +149,6 @@ Guides : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) et [`17_CONTROL_CENTER.md`
 | Terminal WezTerm | `config/wezterm/wezterm.lua` |
 | Déploiement WezTerm | `scripts/windows/31_wezterm.ps1` |
 | Applications Windows | `manifests/winget/apps-core.json` |
-| Pin OpenClaw | `config/openclaw/control-plane.json` |
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
 | Interface humaine | `menu.ps1` |
 
@@ -180,7 +157,7 @@ La hiérarchie complète est définie dans [`23_SOURCES_DE_VERITE.md`](23_SOURCE
 ## Objectifs architecturaux
 
 1. **Reproductibilité** — reconstruire la workstation sans mémoire implicite.
-2. **Séparation des responsabilités** — Windows, WSL2, terminal et OpenClaw gardent leurs rôles.
+2. **Séparation des responsabilités** — Windows, WSL2, terminal et projets externes gardent leurs rôles.
 3. **Performance I/O** — les projets Linux travaillent sur ext4 dans WSL2.
 4. **Idempotence** — un composant conforme ne doit pas être réinstallé sans raison.
 5. **Observabilité** — l'état et les validations restent explicables.
