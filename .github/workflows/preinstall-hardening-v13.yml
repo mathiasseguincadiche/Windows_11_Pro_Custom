@@ -32,16 +32,22 @@ jobs:
             }
           }
 
-      - name: Enforce Windows 11 Pro and reboot guards
+      - name: Enforce Windows 11 non-Home and reboot guards
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "EditionID" scripts/bootstrap/00_preflight.ps1
-          grep -Fq "editionId -ne 'Professional'" scripts/bootstrap/00_preflight.ps1
+          grep -Fq 'EditionID' scripts/bootstrap/00_preflight.ps1
+          grep -Fq "editionId -match '^Core'" scripts/bootstrap/00_preflight.ps1
+          grep -Fq "Windows 11 Home n'est pas pris en charge" scripts/bootstrap/00_preflight.ps1
+          grep -Fq 'ProfessionalWorkstation' /dev/null || true
           grep -Fq 'PendingFileRenameOperations' scripts/bootstrap/00_preflight.ps1
           grep -Fq 'Un redémarrage Windows est en attente' scripts/bootstrap/00_preflight.ps1
-          grep -Fq 'Windows11Pro' scripts/bootstrap/11_validate_v3.ps1
-          grep -Fq "editionId -eq 'Professional'" scripts/bootstrap/11_validate_v3.ps1
+          grep -Fq 'Windows11SupportedEdition' scripts/bootstrap/11_validate_v3.ps1
+          grep -Fq "editionId -notmatch '^Core'" scripts/bootstrap/11_validate_v3.ps1
+          if grep -Fq "editionId -eq 'Professional'" scripts/bootstrap/00_preflight.ps1 scripts/bootstrap/11_validate_v3.ps1; then
+            echo 'Edition validation must not reject ProfessionalWorkstation or other Windows 11 non-Home editions.' >&2
+            exit 1
+          fi
 
       - name: Enforce fail-closed restore point
         shell: bash
