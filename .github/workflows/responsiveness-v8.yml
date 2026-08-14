@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           jq -e '
             (.version == "V8") and
-            (.reviewedAt == "2026-08-12") and
+            (.reviewedAt == "2026-08-14") and
             (.memory.memoryCompression == true) and
             (.memory.applicationLaunchPrefetching == true) and
             (.memory.applicationPreLaunch == true) and
@@ -46,7 +46,11 @@ jobs:
             (.pageFile.crashDumpEnabled == 7) and
             (.power.activeSchemeGuid == "381b4222-f694-41f0-9685-ff5bb260df2e") and
             (.power.acPowerModeGuid == "ded574b5-45a0-4f42-8737-46345c09c238") and
+            (.power.acPowerModeManagement == "observe-only") and
             (.power.keepDynamicProcessorManagement == true) and
+            (.ui.minimizeRestoreAnimation == true) and
+            (.ui.clientAreaAnimations == true) and
+            ((.forbiddenTweaks | index("force-best-performance-power-mode")) != null) and
             (.storage.requireTrim == true) and
             (.storage.keepScheduledOptimize == true) and
             (.startup.automaticDisable == false) and
@@ -67,6 +71,9 @@ jobs:
           grep -Fq 'Enable-MMAgent -MemoryCompression' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationLaunchPrefetching' "$script"
           grep -Fq 'Enable-MMAgent -ApplicationPreLaunch' "$script"
+          grep -Fq "acPowerModeManagement -eq 'enforce'" "$script"
+          grep -Fq 'Mode de puissance secteur observé uniquement' "$script"
+          grep -Fq 'Set-UiAnimationState' "$script"
           grep -Fq 'Les applications de démarrage sont uniquement inventoriées' "$script"
           grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
           grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
@@ -99,6 +106,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $report = Get-Content -Raw .\reports\windows\v8-responsiveness.json | ConvertFrom-Json
           if ($report.Version -ne 'V8') { throw 'Unexpected internal responsiveness report schema version.' }
+          if ($report.AcPowerModeManagement -ne 'observe-only') { throw 'AC power mode must remain observe-only.' }
           if ($report.StartupAutomaticDisable -ne $false) { throw 'Startup automatic disable must remain off.' }
           if ($report.BackgroundGlobalDisable -ne $false) { throw 'Background global disable must remain off.' }
           $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json
