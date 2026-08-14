@@ -37,7 +37,7 @@ Le dépôt applique une approche **workstation-as-code** : l'état réel de la m
 La séparation fonctionnelle est volontaire :
 
 ```text
-Windows = hôte, desktop, sécurité, pilotes, administration et runtime OpenClaw
+Windows = hôte, desktop, sécurité, pilotes, administration et capacité d'accueil OpenClaw
 Ubuntu  = backend Linux DevOps et workspaces Linux
 WezTerm = point d'entrée terminal vers les contextes sans mélanger les runtimes
 VS Code = interface Windows reliée aux projets WSL2
@@ -102,13 +102,13 @@ Ubuntu fournit la chaîne Linux de référence : Docker Engine, Compose/Buildx, 
 
 ### OpenClaw/OpenRouter
 
-OpenClaw est une **extension optionnelle de la workstation**, Windows-native sous :
+OpenClaw est une **extension optionnelle et externe à la workstation core**, Windows-native sous :
 
 ```text
 D:\AI\OpenClaw
 ```
 
-Le dépôt `Windows_11_Pro_Custom` prépare et valide l'intégration locale ; le control-plane `openclaw_openrouter` reste propriétaire du runtime OpenClaw, de `clawops`, des modèles, agents et fonctions métier. Le dépôt Windows ne duplique pas ces responsabilités.
+Le dépôt `Windows_11_Pro_Custom` prépare l'hôte, le terminal et les frontières de stockage, peut déléguer explicitement vers un control-plane approuvé, puis valider l'intégration locale. Le dépôt `openclaw_openrouter` reste l'unique propriétaire de l'installation complète du runtime OpenClaw, de la configuration OpenRouter, de `clawops`, des modèles, agents, Gateway et fonctions métier. Le dépôt Windows ne recopie pas ces responsabilités.
 
 ## Modèle d'orchestration
 
@@ -140,30 +140,33 @@ update.ps1                 -> maintenance structurée
 
 Un composant déjà conforme doit rester `DÉJÀ OK`. Un ancien commit, un ancien rapport ou le simple fait qu'un script ait déjà tourné ne constitue pas une preuve de conformité actuelle.
 
-## Deux périmètres d'installation
-
-### Workstation core
-
-Le parcours core construit Windows + WSL2 + DevOps sans rendre OpenClaw obligatoire :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware
-```
+## Deux périmètres indépendants
 
 ### Workstation complète
 
-Le raccourci `-FullInstall` active actuellement DevOps, les validations WSL/matériel et l'installation/validation OpenClaw :
+Le parcours Windows construit et qualifie Windows + WSL2 + DevOps sans rendre OpenClaw obligatoire :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-Il doit donc être utilisé uniquement lorsque ce périmètre complet est réellement souhaité.
+`-FullInstall` reste le raccourci de la **workstation complète**. L'extension IA n'en fait pas partie par défaut.
+
+### Extension IA facultative
+
+Lorsque l'intégration OpenClaw est souhaitée, elle doit être demandée explicitement :
+
+```powershell
+.\install.ps1 -Mode Apply -InstallOpenClawAI
+```
+
+Ce point d'entrée ne transforme pas le dépôt Windows en installateur OpenClaw : il délègue au dépôt `openclaw_openrouter` approuvé par `config/openclaw/control-plane.json`.
+
+Pour enchaîner volontairement workstation + extension IA :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -InstallOpenClawAI
+```
 
 ## Parcours recommandé
 
@@ -173,24 +176,20 @@ Il doit donc être utilisé uniquement lorsque ce périmètre complet est réell
 .\install.ps1 -Mode Audit
 ```
 
+L'audit général reste centré sur la workstation. L'intégration IA est auditée seulement lorsqu'elle est explicitement incluse.
+
 ### 2. Prévisualiser
 
-Core :
-
-```powershell
-.\install.ps1 `
-  -Mode Apply `
-  -InstallDevOps `
-  -ValidateWsl `
-  -ValidateDevOps `
-  -ValidateHardware `
-  -PlanOnly
-```
-
-Complet avec OpenClaw :
+Workstation complète :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
+```
+
+Avec délégation OpenClaw explicite :
+
+```powershell
+.\install.ps1 -Mode Apply -FullInstall -InstallOpenClawAI -PlanOnly
 ```
 
 ### 3. Faire converger
@@ -199,7 +198,7 @@ Appliquer le même périmètre sans `-PlanOnly`.
 
 ### 4. Prouver la conformité
 
-Core :
+Workstation :
 
 ```powershell
 .\install.ps1 `
@@ -209,7 +208,7 @@ Core :
   -ValidateDevOps
 ```
 
-Si OpenClaw fait partie du périmètre :
+Si OpenClaw est utilisé :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateOpenClawAI
@@ -273,7 +272,7 @@ Le README présente le projet. Les procédures, contrats et diagnostics vivent d
 | Guide WSL2 pédagogique | [`docs/16_WSL2_GUIDE_COMPLET.md`](docs/16_WSL2_GUIDE_COMPLET.md) |
 | Centre de contrôle | [`docs/17_CONTROL_CENTER.md`](docs/17_CONTROL_CENTER.md) |
 | Vue consolidée | [`docs/18_GUIDE_MAITRE.md`](docs/18_GUIDE_MAITRE.md) |
-| OpenClaw/OpenRouter Windows | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
+| Intégration facultative OpenClaw/OpenRouter | [`docs/19_OPENCLAW_OPENROUTER_WINDOWS.md`](docs/19_OPENCLAW_OPENROUTER_WINDOWS.md) |
 | Runbook opérationnel | [`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md) |
 | Référence des commandes | [`docs/21_REFERENCE_COMMANDES.md`](docs/21_REFERENCE_COMMANDES.md) |
 | Troubleshooting | [`docs/22_TROUBLESHOOTING.md`](docs/22_TROUBLESHOOTING.md) |
