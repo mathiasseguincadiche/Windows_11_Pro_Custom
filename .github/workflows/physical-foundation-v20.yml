@@ -41,13 +41,13 @@ jobs:
 
           test -f "$foundation"
           grep -Fq 'RequireFoundation' "$preflight"
-          grep -Fq -- '-RequireFoundation:$RequireFoundation' "$preflight"
+          grep -Fq -- "-RequireFoundation:\$RequireFoundation" "$preflight"
           grep -Fq 'RequireFoundation' "$readiness"
           grep -Fq 'Version = '\''V20'\''' "$readiness"
           grep -Fq 'Matériel cible V5 essentiel détecté' "$readiness"
           grep -Fq 'Affichage cible V5 1440p240' "$readiness"
-          grep -Fq -- '-Blocking $false' "$readiness"
-          grep -Fq '$foundationBlocking = [bool]$RequireFoundation' "$readiness"
+          grep -Fq -- "-Blocking \$false" "$readiness"
+          grep -Fq "\$foundationBlocking = [bool]\$RequireFoundation" "$readiness"
           grep -Fq "Microsoft-Windows-Subsystem-Linux" "$readiness"
           grep -Fq 'VirtualMachinePlatform' "$readiness"
           grep -Fq 'WinGet opérationnel' "$readiness"
@@ -60,7 +60,7 @@ jobs:
           grep -Fq "Point de restauration pré-fondations" "$install"
           grep -Fq "Revalidation fondations Windows" "$install"
           grep -Fq "RequireFoundation=[switch]::Present" "$install"
-          grep -Fq -- '-not $PlanOnly' "$install"
+          grep -Fq -- "-not \$PlanOnly" "$install"
 
           manual_line=$(grep -n "Ensure-HardwareManualEvidence" "$install" | tail -n1 | cut -d: -f1)
           foundation_line=$(grep -n "02_foundation.ps1" "$install" | head -n1 | cut -d: -f1)
