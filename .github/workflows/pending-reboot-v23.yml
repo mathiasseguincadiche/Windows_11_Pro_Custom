@@ -45,8 +45,8 @@ jobs:
           grep -Fq 'Test-WpcRebootRequiredMessage' "$module"
 
           grep -Fq 'scripts\core\reboot-state.psm1' "$preflight"
-          grep -Fq 'Import-Module $rebootStateModule -Force' "$preflight"
-          grep -Fq '$pendingReboot = Get-WpcPendingRebootState' "$preflight"
+          grep -Fq "Import-Module \$rebootStateModule -Force" "$preflight"
+          grep -Fq "\$pendingReboot = Get-WpcPendingRebootState" "$preflight"
           grep -Fq 'AllowPendingReboot' "$preflight"
           grep -Fq 'Le bypass n' "$preflight"
           if grep -Fq 'function Get-PendingRebootState' "$preflight"; then
