@@ -1,8 +1,12 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Test-WpcWindowsHost {
+    return ([string]$env:OS -eq 'Windows_NT')
+}
+
 function Get-WpcWindowsPowerShellModuleRoot {
-    if (-not $IsWindows) {
+    if (-not (Test-WpcWindowsHost)) {
         throw 'Les modules Windows natifs ne sont disponibles que sous Windows.'
     }
     if ([string]::IsNullOrWhiteSpace($env:SystemRoot)) {
@@ -23,11 +27,15 @@ function Add-WpcWindowsPowerShellModulePath {
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
     )
     $alreadyPresent = @($paths | Where-Object {
-        [string]::Equals(
-            [IO.Path]::GetFullPath($_).TrimEnd('\'),
-            [IO.Path]::GetFullPath($legacyRoot).TrimEnd('\'),
-            [StringComparison]::OrdinalIgnoreCase
-        )
+        try {
+            [string]::Equals(
+                [IO.Path]::GetFullPath($_).TrimEnd('\'),
+                [IO.Path]::GetFullPath($legacyRoot).TrimEnd('\'),
+                [StringComparison]::OrdinalIgnoreCase
+            )
+        } catch {
+            $false
+        }
     }).Count -gt 0
 
     if (-not $alreadyPresent) {
@@ -96,7 +104,7 @@ function Initialize-WpcWindowsNativeModules {
         [string]$Profile = 'Discovery'
     )
 
-    if (-not $IsWindows) {
+    if (-not (Test-WpcWindowsHost)) {
         throw 'Windows 11 est requis pour initialiser les modules natifs de la workstation.'
     }
 
@@ -112,7 +120,7 @@ function Initialize-WpcWindowsNativeModules {
     }
 
     if ($Profile -eq 'Full') {
-        $missingImportant = @($results | Where-Object { -not $_.Available -and $_.Module -in @('MMAgent','ScheduledTasks') })
+        $missingImportant = @($results | Where-Object { -not $_.Available -and $_.Module -in @('MMAgent','ScheduledTasks','Defender') })
         if ($missingImportant.Count -gt 0) {
             throw "Modules Windows requis pour la convergence complète indisponibles: $($missingImportant.Module -join ', ')."
         }
@@ -121,4 +129,4 @@ function Initialize-WpcWindowsNativeModules {
     return @($results)
 }
 
-Export-ModuleMember -Function Get-WpcWindowsPowerShellModuleRoot, Add-WpcWindowsPowerShellModulePath, Import-WpcWindowsModule, Initialize-WpcWindowsNativeModules
+Export-ModuleMember -Function Test-WpcWindowsHost, Get-WpcWindowsPowerShellModuleRoot, Add-WpcWindowsPowerShellModulePath, Import-WpcWindowsModule, Initialize-WpcWindowsNativeModules
