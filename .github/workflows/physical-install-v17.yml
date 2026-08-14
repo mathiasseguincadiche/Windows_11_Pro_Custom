@@ -45,11 +45,11 @@ jobs:
 
           test -f "$readiness"
           grep -Fq "02_physical_readiness.ps1" "$preflight"
-          grep -Fq '& $physicalReadinessScript -Strict:$StrictPhysicalReadiness' "$preflight"
+          grep -Fq "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight"
           grep -Fq "StrictPhysicalReadiness" "$install"
           grep -Fq "if (\$Mode -in @('Apply','Verify'))" "$install"
           grep -Fq "Ensure-HardwareManualEvidence" "$install"
-          grep -Fq "before toute convergence" "$install"
+          grep -Fq "avant toute convergence" "$install"
           grep -Fq -- "-not \$PlanOnly" "$install"
           grep -Fq "PowerShell 7 supporté" "$readiness"
           grep -Fq "7.4.0" "$readiness"
@@ -82,10 +82,10 @@ jobs:
           devops='scripts/bootstrap/08_devops.ps1'
 
           jq -e '.sourceDistribution == "Ubuntu-26.04" and .distribution == "Ubuntu"' "$contract" >/dev/null
-          grep -Fq -- '--distribution $sourceDistribution --name $Distribution --location $InstallLocation --no-launch' "$wsl"
+          grep -Fq -- "--distribution \$sourceDistribution --name \$Distribution --location \$InstallLocation --no-launch" "$wsl"
           grep -Fq "Aucune autre version Ubuntu ne sera substituée silencieusement" "$wsl"
           grep -Fq 'Restart-WslSessionAfterDockerGroupChange' "$devops"
-          grep -Fq 'wsl.exe --terminate $Distribution' "$devops"
+          grep -Fq "wsl.exe --terminate \$Distribution" "$devops"
           grep -Fq -- "-Command 'id -nG'" "$devops"
           grep -Fq 'docker info >/dev/null 2>&1' "$devops"
 
@@ -140,12 +140,14 @@ jobs:
             throw 'Get-WindowsOptionalFeature is unavailable after importing DISM.'
           }
 
-      - name: Validate current WSL CLI exposes deterministic install switches
+      - name: Observe hosted-runner WSL CLI capabilities
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $wsl = Get-Command wsl.exe -ErrorAction Stop
           $help = (& $wsl.Source --help 2>&1 | Out-String)
           foreach ($option in @('--location','--name','--no-launch')) {
-            if ($help -notmatch [regex]::Escape($option)) { throw "WSL option missing on current Windows runner: $option" }
+            $present = $help -match [regex]::Escape($option)
+            Write-Host "Hosted runner capability $option = $present"
           }
+          Write-Host 'The hosted Windows image is not treated as the Store WSL source of truth. scripts/bootstrap/02_physical_readiness.ps1 enforces these switches on the real workstation before mutation.'
