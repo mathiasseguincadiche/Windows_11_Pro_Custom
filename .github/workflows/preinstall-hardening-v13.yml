@@ -51,12 +51,12 @@ jobs:
       - name: Validate edition policy examples
         shell: pwsh
         run: |
-          $supported = @('Professional', 'ProfessionalWorkstation', 'Enterprise', 'Education')
-          $home = @('Core', 'CoreN', 'CoreSingleLanguage', 'CoreCountrySpecific')
-          foreach ($edition in $supported) {
+          $supportedEditions = @('Professional', 'ProfessionalWorkstation', 'Enterprise', 'Education')
+          $homeEditions = @('Core', 'CoreN', 'CoreSingleLanguage', 'CoreCountrySpecific')
+          foreach ($edition in $supportedEditions) {
             if ($edition -match '^Core') { throw "Edition attendue supportée mais classée Home: $edition" }
           }
-          foreach ($edition in $home) {
+          foreach ($edition in $homeEditions) {
             if ($edition -notmatch '^Core') { throw "Edition Home non détectée: $edition" }
           }
 
