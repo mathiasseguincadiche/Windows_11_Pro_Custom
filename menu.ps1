@@ -13,12 +13,15 @@ $RepoRoot = $PSScriptRoot
 $InstallScript = Join-Path $RepoRoot 'install.ps1'
 $UpdateScript = Join-Path $RepoRoot 'update.ps1'
 $AppsScript = Join-Path $RepoRoot 'scripts\bootstrap\03_apps.ps1'
+$RebootStateModule = Join-Path $RepoRoot 'scripts\core\reboot-state.psm1'
+$script:LastActionRequiresReboot = $false
 
-foreach ($required in @($InstallScript, $UpdateScript, $AppsScript)) {
+foreach ($required in @($InstallScript, $UpdateScript, $AppsScript, $RebootStateModule)) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Point d'entree introuvable: $required"
     }
 }
+Import-Module $RebootStateModule -Force
 
 function Test-IsAdministrator {
     try {
@@ -85,6 +88,50 @@ function Confirm-WpcAction {
     return $answer -in @('o','oui','y','yes')
 }
 
+function Invoke-WpcRestartComputer {
+    if ($DryRun) {
+        Write-Line '[DRY-RUN] Redemarrage Windows demande.' Green
+        return
+    }
+
+    Write-Line '[ACTION] Redemarrage Windows en cours. Apres reconnexion, relance Installation complete.' Yellow
+    if (Test-IsAdministrator) {
+        Restart-Computer -Force
+        return
+    }
+
+    $shutdown = Join-Path $env:WINDIR 'System32\shutdown.exe'
+    Start-Process -FilePath $shutdown -Verb RunAs -ArgumentList @('/r','/t','0') | Out-Null
+}
+
+function Invoke-WpcPendingRebootGate {
+    param(
+        [string]$Context = 'avant la convergence',
+        [switch]$ForceRequired
+    )
+
+    if ($DryRun) { return $false }
+
+    $state = Get-WpcPendingRebootState
+    if (-not $state.Pending -and -not $ForceRequired) { return $false }
+
+    $reasonText = if ($state.Pending) { $state.Reasons -join ', ' } else { 'demande explicite de l orchestrateur' }
+    Write-Host ''
+    Write-Line ("[ACTION REQUISE] Un redemarrage Windows est requis {0}: {1}." -f $Context, $reasonText) Yellow
+    Write-Line 'La convergence reste volontairement bloquee tant que Windows n a pas finalise ce redemarrage.' DarkGray
+    Write-Line 'Apres reboot, relance simplement Installation complete: les etapes deja conformes seront ignorees.' DarkGray
+
+    if (-not [string]::IsNullOrWhiteSpace($Choice)) {
+        Write-Line 'Mode -Choice: aucun redemarrage automatique. Redemarre Windows puis relance la commande.' Yellow
+        return $true
+    }
+
+    if (Confirm-WpcAction -Message 'Redemarrer Windows maintenant pour reprendre ensuite l installation') {
+        Invoke-WpcRestartComputer
+    }
+    return $true
+}
+
 function Convert-ArgumentsForElevation {
     param([hashtable]$Arguments)
     $list = New-Object System.Collections.Generic.List[string]
@@ -145,6 +192,7 @@ function Invoke-WpcRepoScript {
     Write-Host ''
     Write-Line ("[ACTION] {0}" -f $DisplayName) Cyan
     Write-Line ("Commande: {0}" -f (Format-WpcCommand -Path $Path -Arguments $Arguments)) DarkGray
+    $script:LastActionRequiresReboot = $false
 
     if ($DryRun) {
         Write-Line '[DRY-RUN] Aucune commande executee.' Green
@@ -163,14 +211,27 @@ function Invoke-WpcRepoScript {
             $argList.Add($Path)
             foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) { $argList.Add($arg) }
             $process = Start-Process -FilePath $exe -Verb RunAs -ArgumentList @($argList) -Wait -PassThru
-            if ($process.ExitCode -ne 0) { throw "Le processus eleve a retourne le code $($process.ExitCode)." }
+            if ($process.ExitCode -ne 0) {
+                $state = Get-WpcPendingRebootState
+                if ($state.Pending) {
+                    $script:LastActionRequiresReboot = $true
+                    throw "REDÉMARRAGE REQUIS: le processus eleve s est arrete avec un redemarrage Windows en attente ($($state.Reasons -join ', '))."
+                }
+                throw "Le processus eleve a retourne le code $($process.ExitCode)."
+            }
         } else {
             & $Path @Arguments
         }
         Write-Line '[TERMINE] Action terminee.' Green
         return $true
     } catch {
-        Write-Line ("[ERREUR] {0}" -f $_.Exception.Message) Red
+        $message = $_.Exception.Message
+        if (Test-WpcRebootRequiredMessage -Message $message) {
+            $script:LastActionRequiresReboot = $true
+            Write-Line ("[ACTION REQUISE] {0}" -f $message) Yellow
+            return $false
+        }
+        Write-Line ("[ERREUR] {0}" -f $message) Red
         return $false
     }
 }
@@ -192,8 +253,12 @@ function Invoke-MainAction {
 
     switch ($Selected.ToLowerInvariant()) {
         '1' {
+            if (Invoke-WpcPendingRebootGate -Context 'avant l installation complete') { return }
             if (Confirm-WpcAction -Message 'Lancer l installation COMPLETE de la workstation') {
-                [void](Invoke-WpcRepoScript -DisplayName 'Installation complete' -Path $InstallScript -Arguments @{ Mode='Apply'; FullInstall=[switch]::Present } -RequiresAdmin)
+                $completed = Invoke-WpcRepoScript -DisplayName 'Installation complete' -Path $InstallScript -Arguments @{ Mode='Apply'; FullInstall=[switch]::Present } -RequiresAdmin
+                if (-not $completed -and $script:LastActionRequiresReboot) {
+                    [void](Invoke-WpcPendingRebootGate -Context 'pour poursuivre l installation complete' -ForceRequired)
+                }
             }
         }
         '2' {
@@ -299,6 +364,7 @@ function Show-Help {
     Write-Line ''
     Write-Line 'Installation complete' Cyan
     Write-Line '  Converge toute la workstation avec install.ps1 -FullInstall.' DarkGray
+    Write-Line '  Si Windows exige un reboot, le menu bloque proprement puis propose le redemarrage; relancer ensuite la meme option reprend idempotemment.' DarkGray
     Write-Line 'Logiciels' Cyan
     Write-Line '  Installe uniquement les applications WinGet manquantes ou non conformes.' DarkGray
     Write-Line 'Mises a jour' Cyan
