@@ -40,6 +40,50 @@ $userExistsCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($userExistsCode -ne 0) { throw "Utilisateur WSL absent: $LinuxUser" }
 
+function Invoke-WslUserCommand {
+    param(
+        [Parameter(Mandatory)][string]$Command,
+        [switch]$IgnoreExitCode
+    )
+    $output = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec sh -lc $Command 2>&1 | Out-String).Trim()
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ne 0 -and -not $IgnoreExitCode) {
+        throw "Commande WSL échouée pour $LinuxUser (code=$code): $Command`n$output"
+    }
+    return [pscustomobject]@{ ExitCode=$code; Output=$output }
+}
+
+function Restart-WslSessionAfterDockerGroupChange {
+    Write-Host '[2.5/4] Rechargement de la session WSL après configuration Docker' -ForegroundColor Cyan
+    & wsl.exe --terminate $Distribution
+    $terminateCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($terminateCode -ne 0) { throw "Impossible de terminer $Distribution après installation Docker (code=$terminateCode)." }
+
+    Start-Sleep -Milliseconds 750
+    $groups = Invoke-WslUserCommand -Command 'id -nG'
+    if (@($groups.Output -split '\s+') -notcontains 'docker') {
+        throw "Le groupe docker nʼest pas visible dans la nouvelle session WSL de '$LinuxUser'. Groupes observés: $($groups.Output)"
+    }
+
+    $dockerReady = $false
+    $lastDockerOutput = ''
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        $probe = Invoke-WslUserCommand -Command 'docker info >/dev/null 2>&1' -IgnoreExitCode
+        if ($probe.ExitCode -eq 0) {
+            $dockerReady = $true
+            break
+        }
+        $lastDockerOutput = $probe.Output
+        Start-Sleep -Seconds 1
+    }
+    if (-not $dockerReady) {
+        throw "Docker nʼest pas accessible sans sudo après redémarrage contrôlé de la session WSL. Dernière sortie: $lastDockerOutput"
+    }
+    Write-Host "[OK] Nouvelle session WSL active: groupe docker chargé et Docker Engine accessible sans sudo." -ForegroundColor Green
+}
+
 Write-Host '[1/4] /etc/wsl.conf et systemd' -ForegroundColor Cyan
 [void](Invoke-WpcManagedScript -Context $context -Path $wslConfScript -DisplayName 'Configuration /etc/wsl.conf' -Arguments @{ Distribution=$Distribution; LinuxUser=$LinuxUser } -Phase 'DevOps')
 
@@ -49,6 +93,12 @@ $convertCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($convertCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxScript)) { throw 'Impossible de convertir le chemin du bootstrap DevOps avec wslpath.' }
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxScript) -LogIdentity 'scripts/wsl/install-devops.sh' -DisplayName 'install-devops.sh'
+
+# install-devops.sh ajoute l’utilisateur au groupe docker. Les groupes auxiliaires d’une
+# session Linux déjà ouverte ne sont pas recalculés dynamiquement. La revalidation
+# immédiate de l’orchestrateur doit donc démarrer une nouvelle session WSL avant de
+# tester docker info; sinon une première installation correcte peut être déclarée KO.
+Restart-WslSessionAfterDockerGroupChange
 
 Write-Host '[3/4] Terminal Bash DevOps' -ForegroundColor Cyan
 $linuxTerminalScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $terminalScript).Trim()
@@ -64,5 +114,4 @@ $global:LASTEXITCODE = 0
 if ($convertVsCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxVsCodeScript)) { throw 'Impossible de convertir le chemin du gestionnaire VS Code WSL avec wslpath.' }
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxVsCodeScript, 'apply') -LogIdentity 'scripts/wsl/manage-vscode-extensions.sh' -DisplayName 'manage-vscode-extensions.sh'
 
-Write-Host '[FAIT] Stack DevOps + terminal exécutés; chaque sous-script possède son journal dédié.' -ForegroundColor Green
-Write-Host '[ACTION REQUISE] Si Docker vient dʼajouter ton utilisateur au groupe docker, exécute « wsl --shutdown » avant le premier usage Docker.' -ForegroundColor Magenta
+Write-Host '[FAIT] Stack DevOps + terminal exécutés; la session WSL a été rechargée automatiquement après Docker et chaque sous-script possède son journal dédié.' -ForegroundColor Green
