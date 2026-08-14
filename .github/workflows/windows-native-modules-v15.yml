@@ -1,0 +1,98 @@
+name: Windows native modules V15
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-native-modules-v15.yml'
+      - 'scripts/core/windows-native.psm1'
+      - 'scripts/bootstrap/00_preflight.ps1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-native-modules-v15.yml'
+      - 'scripts/core/windows-native.psm1'
+      - 'scripts/bootstrap/00_preflight.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enforce explicit Windows module bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='scripts/core/windows-native.psm1'
+          preflight='scripts/bootstrap/00_preflight.ps1'
+          grep -Fq "System32\\WindowsPowerShell\\v1.0\\Modules" "$module"
+          grep -Fq 'Add-WpcWindowsPowerShellModulePath' "$module"
+          grep -Fq "ModuleName 'Storage'" "$module"
+          grep -Fq "Get-Volume','Get-PhysicalDisk','Get-StorageReliabilityCounter" "$module"
+          grep -Fq 'Initialize-WpcWindowsNativeModules -Profile Full' "$preflight"
+          bootstrap_line="$(grep -nF 'Initialize-WpcWindowsNativeModules -Profile Full' "$preflight" | head -n1 | cut -d: -f1)"
+          volume_line="$(grep -nF '$volumes = Get-Volume' "$preflight" | head -n1 | cut -d: -f1)"
+          if [[ -z "$bootstrap_line" || -z "$volume_line" || "$bootstrap_line" -ge "$volume_line" ]]; then
+            echo 'Windows native modules must be initialized before the first Get-Volume call.' >&2
+            exit 1
+          fi
+
+  windows-recovery:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse V15 PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @('.\scripts\core\windows-native.psm1', '.\scripts\bootstrap\00_preflight.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+            if (@($errors).Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
+          }
+
+      - name: Reproduce missing Storage autoload and recover
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\windows-native.psm1 -Force
+          $legacyRoot = Get-WpcWindowsPowerShellModuleRoot
+          if (-not (Test-Path -LiteralPath $legacyRoot)) { throw "Legacy Windows module root missing on runner: $legacyRoot" }
+
+          $original = $env:PSModulePath
+          try {
+            Remove-Module Storage -Force -ErrorAction SilentlyContinue
+            $separator = [IO.Path]::PathSeparator
+            $remaining = @(
+              ([string]$env:PSModulePath -split [regex]::Escape([string]$separator)) |
+                Where-Object { $_ -and -not [string]::Equals([IO.Path]::GetFullPath($_).TrimEnd('\'), [IO.Path]::GetFullPath($legacyRoot).TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) }
+            )
+            $env:PSModulePath = ($remaining -join $separator)
+
+            $result = Import-WpcWindowsModule -ModuleName Storage -RequiredCommands @('Get-Volume','Get-PhysicalDisk','Get-StorageReliabilityCounter')
+            if (-not $result.Available) { throw 'Storage module recovery did not report Available=true.' }
+            foreach ($command in @('Get-Volume','Get-PhysicalDisk','Get-StorageReliabilityCounter')) {
+              if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "$command unavailable after recovery." }
+            }
+            $paths = @(([string]$env:PSModulePath -split [regex]::Escape([string]$separator)) | Where-Object { $_ })
+            $restored = @($paths | Where-Object { [string]::Equals([IO.Path]::GetFullPath($_).TrimEnd('\'), [IO.Path]::GetFullPath($legacyRoot).TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+            if (-not $restored) { throw 'Legacy Windows module root was not restored into the process PSModulePath.' }
+          }
+          finally {
+            $env:PSModulePath = $original
+          }
+
+      - name: Validate full discovery module set
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\windows-native.psm1 -Force
+          $results = @(Initialize-WpcWindowsNativeModules -Profile Full)
+          $required = @('Storage','MMAgent','ScheduledTasks','Defender')
+          foreach ($name in $required) {
+            $entry = @($results | Where-Object Module -EQ $name)
+            if ($entry.Count -ne 1 -or -not $entry[0].Available) { throw "Required Windows module unavailable in V15 bootstrap: $name" }
+          }
