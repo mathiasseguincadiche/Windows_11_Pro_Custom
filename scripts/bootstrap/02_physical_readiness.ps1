@@ -233,7 +233,7 @@ if ($wingetReady) {
     $wingetVersion = $versionResult.Text.Trim()
     $wingetReady = ($versionResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($wingetVersion))
 }
-Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) { "Version=$wingetVersion Path=$($winget.Source)" } else { 'WinGet/App Installer absent ou non fonctionnel; FullInstall tentera l’enregistrement/réparation supportée.' }) -Blocking $foundationBlocking
+Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) { "Version=$wingetVersion Path=$($winget.Source)" } else { 'WinGet/App Installer absent ou non fonctionnel; FullInstall tentera le réenregistrement ou la réparation supportée.' }) -Blocking $foundationBlocking
 
 $unresolvedApps = [System.Collections.Generic.List[string]]::new()
 if ($wingetReady) {
