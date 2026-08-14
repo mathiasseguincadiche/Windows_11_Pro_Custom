@@ -1,4 +1,4 @@
-name: Windows native modules V15
+name: Windows native modules V16
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Enforce explicit Windows module bootstrap
+      - name: Enforce explicit Windows module bootstrap and robust host detection
         shell: bash
         run: |
           set -euo pipefail
@@ -31,6 +31,11 @@ jobs:
           grep -Fq 'Add-WpcWindowsPowerShellModulePath' "$module"
           grep -Fq "ModuleName 'Storage'" "$module"
           grep -Fq "Get-Volume','Get-PhysicalDisk','Get-StorageReliabilityCounter" "$module"
+          grep -Fq '$IsWindows' "$module"
+          if grep -Fq "return ([string]\$env:OS -eq 'Windows_NT')" "$module"; then
+            echo 'Host detection must not depend exclusively on env:OS.' >&2
+            exit 1
+          fi
           grep -Fq 'Initialize-WpcWindowsNativeModules -Profile Full' "$preflight"
           bootstrap_line="$(grep -nF 'Initialize-WpcWindowsNativeModules -Profile Full' "$preflight" | head -n1 | cut -d: -f1)"
           volume_line="$(grep -nF "\$volumes = Get-Volume" "$preflight" | head -n1 | cut -d: -f1)"
@@ -39,11 +44,24 @@ jobs:
             exit 1
           fi
 
+  non-windows-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reject a non-Windows host without relying on env:OS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\windows-native.psm1 -Force
+          if (Test-WpcWindowsHost) {
+            throw 'Linux runner was incorrectly detected as Windows.'
+          }
+
   windows-recovery:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Parse V15 PowerShell
+      - name: Parse V16 PowerShell
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -52,6 +70,38 @@ jobs:
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
             if (@($errors).Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
+          }
+
+      - name: Prove Windows host detection survives missing or corrupted env:OS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\windows-native.psm1 -Force
+
+          if (-not (Test-WpcWindowsHost)) {
+            throw 'Baseline Windows host detection failed.'
+          }
+
+          $hadOS = Test-Path Env:OS
+          $originalOS = $env:OS
+          try {
+            Remove-Item Env:OS -ErrorAction SilentlyContinue
+            if (-not (Test-WpcWindowsHost)) {
+              throw 'Windows detection incorrectly depends on env:OS being present.'
+            }
+
+            $env:OS = 'BROKEN_OR_CUSTOM_VALUE'
+            if (-not (Test-WpcWindowsHost)) {
+              throw 'Windows detection incorrectly trusts env:OS content.'
+            }
+          }
+          finally {
+            if ($hadOS) {
+              $env:OS = $originalOS
+            }
+            else {
+              Remove-Item Env:OS -ErrorAction SilentlyContinue
+            }
           }
 
       - name: Reproduce missing Storage autoload and recover
@@ -94,5 +144,5 @@ jobs:
           $required = @('Storage','MMAgent','ScheduledTasks','Defender')
           foreach ($name in $required) {
             $entry = @($results | Where-Object Module -EQ $name)
-            if ($entry.Count -ne 1 -or -not $entry[0].Available) { throw "Required Windows module unavailable in V15 bootstrap: $name" }
+            if ($entry.Count -ne 1 -or -not $entry[0].Available) { throw "Required Windows module unavailable in V16 bootstrap: $name" }
           }
