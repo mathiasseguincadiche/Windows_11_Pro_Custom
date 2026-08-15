@@ -27,7 +27,7 @@ jobs:
           grep -Fq -- "-Scan" "$script"
           grep -Fq "GetCorruptionCount" "$script"
           grep -Fq "fsutil.exe repair enumerate" "$script"
-          grep -Fq "'$Corrupt'" "$script"
+          grep -Fq "'\$Corrupt'" "$script"
           grep -Fq "Get-StorageReliabilityCounter" "$script"
           grep -Fq "ReadErrorsTotal" "$script"
           grep -Fq "WriteErrorsTotal" "$script"
