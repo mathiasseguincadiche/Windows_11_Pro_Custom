@@ -22,36 +22,45 @@ $storagePolicy = Get-Content -Raw $storagePolicyPath | ConvertFrom-Json
 $targetModelRegex = [string]$storagePolicy.storage.modelRegex
 $targetMinimumCount = [int]$storagePolicy.storage.minimumCount
 $criticalTemperatureC = [int]$storagePolicy.storage.temperatureCriticalC
-$failures = [System.Collections.Generic.List[string]]::new()
+$failures = @()
 
-function Get-WpcNtfsVolumeCim {
+function Get-WpcMsftVolume {
     param([Parameter(Mandatory)][ValidatePattern('^[A-Z]$')][string]$DriveLetter)
 
-    $volume = @(
+    $matches = @(
         Get-CimInstance -Namespace 'root/Microsoft/Windows/Storage' -ClassName MSFT_Volume -ErrorAction Stop |
             Where-Object { [string]$_.DriveLetter -eq $DriveLetter } |
             Select-Object -First 1
     )
-    if ($volume.Count -eq 0) {
-        throw "MSFT_Volume introuvable pour $DriveLetter`:"
+    if ($matches.Count -eq 0) {
+        throw "MSFT_Volume introuvable pour ${DriveLetter}:"
     }
-    return $volume[0]
+    return $matches[0]
 }
 
-function Get-WpcNtfsCorruptionCount {
+function Get-WpcCorruptionCount {
     param([Parameter(Mandatory)]$Volume)
 
     $result = Invoke-CimMethod -InputObject $Volume -MethodName GetCorruptionCount -ErrorAction Stop
     if ([uint32]$result.ReturnValue -ne 0) {
-        throw "GetCorruptionCount a échoué avec le code $($result.ReturnValue)."
+        throw "GetCorruptionCount a echoue avec le code $($result.ReturnValue)."
     }
     return [uint32]$result.CorruptionCount
+}
+
+function ConvertTo-WpcNullableUInt64 {
+    param($Value)
+
+    if ($null -eq $Value) { return $null }
+    $text = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+    return [uint64]$Value
 }
 
 function Invoke-WpcNtfsSafetyCheck {
     param([Parameter(Mandatory)][ValidatePattern('^[A-Z]$')][string]$DriveLetter)
 
-    $drive = "$DriveLetter`:"
+    $drive = "${DriveLetter}:"
     $volume = Get-Volume -DriveLetter $DriveLetter -ErrorAction Stop
     if ([string]$volume.FileSystem -ne 'NTFS') {
         return [pscustomobject]@{
@@ -64,11 +73,14 @@ function Invoke-WpcNtfsSafetyCheck {
             CorruptionJournalExitCode = $null
             CorruptionJournalPath = $null
             Clean = $false
-            Failure = "$drive doit être NTFS."
+            Failure = "$drive doit etre NTFS."
         }
     }
 
-    $win32Volume = @(Get-CimInstance -ClassName Win32_Volume -Filter "DriveLetter='$drive'" -ErrorAction Stop | Select-Object -First 1)
+    $win32Volume = @(
+        Get-CimInstance -ClassName Win32_Volume -Filter ("DriveLetter='{0}'" -f $drive) -ErrorAction Stop |
+            Select-Object -First 1
+    )
     if ($win32Volume.Count -eq 0) {
         throw "Win32_Volume introuvable pour $drive"
     }
@@ -82,10 +94,13 @@ function Invoke-WpcNtfsSafetyCheck {
     $dirtyEvidence | Set-Content -Encoding utf8 $dirtyEvidencePath
 
     $scanOutput = @(Repair-Volume -DriveLetter ([char]$DriveLetter) -Scan -ErrorAction Stop)
-    $scanReturnCode = if ($scanOutput.Count -gt 0) { [uint32]$scanOutput[-1] } else { $null }
+    $scanReturnCode = $null
+    if ($scanOutput.Count -gt 0) {
+        $scanReturnCode = [uint32]$scanOutput[-1]
+    }
 
-    $msftVolume = Get-WpcNtfsVolumeCim -DriveLetter $DriveLetter
-    $corruptionCount = Get-WpcNtfsCorruptionCount -Volume $msftVolume
+    $msftVolume = Get-WpcMsftVolume -DriveLetter $DriveLetter
+    $corruptionCount = Get-WpcCorruptionCount -Volume $msftVolume
     $msftHealthStatus = [uint16]$msftVolume.HealthStatus
 
     $global:LASTEXITCODE = 0
@@ -95,24 +110,18 @@ function Invoke-WpcNtfsSafetyCheck {
     $journalPath = Join-Path $reportDir "$DriveLetter-corrupt-journal.txt"
     $journal | Set-Content -Encoding utf8 $journalPath
 
-    $clean = (
-        -not $dirtyBitSet -and
-        $dirtyEvidenceExitCode -eq 0 -and
-        $null -ne $scanReturnCode -and
-        $scanReturnCode -eq 0 -and
-        $msftHealthStatus -eq 0 -and
-        $corruptionCount -eq 0 -and
-        $journalExitCode -eq 0
-    )
+    $reasons = @()
+    if ($dirtyBitSet) { $reasons += 'dirty-bit NTFS positionne' }
+    if ($dirtyEvidenceExitCode -ne 0) { $reasons += "fsutil dirty query code=$dirtyEvidenceExitCode" }
+    if ($null -eq $scanReturnCode) { $reasons += 'Repair-Volume -Scan sans code de retour' }
+    elseif ($scanReturnCode -ne 0) { $reasons += "Repair-Volume -Scan code=$scanReturnCode" }
+    if ($msftHealthStatus -ne 0) { $reasons += "MSFT_Volume HealthStatus=$msftHealthStatus" }
+    if ($corruptionCount -gt 0) { $reasons += "CorruptionCount=$corruptionCount" }
+    if ($journalExitCode -ne 0) { $reasons += "fsutil repair enumerate code=$journalExitCode" }
 
-    $reasons = [System.Collections.Generic.List[string]]::new()
-    if ($dirtyBitSet) { $reasons.Add('dirty-bit NTFS positionné') }
-    if ($dirtyEvidenceExitCode -ne 0) { $reasons.Add("fsutil dirty query a échoué (code=$dirtyEvidenceExitCode)") }
-    if ($null -eq $scanReturnCode) { $reasons.Add('Repair-Volume -Scan n’a retourné aucun code exploitable') }
-    elseif ($scanReturnCode -ne 0) { $reasons.Add("Repair-Volume -Scan a échoué (code=$scanReturnCode)") }
-    if ($msftHealthStatus -ne 0) { $reasons.Add("MSFT_Volume HealthStatus=$msftHealthStatus") }
-    if ($corruptionCount -gt 0) { $reasons.Add("$corruptionCount corruption(s) NTFS confirmée(s)") }
-    if ($journalExitCode -ne 0) { $reasons.Add("lecture du journal `$Corrupt impossible (code=$journalExitCode)") }
+    $clean = ($reasons.Count -eq 0)
+    $failureText = $null
+    if (-not $clean) { $failureText = $reasons -join '; ' }
 
     return [pscustomobject]@{
         Drive = $drive
@@ -127,14 +136,8 @@ function Invoke-WpcNtfsSafetyCheck {
         CorruptionJournalExitCode = $journalExitCode
         CorruptionJournalPath = $journalPath
         Clean = $clean
-        Failure = if ($reasons.Count -gt 0) { $reasons -join '; ' } else { $null }
+        Failure = $failureText
     }
-}
-
-function ConvertTo-WpcNullableUInt64 {
-    param($Value)
-    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return $null }
-    return [uint64]$Value
 }
 
 function Invoke-WpcNvmeSafetyCheck {
@@ -145,43 +148,67 @@ function Invoke-WpcNvmeSafetyCheck {
             TargetMinimumCount = $targetMinimumCount
             Disks = @()
             Clean = $false
-            Failure = 'Aucun disque NVMe détecté.'
+            Failure = 'Aucun disque NVMe detecte.'
         }
     }
 
-    $targetDisks = @($nvmeDisks | Where-Object { (([string]$_.FriendlyName + ' ' + [string]$_.Model) -match $targetModelRegex) })
-    $diskStates = [System.Collections.Generic.List[object]]::new()
+    $targetDisks = @(
+        $nvmeDisks | Where-Object {
+            (([string]$_.FriendlyName + ' ' + [string]$_.Model) -match $targetModelRegex)
+        }
+    )
 
+    $diskStates = @()
     foreach ($disk in $nvmeDisks) {
         $counter = $null
         $counterError = $null
         try {
-            $counter = @($disk | Get-StorageReliabilityCounter -ErrorAction Stop | Select-Object -First 1)
-            if ($counter.Count -gt 0) { $counter = $counter[0] } else { $counter = $null }
+            $counterRows = @($disk | Get-StorageReliabilityCounter -ErrorAction Stop | Select-Object -First 1)
+            if ($counterRows.Count -gt 0) { $counter = $counterRows[0] }
         } catch {
             $counterError = $_.Exception.Message
         }
 
-        $readTotal = if ($counter) { ConvertTo-WpcNullableUInt64 $counter.ReadErrorsTotal } else { $null }
-        $writeTotal = if ($counter) { ConvertTo-WpcNullableUInt64 $counter.WriteErrorsTotal } else { $null }
-        $readUncorrected = if ($counter) { ConvertTo-WpcNullableUInt64 $counter.ReadErrorsUncorrected } else { $null }
-        $writeUncorrected = if ($counter) { ConvertTo-WpcNullableUInt64 $counter.WriteErrorsUncorrected } else { $null }
-        $temperature = if ($counter -and $null -ne $counter.Temperature) { [int]$counter.Temperature } else { $null }
+        $readTotal = $null
+        $writeTotal = $null
+        $readUncorrected = $null
+        $writeUncorrected = $null
+        $temperature = $null
+        $temperatureMax = $null
+        $wear = $null
+        $powerOnHours = $null
 
-        $reasons = [System.Collections.Generic.List[string]]::new()
-        if ([string]$disk.HealthStatus -ne 'Healthy') { $reasons.Add("HealthStatus=$($disk.HealthStatus)") }
-        if ($null -eq $counter) { $reasons.Add("compteurs de fiabilité indisponibles: $counterError") }
-        if ($null -eq $readTotal) { $reasons.Add('ReadErrorsTotal indisponible') }
-        elseif ($readTotal -gt 0) { $reasons.Add("ReadErrorsTotal=$readTotal") }
-        if ($null -eq $writeTotal) { $reasons.Add('WriteErrorsTotal indisponible') }
-        elseif ($writeTotal -gt 0) { $reasons.Add("WriteErrorsTotal=$writeTotal") }
-        if ($null -eq $readUncorrected) { $reasons.Add('ReadErrorsUncorrected indisponible') }
-        elseif ($readUncorrected -gt 0) { $reasons.Add("ReadErrorsUncorrected=$readUncorrected") }
-        if ($null -eq $writeUncorrected) { $reasons.Add('WriteErrorsUncorrected indisponible') }
-        elseif ($writeUncorrected -gt 0) { $reasons.Add("WriteErrorsUncorrected=$writeUncorrected") }
-        if ($null -ne $temperature -and $temperature -gt $criticalTemperatureC) { $reasons.Add("température=${temperature}C > ${criticalTemperatureC}C") }
+        if ($null -ne $counter) {
+            $readTotal = ConvertTo-WpcNullableUInt64 -Value $counter.ReadErrorsTotal
+            $writeTotal = ConvertTo-WpcNullableUInt64 -Value $counter.WriteErrorsTotal
+            $readUncorrected = ConvertTo-WpcNullableUInt64 -Value $counter.ReadErrorsUncorrected
+            $writeUncorrected = ConvertTo-WpcNullableUInt64 -Value $counter.WriteErrorsUncorrected
+            if ($null -ne $counter.Temperature) { $temperature = [int]$counter.Temperature }
+            $temperatureMax = $counter.TemperatureMax
+            $wear = $counter.Wear
+            $powerOnHours = $counter.PowerOnHours
+        }
 
-        $diskStates.Add([pscustomobject]@{
+        $reasons = @()
+        if ([string]$disk.HealthStatus -ne 'Healthy') { $reasons += "HealthStatus=$($disk.HealthStatus)" }
+        if ($null -eq $counter) { $reasons += "Reliability unavailable: $counterError" }
+        if ($null -eq $readTotal) { $reasons += 'ReadErrorsTotal unavailable' }
+        elseif ($readTotal -gt 0) { $reasons += "ReadErrorsTotal=$readTotal" }
+        if ($null -eq $writeTotal) { $reasons += 'WriteErrorsTotal unavailable' }
+        elseif ($writeTotal -gt 0) { $reasons += "WriteErrorsTotal=$writeTotal" }
+        if ($null -eq $readUncorrected) { $reasons += 'ReadErrorsUncorrected unavailable' }
+        elseif ($readUncorrected -gt 0) { $reasons += "ReadErrorsUncorrected=$readUncorrected" }
+        if ($null -eq $writeUncorrected) { $reasons += 'WriteErrorsUncorrected unavailable' }
+        elseif ($writeUncorrected -gt 0) { $reasons += "WriteErrorsUncorrected=$writeUncorrected" }
+        if ($null -ne $temperature -and $temperature -gt $criticalTemperatureC) {
+            $reasons += "Temperature=${temperature}C critical=${criticalTemperatureC}C"
+        }
+
+        $diskClean = ($reasons.Count -eq 0)
+        $diskFailure = $null
+        if (-not $diskClean) { $diskFailure = $reasons -join '; ' }
+
+        $diskStates += [pscustomobject]@{
             FriendlyName = [string]$disk.FriendlyName
             Model = [string]$disk.Model
             SerialNumber = [string]$disk.SerialNumber
@@ -191,60 +218,68 @@ function Invoke-WpcNvmeSafetyCheck {
             IsTargetT705 = (([string]$disk.FriendlyName + ' ' + [string]$disk.Model) -match $targetModelRegex)
             ReliabilityAvailable = ($null -ne $counter)
             Temperature = $temperature
-            TemperatureMax = if ($counter) { $counter.TemperatureMax } else { $null }
-            Wear = if ($counter) { $counter.Wear } else { $null }
-            PowerOnHours = if ($counter) { $counter.PowerOnHours } else { $null }
+            TemperatureMax = $temperatureMax
+            Wear = $wear
+            PowerOnHours = $powerOnHours
             ReadErrorsTotal = $readTotal
             WriteErrorsTotal = $writeTotal
             ReadErrorsUncorrected = $readUncorrected
             WriteErrorsUncorrected = $writeUncorrected
-            Clean = ($reasons.Count -eq 0)
-            Failure = if ($reasons.Count -gt 0) { $reasons -join '; ' } else { $null }
-        })
+            Clean = $diskClean
+            Failure = $diskFailure
+        }
     }
 
-    $reasonsAll = [System.Collections.Generic.List[string]]::new()
+    $reasonsAll = @()
     if ($targetDisks.Count -lt $targetMinimumCount) {
-        $reasonsAll.Add("T705 détectés=$($targetDisks.Count), minimum attendu=$targetMinimumCount")
+        $reasonsAll += "T705 count=$($targetDisks.Count), required=$targetMinimumCount"
     }
     foreach ($state in $diskStates) {
         if (-not $state.Clean) {
-            $reasonsAll.Add("$($state.FriendlyName): $($state.Failure)")
+            $reasonsAll += "$($state.FriendlyName): $($state.Failure)"
         }
     }
+
+    $clean = ($reasonsAll.Count -eq 0)
+    $failureText = $null
+    if (-not $clean) { $failureText = $reasonsAll -join ' | ' }
 
     return [pscustomobject]@{
         TargetCount = $targetDisks.Count
         TargetMinimumCount = $targetMinimumCount
         Disks = @($diskStates)
-        Clean = ($reasonsAll.Count -eq 0)
-        Failure = if ($reasonsAll.Count -gt 0) { $reasonsAll -join ' | ' } else { $null }
+        Clean = $clean
+        Failure = $failureText
     }
 }
 
-$volumeStates = [System.Collections.Generic.List[object]]::new()
+$volumeStates = @()
 foreach ($letter in @('C', 'D')) {
     try {
         $state = Invoke-WpcNtfsSafetyCheck -DriveLetter $letter
-        $volumeStates.Add($state)
-        if (-not $state.Clean) { $failures.Add("$($state.Drive) $($state.Failure)") }
+        $volumeStates += $state
+        if (-not $state.Clean) { $failures += "$($state.Drive) $($state.Failure)" }
     } catch {
-        $volumeStates.Add([pscustomobject]@{
-            Drive = "$letter`:"
+        $volumeStates += [pscustomobject]@{
+            Drive = "${letter}:"
             Clean = $false
             Failure = $_.Exception.Message
-        })
-        $failures.Add("$letter`: $($_.Exception.Message)")
+        }
+        $failures += "${letter}: $($_.Exception.Message)"
     }
 }
 
 $nvmeState = $null
 try {
     $nvmeState = Invoke-WpcNvmeSafetyCheck
-    if (-not $nvmeState.Clean) { $failures.Add("NVMe: $($nvmeState.Failure)") }
+    if (-not $nvmeState.Clean) { $failures += "NVMe: $($nvmeState.Failure)" }
 } catch {
-    $nvmeState = [pscustomobject]@{ Clean=$false; Failure=$_.Exception.Message; Disks=@() }
-    $failures.Add("NVMe: $($_.Exception.Message)")
+    $nvmeState = [pscustomobject]@{
+        Clean = $false
+        Failure = $_.Exception.Message
+        Disks = @()
+    }
+    $failures += "NVMe: $($_.Exception.Message)"
 }
 
 $report = [ordered]@{
@@ -274,22 +309,22 @@ $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $reportPath
 
 foreach ($state in $volumeStates) {
     if ($state.Clean) {
-        Write-Host "[OK] $($state.Drive) NTFS propre: dirty-bit=0, scan=0, corruptions=0." -ForegroundColor Green
+        Write-Host "[OK] $($state.Drive) NTFS clean: dirty-bit=0, scan=0, corruptions=0." -ForegroundColor Green
     } else {
-        Write-Host "[KO] $($state.Drive) NTFS non qualifié: $($state.Failure)" -ForegroundColor Red
+        Write-Host "[KO] $($state.Drive) NTFS blocked: $($state.Failure)" -ForegroundColor Red
     }
 }
 foreach ($disk in @($nvmeState.Disks)) {
     if ($disk.Clean) {
-        Write-Host "[OK] NVMe $($disk.FriendlyName): Healthy, erreurs lecture/écriture=0." -ForegroundColor Green
+        Write-Host "[OK] NVMe $($disk.FriendlyName): Healthy, read/write errors=0." -ForegroundColor Green
     } else {
         Write-Host "[KO] NVMe $($disk.FriendlyName): $($disk.Failure)" -ForegroundColor Red
     }
 }
-Write-Host "[INFO] Rapport V24: $reportPath"
+Write-Host "[INFO] V24 report: $reportPath"
 
 if ($Mode -eq 'Verify' -and $failures.Count -gt 0) {
-    throw "V24 STORAGE SAFETY BLOCK: stockage non totalement propre. Aucune convergence ne doit commencer. $($failures -join ' | ')"
+    throw "V24 STORAGE SAFETY BLOCK: storage is not fully clean. No convergence is allowed. $($failures -join ' | ')"
 }
 
 if ($failures.Count -eq 0) {
