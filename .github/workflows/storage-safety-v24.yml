@@ -37,13 +37,13 @@ jobs:
           grep -Fq "VERDICT: STORAGE SAFETY READY" "$script"
 
           grep -Fq "00_storage_integrity_v24.ps1" "$preflight"
-          grep -Fq '& $storageSafetyScript -Mode Verify' "$preflight"
-          grep -Fq 'StrictPhysicalReadiness -or -not $AllowPendingReboot' "$preflight"
+          grep -Fq "& \$storageSafetyScript -Mode Verify" "$preflight"
+          grep -Fq "StrictPhysicalReadiness -or -not \$AllowPendingReboot" "$preflight"
           grep -Fq 'ne contourne jamais StrictPhysicalReadiness' "$preflight"
 
-          pending_line=$(grep -n 'if ($pendingReboot.Pending -and ($StrictPhysicalReadiness -or -not $AllowPendingReboot))' "$preflight" | head -1 | cut -d: -f1)
-          storage_line=$(grep -n '& $storageSafetyScript -Mode Verify' "$preflight" | head -1 | cut -d: -f1)
-          physical_line=$(grep -n '& $physicalReadinessScript -Strict:$StrictPhysicalReadiness' "$preflight" | head -1 | cut -d: -f1)
+          pending_line=$(grep -n "if (\$pendingReboot.Pending -and (\$StrictPhysicalReadiness -or -not \$AllowPendingReboot))" "$preflight" | head -1 | cut -d: -f1)
+          storage_line=$(grep -n "& \$storageSafetyScript -Mode Verify" "$preflight" | head -1 | cut -d: -f1)
+          physical_line=$(grep -n "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight" | head -1 | cut -d: -f1)
           test "$pending_line" -lt "$storage_line"
           test "$storage_line" -lt "$physical_line"
 
