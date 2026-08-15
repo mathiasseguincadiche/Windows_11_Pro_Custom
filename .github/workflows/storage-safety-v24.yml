@@ -34,7 +34,7 @@ jobs:
           grep -Fq "ReadErrorsUncorrected" "$script"
           grep -Fq "WriteErrorsUncorrected" "$script"
           grep -Fq "V24 STORAGE SAFETY BLOCK" "$script"
-          grep -Fq "VERDICT: V24 STORAGE SAFETY READY" "$script"
+          grep -Fq "VERDICT: STORAGE SAFETY READY" "$script"
 
           grep -Fq "00_storage_integrity_v24.ps1" "$preflight"
           grep -Fq '& $storageSafetyScript -Mode Verify' "$preflight"
