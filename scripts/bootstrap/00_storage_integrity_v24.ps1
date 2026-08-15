@@ -321,12 +321,12 @@ foreach ($disk in @($nvmeState.Disks)) {
         Write-Host "[KO] NVMe $($disk.FriendlyName): $($disk.Failure)" -ForegroundColor Red
     }
 }
-Write-Host "[INFO] V24 report: $reportPath"
+Write-Host "[INFO] Storage safety report: $reportPath"
 
 if ($Mode -eq 'Verify' -and $failures.Count -gt 0) {
     throw "V24 STORAGE SAFETY BLOCK: storage is not fully clean. No convergence is allowed. $($failures -join ' | ')"
 }
 
 if ($failures.Count -eq 0) {
-    Write-Host 'VERDICT: V24 STORAGE SAFETY READY' -ForegroundColor Green
+    Write-Host 'VERDICT: STORAGE SAFETY READY' -ForegroundColor Green
 }
