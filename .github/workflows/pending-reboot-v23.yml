@@ -48,7 +48,7 @@ jobs:
           grep -Fq "Import-Module \$rebootStateModule -Force" "$preflight"
           grep -Fq "\$pendingReboot = Get-WpcPendingRebootState" "$preflight"
           grep -Fq 'AllowPendingReboot' "$preflight"
-          grep -Fq 'StrictPhysicalReadiness -or -not $AllowPendingReboot' "$preflight"
+          grep -Fq "StrictPhysicalReadiness -or -not \$AllowPendingReboot" "$preflight"
           grep -Fq 'ne contourne jamais StrictPhysicalReadiness' "$preflight"
           if grep -Fq 'function Get-PendingRebootState' "$preflight"; then
             echo 'Preflight must use the shared reboot-state module.' >&2
