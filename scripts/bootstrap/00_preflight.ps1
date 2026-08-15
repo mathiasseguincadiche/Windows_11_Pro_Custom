@@ -12,12 +12,16 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $reportDir = Join-Path $repoRoot 'reports'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
 $rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
+$storageSafetyScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_integrity_v24.ps1'
 $physicalReadinessScript = Join-Path $repoRoot 'scripts\bootstrap\02_physical_readiness.ps1'
 if (-not (Test-Path -LiteralPath $windowsNativeModule)) {
     throw "Bootstrap des modules Windows introuvable: $windowsNativeModule"
 }
 if (-not (Test-Path -LiteralPath $rebootStateModule)) {
     throw "Détection de redémarrage Windows introuvable: $rebootStateModule"
+}
+if (-not (Test-Path -LiteralPath $storageSafetyScript)) {
+    throw "Gate d'intégrité stockage V24 introuvable: $storageSafetyScript"
 }
 if (-not (Test-Path -LiteralPath $physicalReadinessScript)) {
     throw "Préqualification physique introuvable: $physicalReadinessScript"
@@ -53,6 +57,7 @@ $result = [ordered]@{
     Volumes = $volumes
     NativeModules = @($nativeModules)
     RequireFoundation = [bool]$RequireFoundation
+    StorageSafetyV24Required = [bool]$StrictPhysicalReadiness
 }
 
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $reportDir 'preflight.json')
@@ -75,16 +80,27 @@ $d = Get-Volume -DriveLetter D -ErrorAction Stop
 if ($c.FileSystem -ne 'NTFS') { throw 'C: doit être NTFS.' }
 if ($d.FileSystem -ne 'NTFS') { throw 'D: doit être NTFS. Aucun EXT4 physique n est attendu.' }
 
-if ($pendingReboot.Pending -and -not $AllowPendingReboot) {
-    throw "Un redémarrage Windows est en attente ($($pendingReboot.Reasons -join ', ')). Redémarre Windows puis relance Installation complète: la convergence reprendra idempotemment. Le bypass n'est autorisé que pour un diagnostic volontaire via -AllowPendingReboot."
+# V24: un bypass de reboot reste possible uniquement pour un diagnostic non strict.
+# Dès qu'une convergence physique est qualifiée, CBS/Windows Update/pending rename
+# doivent être totalement propres avant même le scan NTFS.
+if ($pendingReboot.Pending -and ($StrictPhysicalReadiness -or -not $AllowPendingReboot)) {
+    throw "Un redémarrage Windows est en attente ($($pendingReboot.Reasons -join ', ')). Redémarre Windows puis relance Installation complète: aucune convergence physique n'est autorisée tant que CBS/Windows Update n'est pas stabilisé. -AllowPendingReboot reste diagnostic-only et ne contourne jamais StrictPhysicalReadiness."
 }
 
 if ($pendingReboot.Pending) {
-    Write-Warning "Redémarrage Windows en attente: $($pendingReboot.Reasons -join ', '). Le préflight a été explicitement autorisé en mode diagnostic."
+    Write-Warning "Redémarrage Windows en attente: $($pendingReboot.Reasons -join ', '). Le préflight non strict a été explicitement autorisé en mode diagnostic."
 }
 
 $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module)
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
+
+if ($StrictPhysicalReadiness) {
+    Write-Host '[ANALYSE] V24 — qualification NTFS/NVMe avant toute mutation...' -ForegroundColor Cyan
+    & $storageSafetyScript -Mode Verify
+} else {
+    Write-Host '[INFO] V24 Storage Safety non exécuté dans ce préflight diagnostic non strict.' -ForegroundColor DarkGray
+}
+
 Write-Host '[ANALYSE] Préqualification physique complète avant toute convergence...' -ForegroundColor Cyan
 & $physicalReadinessScript -Strict:$StrictPhysicalReadiness -RequireFoundation:$RequireFoundation
