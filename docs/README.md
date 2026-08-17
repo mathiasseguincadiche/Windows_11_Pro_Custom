@@ -17,6 +17,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 | Comprendre l'orchestration | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |
 | Trouver une commande | [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md) |
 | Vérifier la conformité | [`11_VALIDATION.md`](11_VALIDATION.md) → [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) |
+| Comprendre les niveaux de preuve et détecter la dérive | [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md) |
 | Diagnostiquer | [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md) → [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
 | Identifier les sources de vérité | [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md) |
 | Reconstruire après incident | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) → [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) |
@@ -56,6 +57,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 - [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) — qualification matérielle ;
 - [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) — checklist finale ;
 - [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) — identité physique C:/D: et reprise après disparition d'un volume ;
+- [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md) — niveaux `STATIC`/`SIMULATED`/`PHYSICAL`, empreinte V26 et restauration WSL isolée ;
 - [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) — sauvegarde ;
 - [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) — reconstruction.
 
@@ -67,6 +69,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 - `19_OPENCLAW_OPENROUTER_WINDOWS.md` documente uniquement la frontière avec le projet IA externe ;
 - le Runbook `20` donne l'ordre d'exécution ;
 - le Runbook `13` reste réservé à la reprise ;
+- `26_PREUVES_DRIFT_ET_RESTAURATION.md` distingue preuve CI et preuve physique ;
 - `CHANGELOG.md` et Git conservent l'historique.
 
 ## Point de départ
@@ -97,5 +100,12 @@ Puis prévisualiser la workstation complète :
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
+Après validation physique complète, capturer l'empreinte globale V26 :
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
+```
+
 Ordre canonique : [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
 Sécurité stockage : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
+Preuves et dérive : [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md).

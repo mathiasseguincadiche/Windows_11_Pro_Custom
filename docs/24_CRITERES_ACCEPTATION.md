@@ -118,6 +118,23 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 
 Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
+## 11. Preuves V26, dérive et restaurabilité
+
+- [ ] les preuves `STATIC`, `SIMULATED` et `PHYSICAL` ne sont pas confondues ;
+- [ ] une CI verte n'est pas considérée comme une preuve physique ;
+- [ ] `90_workstation_fingerprint_v26.ps1 -Mode Audit` produit un rapport structuré et son SHA-256 ;
+- [ ] une baseline V26 n'est enregistrée qu'après validation physique complète ;
+- [ ] `-Mode Verify` ne signale aucune dérive inexpliquée ;
+- [ ] le Golden Backup passe `63_restore_drill_v26.ps1 -Mode Verify` ;
+- [ ] au moins un drill WSL `Sandbox` a prouvé que le VHDX peut être importé et démarré sans toucher à la distribution `Ubuntu` réelle ;
+- [ ] l'exercice de restauration Windows complet reste planifié sous WinRE/offline et n'est jamais automatisé sur le système actif.
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
+```
+
+Guide : [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md).
+
 # Verdict final
 
 ```powershell
@@ -128,6 +145,6 @@ Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
   -ValidateDevOps
 ```
 
-Puis vérifier l'idempotence avec `-FullInstall -PlanOnly` et la sauvegarde de référence.
+Puis vérifier l'idempotence avec `-FullInstall -PlanOnly`, la sauvegarde de référence et l'absence de dérive V26 inexpliquée.
 
 Le résultat attendu est une workstation **cohérente, performante, maintenable, reproductible et récupérable**, indépendante des projets applicatifs ou IA éventuellement utilisés dessus.
