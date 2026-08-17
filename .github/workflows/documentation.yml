@@ -202,6 +202,45 @@ jobs:
           grep -Fq "\$ValidateWsl = \$true" install.ps1
           grep -Fq "\$ValidateHardware = \$true" install.ps1
 
+      - name: Verrouiller l'ordre du premier parcours V25
+        shell: python
+        run: |
+          from pathlib import Path
+
+          required = [
+              Path('README.md'),
+              Path('docs/README.md'),
+              Path('docs/01_INSTALLATION_WINDOWS.md'),
+              Path('docs/13_RUNBOOK_REINSTALLATION.md'),
+              Path('docs/14_ORCHESTRATION.md'),
+              Path('docs/16_WSL2_GUIDE_COMPLET.md'),
+              Path('docs/17_CONTROL_CENTER.md'),
+              Path('docs/18_GUIDE_MAITRE.md'),
+              Path('docs/20_RUNBOOK_OPERATIONNEL.md'),
+              Path('docs/21_REFERENCE_COMMANDES.md'),
+              Path('docs/22_TROUBLESHOOTING.md'),
+              Path('docs/24_CRITERES_ACCEPTATION.md'),
+          ]
+          needle = '00_storage_identity_v25.ps1'
+          missing = [str(path) for path in required if needle not in path.read_text(encoding='utf-8')]
+          if missing:
+              raise SystemExit('Référence V25 absente: ' + ', '.join(missing))
+
+          runbook = Path('docs/20_RUNBOOK_OPERATIONNEL.md').read_text(encoding='utf-8')
+          order = [
+              '.\\install.ps1 -Mode Audit',
+              '00_storage_identity_v25.ps1 -Mode Audit',
+              '-Mode Record',
+              '00_storage_identity_v25.ps1 -Mode Verify',
+              '.\\install.ps1 -Mode Apply -FullInstall -PlanOnly',
+              '.\\install.ps1 -Mode Apply -FullInstall',
+          ]
+          positions = [runbook.find(item) for item in order]
+          if any(position < 0 for position in positions):
+              raise SystemExit(f'Parcours V25 incomplet dans docs/20: {positions}')
+          if positions != sorted(positions):
+              raise SystemExit(f'Ordre V25 incohérent dans docs/20: {positions}')
+
       - name: Vérifier la référence des paramètres publics
         shell: python
         run: |
