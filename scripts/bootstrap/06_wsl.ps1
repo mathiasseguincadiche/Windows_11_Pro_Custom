@@ -17,6 +17,7 @@ Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
+$storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity_v25.ps1'
 $swapDir = 'D:\WSL\swap'
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
@@ -24,6 +25,7 @@ if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
 }
 if (-not (Test-Path $configSource)) { throw "Profil WSL introuvable: $configSource" }
 if (-not (Test-Path $runtimeContractPath)) { throw "Contrat runtime WSL absent: $runtimeContractPath" }
+if (-not (Test-Path $storageIdentityScript)) { throw "Gate d'identité stockage V25 absent: $storageIdentityScript" }
 
 $runtimeContract = Get-Content -Raw $runtimeContractPath | ConvertFrom-Json
 $expectedDistribution = [string]$runtimeContract.distribution
@@ -135,6 +137,9 @@ function Assert-WslInstallCapabilities {
         throw "Source WSL épinglée indisponible: $sourceDistribution. Aucune autre version Ubuntu ne sera substituée silencieusement."
     }
 }
+
+Write-Host '[ANALYSE] Vérification V25 de l’identité physique de D: avant toute opération WSL...' -ForegroundColor Cyan
+& $storageIdentityScript -Mode Verify
 
 $dVolume = Get-Volume -DriveLetter D -ErrorAction Stop
 if ($dVolume.FileSystem -ne 'NTFS') { throw 'D: doit rester NTFS.' }

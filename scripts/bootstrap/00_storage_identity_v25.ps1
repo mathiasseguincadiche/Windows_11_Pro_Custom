@@ -1,0 +1,288 @@
+[CmdletBinding()]
+param(
+    [ValidateSet('Audit', 'Record', 'Verify')]
+    [string]$Mode = 'Audit',
+    [string]$BaselinePath = '',
+    [switch]$ConfirmHealthyTopology,
+    [switch]$ReplaceBaseline
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
+    $BaselinePath = Join-Path $repoRoot 'state\storage-v25\volume-identity.json'
+}
+$reportDir = Join-Path $repoRoot 'reports\storage-identity-v25'
+$reportPath = Join-Path $reportDir 'latest-topology.json'
+New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+
+function Get-WpcPropertyValue {
+    param(
+        [Parameter(Mandatory)]$InputObject,
+        [Parameter(Mandatory)][string]$Name
+    )
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function ConvertTo-WpcIdentityText {
+    param($Value)
+    if ($null -eq $Value) { return '' }
+    return ([string]$Value).Trim().ToLowerInvariant()
+}
+
+function Get-WpcStorageTopology {
+    $disks = @(Get-Disk -ErrorAction Stop)
+    $partitions = @(Get-Partition -ErrorAction Stop)
+    $volumes = @(Get-Volume -ErrorAction Stop)
+
+    $diskFacts = @(
+        foreach ($disk in $disks) {
+            [pscustomobject]@{
+                Number = [int]$disk.Number
+                FriendlyName = [string]$disk.FriendlyName
+                Model = [string](Get-WpcPropertyValue -InputObject $disk -Name 'Model')
+                SerialNumber = [string]$disk.SerialNumber
+                UniqueId = [string]$disk.UniqueId
+                Guid = [string](Get-WpcPropertyValue -InputObject $disk -Name 'Guid')
+                Location = [string](Get-WpcPropertyValue -InputObject $disk -Name 'Location')
+                BusType = [string]$disk.BusType
+                PartitionStyle = [string]$disk.PartitionStyle
+                OperationalStatus = @($disk.OperationalStatus | ForEach-Object { [string]$_ })
+                HealthStatus = [string]$disk.HealthStatus
+                IsOffline = [bool]$disk.IsOffline
+                IsReadOnly = [bool]$disk.IsReadOnly
+                Size = [uint64]$disk.Size
+            }
+        }
+    )
+
+    $partitionFacts = @(
+        foreach ($partition in $partitions) {
+            $disk = @($disks | Where-Object Number -EQ $partition.DiskNumber | Select-Object -First 1)
+            $driveLetter = [string](Get-WpcPropertyValue -InputObject $partition -Name 'DriveLetter')
+            $volume = @()
+            if ($driveLetter -match '^[A-Za-z]$') {
+                $volume = @(Get-Volume -DriveLetter $driveLetter[0] -ErrorAction SilentlyContinue | Select-Object -First 1)
+            }
+            $diskItem = if ($disk.Count -gt 0) { $disk[0] } else { $null }
+            $volumeItem = if ($volume.Count -gt 0) { $volume[0] } else { $null }
+
+            [pscustomobject]@{
+                DiskNumber = [int]$partition.DiskNumber
+                PartitionNumber = [int]$partition.PartitionNumber
+                DriveLetter = $driveLetter.ToUpperInvariant()
+                AccessPaths = @((Get-WpcPropertyValue -InputObject $partition -Name 'AccessPaths') | ForEach-Object { [string]$_ })
+                Type = [string](Get-WpcPropertyValue -InputObject $partition -Name 'Type')
+                GptType = [string](Get-WpcPropertyValue -InputObject $partition -Name 'GptType')
+                MbrType = [string](Get-WpcPropertyValue -InputObject $partition -Name 'MbrType')
+                PartitionGuid = [string](Get-WpcPropertyValue -InputObject $partition -Name 'Guid')
+                PartitionUniqueId = [string](Get-WpcPropertyValue -InputObject $partition -Name 'UniqueId')
+                IsActive = [bool](Get-WpcPropertyValue -InputObject $partition -Name 'IsActive')
+                IsBoot = [bool](Get-WpcPropertyValue -InputObject $partition -Name 'IsBoot')
+                IsSystem = [bool](Get-WpcPropertyValue -InputObject $partition -Name 'IsSystem')
+                IsHidden = [bool](Get-WpcPropertyValue -InputObject $partition -Name 'IsHidden')
+                IsReadOnly = [bool](Get-WpcPropertyValue -InputObject $partition -Name 'IsReadOnly')
+                IsOffline = [bool](Get-WpcPropertyValue -InputObject $partition -Name 'IsOffline')
+                Size = [uint64]$partition.Size
+                Offset = [uint64]$partition.Offset
+                DiskFriendlyName = if ($null -ne $diskItem) { [string]$diskItem.FriendlyName } else { '' }
+                DiskModel = if ($null -ne $diskItem) { [string](Get-WpcPropertyValue -InputObject $diskItem -Name 'Model') } else { '' }
+                DiskSerialNumber = if ($null -ne $diskItem) { [string]$diskItem.SerialNumber } else { '' }
+                DiskUniqueId = if ($null -ne $diskItem) { [string]$diskItem.UniqueId } else { '' }
+                DiskPartitionStyle = if ($null -ne $diskItem) { [string]$diskItem.PartitionStyle } else { '' }
+                DiskIsOffline = if ($null -ne $diskItem) { [bool]$diskItem.IsOffline } else { $true }
+                DiskIsReadOnly = if ($null -ne $diskItem) { [bool]$diskItem.IsReadOnly } else { $true }
+                VolumeUniqueId = if ($null -ne $volumeItem) { [string]$volumeItem.UniqueId } else { '' }
+                VolumePath = if ($null -ne $volumeItem) { [string]$volumeItem.Path } else { '' }
+                FileSystem = if ($null -ne $volumeItem) { [string]$volumeItem.FileSystem } else { '' }
+                FileSystemLabel = if ($null -ne $volumeItem) { [string]$volumeItem.FileSystemLabel } else { '' }
+                VolumeHealthStatus = if ($null -ne $volumeItem) { [string]$volumeItem.HealthStatus } else { '' }
+                VolumeOperationalStatus = if ($null -ne $volumeItem) { @($volumeItem.OperationalStatus | ForEach-Object { [string]$_ }) } else { @() }
+            }
+        }
+    )
+
+    $volumeFacts = @(
+        foreach ($volume in $volumes) {
+            [pscustomobject]@{
+                DriveLetter = [string]$volume.DriveLetter
+                Path = [string]$volume.Path
+                UniqueId = [string]$volume.UniqueId
+                FileSystem = [string]$volume.FileSystem
+                FileSystemLabel = [string]$volume.FileSystemLabel
+                DriveType = [string]$volume.DriveType
+                HealthStatus = [string]$volume.HealthStatus
+                OperationalStatus = @($volume.OperationalStatus | ForEach-Object { [string]$_ })
+                Size = [uint64]$volume.Size
+                SizeRemaining = [uint64]$volume.SizeRemaining
+            }
+        }
+    )
+
+    return [pscustomobject]@{
+        CapturedAt = (Get-Date).ToString('o')
+        Disks = $diskFacts
+        Partitions = $partitionFacts
+        Volumes = $volumeFacts
+    }
+}
+
+function Get-WpcRolePartition {
+    param(
+        [Parameter(Mandatory)]$Topology,
+        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$DriveLetter
+    )
+    $matches = @($Topology.Partitions | Where-Object DriveLetter -EQ $DriveLetter)
+    if ($matches.Count -ne 1) { return $null }
+    return $matches[0]
+}
+
+function Get-WpcRoleFailures {
+    param(
+        [Parameter(Mandatory)][AllowNull()]$Partition,
+        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$Role
+    )
+    $failures = @()
+    if ($null -eq $Partition) { return @("${Role}: partition introuvable ou ambiguë") }
+    if ($Partition.FileSystem -ne 'NTFS') { $failures += "${Role}: filesystem=$($Partition.FileSystem), attendu=NTFS" }
+    if ($Partition.DiskPartitionStyle -ne 'GPT') { $failures += "${Role}: partitionStyle=$($Partition.DiskPartitionStyle), attendu=GPT" }
+    if ($Partition.DiskIsOffline -or $Partition.IsOffline) { $failures += "${Role}: disque ou partition hors ligne" }
+    if ($Partition.DiskIsReadOnly -or $Partition.IsReadOnly) { $failures += "${Role}: disque ou partition en lecture seule" }
+    if ($Partition.VolumeHealthStatus -ne 'Healthy') { $failures += "${Role}: volumeHealth=$($Partition.VolumeHealthStatus), attendu=Healthy" }
+    if ([string]::IsNullOrWhiteSpace($Partition.DiskUniqueId) -and [string]::IsNullOrWhiteSpace($Partition.DiskSerialNumber)) {
+        $failures += "${Role}: aucune identité disque stable disponible"
+    }
+    if ([string]::IsNullOrWhiteSpace($Partition.PartitionGuid) -and [string]::IsNullOrWhiteSpace($Partition.PartitionUniqueId)) {
+        $failures += "${Role}: aucune identité de partition stable disponible"
+    }
+    if ([string]::IsNullOrWhiteSpace($Partition.VolumeUniqueId)) { $failures += "${Role}: VolumeUniqueId indisponible" }
+    if ($Role -eq 'D') {
+        if ($Partition.IsBoot) { $failures += 'D: ne doit jamais être la partition de démarrage Windows' }
+        if ($Partition.IsSystem) { $failures += 'D: ne doit jamais être une partition système/EFI' }
+        if ($Partition.IsHidden) { $failures += 'D: ne doit jamais être une partition masquée' }
+    }
+    return @($failures)
+}
+
+function ConvertTo-WpcRoleIdentity {
+    param(
+        [Parameter(Mandatory)]$Partition,
+        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$Role
+    )
+    return [ordered]@{
+        Role = $Role
+        DriveLetter = $Role
+        DiskFriendlyName = [string]$Partition.DiskFriendlyName
+        DiskModel = [string]$Partition.DiskModel
+        DiskSerialNumber = [string]$Partition.DiskSerialNumber
+        DiskUniqueId = [string]$Partition.DiskUniqueId
+        PartitionGuid = [string]$Partition.PartitionGuid
+        PartitionUniqueId = [string]$Partition.PartitionUniqueId
+        VolumeUniqueId = [string]$Partition.VolumeUniqueId
+        FileSystem = [string]$Partition.FileSystem
+        Size = [uint64]$Partition.Size
+        IsBoot = [bool]$Partition.IsBoot
+        IsSystem = [bool]$Partition.IsSystem
+    }
+}
+
+function Compare-WpcRoleIdentity {
+    param(
+        [Parameter(Mandatory)]$Expected,
+        [Parameter(Mandatory)]$Actual,
+        [Parameter(Mandatory)][string]$Role
+    )
+    $differences = @()
+    foreach ($property in @('DriveLetter','DiskSerialNumber','DiskUniqueId','PartitionGuid','PartitionUniqueId','VolumeUniqueId','FileSystem','Size','IsBoot','IsSystem')) {
+        $expectedValue = Get-WpcPropertyValue -InputObject $Expected -Name $property
+        $actualValue = Get-WpcPropertyValue -InputObject $Actual -Name $property
+        if ((ConvertTo-WpcIdentityText $expectedValue) -ne (ConvertTo-WpcIdentityText $actualValue)) {
+            $differences += "${Role}.${property}: attendu='$expectedValue' observé='$actualValue'"
+        }
+    }
+    return @($differences)
+}
+
+$topology = Get-WpcStorageTopology
+$cPartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'C'
+$dPartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'D'
+$failures = @()
+$failures += @(Get-WpcRoleFailures -Partition $cPartition -Role 'C')
+$failures += @(Get-WpcRoleFailures -Partition $dPartition -Role 'D')
+if ($null -ne $cPartition -and $null -ne $dPartition -and $cPartition.DiskNumber -eq $dPartition.DiskNumber) {
+    $failures += 'C: et D: doivent résider sur deux disques physiques distincts.'
+}
+
+$baselinePresent = Test-Path -LiteralPath $BaselinePath
+$baseline = $null
+if ($baselinePresent) {
+    try { $baseline = Get-Content -Raw -LiteralPath $BaselinePath | ConvertFrom-Json }
+    catch { $failures += "Baseline V25 illisible: $($_.Exception.Message)" }
+}
+
+if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $dPartition) {
+    if ([string]$baseline.ContractVersion -ne 'V25') { $failures += "Version baseline=$($baseline.ContractVersion), attendue=V25" }
+    $failures += @(Compare-WpcRoleIdentity -Expected $baseline.Roles.C -Actual (ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C') -Role 'C')
+    $failures += @(Compare-WpcRoleIdentity -Expected $baseline.Roles.D -Actual (ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D') -Role 'D')
+}
+
+$report = [ordered]@{
+    Version = 'V25'
+    Timestamp = (Get-Date).ToString('o')
+    Mode = $Mode
+    BaselinePath = $BaselinePath
+    BaselinePresent = $baselinePresent
+    BaselineContractVersion = if ($null -ne $baseline) { [string]$baseline.ContractVersion } else { $null }
+    Clean = ($failures.Count -eq 0)
+    Failures = @($failures)
+    Topology = $topology
+}
+$report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
+
+if ($Mode -eq 'Record') {
+    if (-not $ConfirmHealthyTopology) {
+        throw 'Enrôlement refusé: utilise explicitement -ConfirmHealthyTopology après vérification humaine de la topologie C:/D:.'
+    }
+    if ($baselinePresent -and -not $ReplaceBaseline) {
+        throw "Baseline V25 déjà présente: $BaselinePath. Aucun remplacement silencieux. Utilise -ReplaceBaseline avec -ConfirmHealthyTopology uniquement après investigation."
+    }
+    if ($failures.Count -gt 0) {
+        throw "Enrôlement V25 refusé: stockage non qualifié. $($failures -join ' | ')"
+    }
+    $baselineDocument = [ordered]@{
+        ContractVersion = 'V25'
+        RecordedAt = (Get-Date).ToString('o')
+        Policy = 'explicit-trust-enrollment; fail-closed; no-automatic-repair; distinct-physical-disks'
+        Roles = [ordered]@{
+            C = ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C'
+            D = ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D'
+        }
+    }
+    $baselineDir = Split-Path -Parent $BaselinePath
+    New-Item -ItemType Directory -Force -Path $baselineDir | Out-Null
+    $baselineDocument | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $BaselinePath -Encoding utf8
+    Write-Host "[FAIT] Baseline V25 enregistrée explicitement: $BaselinePath" -ForegroundColor Green
+    Write-Host 'Relance immédiatement le mode Verify avant toute installation.' -ForegroundColor Yellow
+    return
+}
+
+if (-not $baselinePresent) {
+    $message = "Baseline V25 absente. Après contrôle humain de C:/D:, exécute: .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology"
+    if ($Mode -eq 'Verify') { throw $message }
+    Write-Host "[ACTION REQUISE] $message" -ForegroundColor Yellow
+}
+
+if ($failures.Count -gt 0) {
+    if ($Mode -eq 'Verify') {
+        throw "V25 STORAGE IDENTITY BLOCK: topologie disque/volume différente ou non sûre. Aucune convergence autorisée. $($failures -join ' | ')"
+    }
+    Write-Host "[ALERTE] Topologie V25 non qualifiée: $($failures -join ' | ')" -ForegroundColor Yellow
+} elseif ($baselinePresent) {
+    Write-Host '[OK] V25: C: et D: correspondent exactement aux identités enrôlées.' -ForegroundColor Green
+    Write-Host 'VERDICT: STORAGE IDENTITY READY' -ForegroundColor Green
+}
+Write-Host "[INFO] Rapport topologique V25: $reportPath" -ForegroundColor DarkGray

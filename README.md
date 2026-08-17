@@ -234,6 +234,7 @@ Le projet privilégie la convergence contrôlée plutôt que les transformations
 - les versions reproductibles viennent des contrats du dépôt, pas d'un `latest` pris arbitrairement ;
 - les preuves matérielles non observables automatiquement restent explicites ;
 - les changements sensibles ou destructifs ne sont pas assimilés à de la maintenance normale ;
+- l'identité physique de `C:` et `D:` est enrôlée explicitement puis vérifiée avant toute convergence et avant WSL ;
 - la reconstruction après incident reste séparée du parcours quotidien.
 
 ## Documentation officielle
@@ -256,6 +257,7 @@ Le README présente le projet. Les procédures, contrats et diagnostics vivent d
 | Runbook opérationnel | [`docs/20_RUNBOOK_OPERATIONNEL.md`](docs/20_RUNBOOK_OPERATIONNEL.md) |
 | Référence des commandes | [`docs/21_REFERENCE_COMMANDES.md`](docs/21_REFERENCE_COMMANDES.md) |
 | Troubleshooting | [`docs/22_TROUBLESHOOTING.md`](docs/22_TROUBLESHOOTING.md) |
+| Identité des SSD/partitions et disparition d'un volume | [`docs/25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](docs/25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
 | Sources de vérité | [`docs/23_SOURCES_DE_VERITE.md`](docs/23_SOURCES_DE_VERITE.md) |
 | Critères d'acceptation | [`docs/24_CRITERES_ACCEPTATION.md`](docs/24_CRITERES_ACCEPTATION.md) |
 | Reconstruction après incident | [`docs/13_RUNBOOK_REINSTALLATION.md`](docs/13_RUNBOOK_REINSTALLATION.md) |
