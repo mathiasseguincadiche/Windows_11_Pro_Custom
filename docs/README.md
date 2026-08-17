@@ -103,7 +103,10 @@ Puis prévisualiser la workstation complète :
 Après validation physique complète, capturer l'empreinte globale V26 :
 
 ```powershell
-.\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+  -Mode Audit `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence
 ```
 
 Ordre canonique : [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).

@@ -231,7 +231,15 @@ function Invoke-WpcIdempotentScript {
 }
 
 function Invoke-WpcExternalCommand {
-    param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$FilePath,[string[]]$ArgumentList=@(),[Parameter(Mandatory)][string]$LogIdentity,[string]$DisplayName='')
+    param(
+        [Parameter(Mandatory)]$Context,
+        [Parameter(Mandatory)][string]$FilePath,
+        [string[]]$ArgumentList=@(),
+        [Parameter(Mandatory)][string]$LogIdentity,
+        [string]$DisplayName='',
+        [switch]$AllowFailure,
+        [switch]$Quiet
+    )
     if ([string]::IsNullOrWhiteSpace($DisplayName)) { $DisplayName=[IO.Path]::GetFileName($LogIdentity) }
     $logPath=Get-WpcLogPath -Context $Context -Identity $LogIdentity
     $safeArgs=Protect-WpcCommandText -Text ($ArgumentList -join ' ')
@@ -239,9 +247,9 @@ function Invoke-WpcExternalCommand {
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
     Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Command=$FilePath $safeArgs"
-    Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $LogIdentity -Context $Context
+    if (-not $Quiet) { Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $LogIdentity -Context $Context }
     $started=Get-Date
-    & $FilePath @ArgumentList 2>&1 | ForEach-Object { foreach ($line in @(([string]$_) -split "`r?`n")) { Write-WpcChildLine -Line $line -LogPath $logPath } }
+    & $FilePath @ArgumentList 2>&1 | ForEach-Object { foreach ($line in @(([string]$_) -split "`r?`n")) { Write-WpcChildLine -Line $line -LogPath $logPath -Quiet:$Quiet } }
     $exitCode=$LASTEXITCODE; $global:LASTEXITCODE=0
     $duration=[math]::Round(((Get-Date)-$started).TotalSeconds,2)
     $parentPurpose=[Environment]::GetEnvironmentVariable('W11_CUSTOM_PARENT_PURPOSE')
@@ -249,10 +257,14 @@ function Invoke-WpcExternalCommand {
     if ($exitCode -ne 0) {
         Add-WpcLogLine -Path $logPath -Level 'ERROR' -Message "ExitCode=$exitCode"
         Add-WpcEvent -Context $Context -Data @{ Kind='SCRIPT'; Purpose=$purpose; Phase='Run'; Script=$LogIdentity; DisplayName=$DisplayName; Outcome='FAILED'; Success=$false; DurationSeconds=$duration; LogPath=$logPath; Error="ExitCode=$exitCode" }
-        throw "$DisplayName a échoué avec le code $exitCode. Voir $logPath"
+        $errorText="$DisplayName a échoué avec le code $exitCode. Voir $logPath"
+        $result=[pscustomobject]@{ Success=$false; Outcome='FAILED'; Error=$errorText; ExitCode=$exitCode; LogPath=$logPath; DurationSeconds=$duration }
+        if (-not $AllowFailure) { throw $errorText }
+        return $result
     }
     Add-WpcLogLine -Path $logPath -Level 'END' -Message "Outcome=OK DurationSeconds=$duration"
     Add-WpcEvent -Context $Context -Data @{ Kind='SCRIPT'; Purpose=$purpose; Phase='Run'; Script=$LogIdentity; DisplayName=$DisplayName; Outcome='OK'; Success=$true; DurationSeconds=$duration; LogPath=$logPath; Error='' }
+    return [pscustomobject]@{ Success=$true; Outcome='OK'; Error=''; ExitCode=0; LogPath=$logPath; DurationSeconds=$duration }
 }
 
 function Read-WpcRequiredValue {

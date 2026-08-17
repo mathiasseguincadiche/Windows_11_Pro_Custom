@@ -33,7 +33,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Validate Ubuntu WSL contract
         shell: bash
         run: |
@@ -91,7 +91,7 @@ jobs:
   microsoft-wsl-source:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Verify Ubuntu 26.04 remains an explicit WSL source
         shell: bash
         run: |
@@ -113,7 +113,7 @@ jobs:
       DEBIAN_FRONTEND: noninteractive
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Validate Resolute package baseline
         shell: bash

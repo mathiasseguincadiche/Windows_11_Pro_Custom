@@ -28,7 +28,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Validate update policy
         run: |
@@ -63,6 +63,11 @@ jobs:
           grep -Fq "@('--update')" scripts/updates/30_wsl_update.ps1
           grep -Fq -- '--update-extensions' scripts/updates/60_vscode_extensions_update.ps1
           grep -Fq 'tool-versions.env' scripts/wsl/reconcile-pinned-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq '${aws_archive}.sig' scripts/wsl/reconcile-pinned-devops.sh
+          grep -Fq 'FB5DB77FD5C118B80511ADA8A6310ACC4672475C' scripts/wsl/reconcile-pinned-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq 'gpg --batch --homedir "$aws_gnupg" --verify' scripts/wsl/reconcile-pinned-devops.sh
           if grep -Eq 'apt-get[[:space:]]+(dist-upgrade|full-upgrade|autoremove)' scripts/wsl/update-system-packages.sh; then
             echo 'Upgrade APT destructif/interdit détecté.' >&2
             exit 1
@@ -115,7 +120,7 @@ jobs:
   powershell-parse:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Parse update PowerShell
         shell: pwsh

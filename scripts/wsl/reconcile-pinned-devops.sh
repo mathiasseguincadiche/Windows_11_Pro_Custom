@@ -155,8 +155,20 @@ fi
 
 if needs aws; then
   echo "[EN COURS] AWS CLI $AWS_CLI_VERSION"
+  command -v gpg >/dev/null 2>&1 || { echo '[ERREUR] gpg est requis pour vérifier AWS CLI.' >&2; exit 1; }
   aws_archive="awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip"
-  curl -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$tmpdir/awscliv2.zip"
+  aws_fingerprint='FB5DB77FD5C118B80511ADA8A6310ACC4672475C'
+  aws_gnupg="$tmpdir/aws-gnupg"
+  install -m 0700 -d "$aws_gnupg"
+  curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$tmpdir/awscliv2.zip"
+  curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}.sig" -o "$tmpdir/awscliv2.sig"
+  gpg --batch --homedir "$aws_gnupg" --keyserver hkps://keyserver.ubuntu.com --recv-keys "$aws_fingerprint"
+  aws_imported_fingerprint="$(gpg --batch --homedir "$aws_gnupg" --with-colons --fingerprint "$aws_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
+  if [[ "$aws_imported_fingerprint" != "$aws_fingerprint" ]]; then
+    echo "[ERREUR] Empreinte de clé AWS CLI inattendue: ${aws_imported_fingerprint:-absente}" >&2
+    exit 1
+  fi
+  gpg --batch --homedir "$aws_gnupg" --verify "$tmpdir/awscliv2.sig" "$tmpdir/awscliv2.zip"
   unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir/aws-cli"
   if command -v aws >/dev/null 2>&1; then
     sudo "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update

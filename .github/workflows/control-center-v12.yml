@@ -24,7 +24,7 @@ jobs:
   powershell-contract:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Parse menu PowerShell
         shell: pwsh
@@ -53,6 +53,12 @@ jobs:
             "Mode='Verify'",
             "InstallDevOps=[switch]::Present",
             "ValidateHardware=[switch]::Present",
+            "ValidateWsl=[switch]::Present",
+            "ValidateDevOps=[switch]::Present",
+            "90_workstation_fingerprint_v26.ps1",
+            "63_restore_drill_v26.ps1",
+            "ConfirmPhysicalEvidence=[switch]::Present",
+            "ReplaceBaseline=[switch]::Present",
             "DryRun",
             "Start-Process -FilePath `$exe -Verb RunAs"
           )) {
@@ -71,7 +77,7 @@ jobs:
       - name: Prove all critical routes with DryRun
         shell: pwsh
         run: |
-          $choices = @('1','2','3','4.1','4.2','5.1','5.2','6','7','8.1','8.2','9.1','9.2','10')
+          $choices = @('1','2','3','4.1','4.2','4.3','5.1','5.2','5.3','6','7','8.1','8.2','8.3','8.4','8.5','8.6','8.7','9.1','9.2','10')
           foreach ($choice in $choices) {
             Write-Host "--- Choice $choice ---"
             $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
@@ -100,10 +106,20 @@ jobs:
           $hardware = & ./menu.ps1 -Choice 8.2 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not $hardware.Contains('ValidateHardware')) { throw 'Hardware qualification route incorrect.' }
 
+          $globalVerify = & ./menu.ps1 -Choice 7 -DryRun -NoPause -NoClear *>&1 | Out-String
+          foreach ($flag in @('ValidateHardware','ValidateWsl','ValidateDevOps')) {
+            if (-not $globalVerify.Contains($flag)) { throw "Global verify route missing $flag." }
+          }
+
+          $fingerprint = & ./menu.ps1 -Choice 8.5 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not ($fingerprint.Contains('90_workstation_fingerprint_v26.ps1') -and $fingerprint.Contains('PHYSICAL') -and $fingerprint.Contains('ConfirmPhysicalEvidence'))) {
+            throw 'Physical fingerprint verification route incorrect.'
+          }
+
   launcher-contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Validate launcher and safety wording
         run: |

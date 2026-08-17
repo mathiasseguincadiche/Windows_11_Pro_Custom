@@ -20,7 +20,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Enforce explicit Windows module bootstrap and robust host detection
         shell: bash
         run: |
@@ -47,7 +47,7 @@ jobs:
   non-windows-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Reject a non-Windows host without relying on env:OS
         shell: pwsh
         run: |
@@ -60,7 +60,7 @@ jobs:
   windows-recovery:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Parse V16 PowerShell
         shell: pwsh
         run: |

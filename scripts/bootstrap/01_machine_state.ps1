@@ -37,7 +37,7 @@ function Test-PendingReboot {
         $pending = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop
         if ($null -ne $pending) { $reasons.Add('PendingFileRenameOperations') }
     } catch {}
-    return [pscustomobject]@{ Pending = ($reasons.Count -gt 0); Reasons = @($reasons) }
+    return [pscustomobject]@{ Pending = ($reasons.Count -gt 0); Reasons = $reasons.ToArray() }
 }
 
 function Get-VolumeFact {

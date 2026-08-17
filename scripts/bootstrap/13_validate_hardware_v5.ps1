@@ -31,7 +31,8 @@ $checks.MemoryConfigured6000 = ($memory.Count -gt 0 -and $memorySpeedFailures.Co
 $details.Memory = $memory
 
 $board = Get-CimInstance Win32_BaseBoard | Select-Object -First 1
-$checks.Motherboard = ([string]$board.Product -like "*$($target.motherboard.productContains)*")
+$checks.MotherboardManufacturer = ([string]$board.Manufacturer -like "*$($target.motherboard.manufacturerContains)*")
+$checks.MotherboardProduct = ([string]$board.Product -like "*$($target.motherboard.productContains)*")
 $details.Motherboard = $board
 
 $video = @(Get-CimInstance Win32_VideoController)

@@ -44,7 +44,7 @@ function Get-UpdateInventory {
         $item = [pscustomobject]@{ Update=$update; Title=[string]$update.Title; KB=$kb; IsDriver=$isDriver; Optional=$browseOnly; Reason=$reason }
         if ($include) { $selected.Add($item) } else { $ignored.Add($item) }
     }
-    return [pscustomobject]@{ Session=$session; Selected=@($selected); Ignored=@($ignored) }
+    return [pscustomobject]@{ Session=$session; Selected=$selected.ToArray(); Ignored=$ignored.ToArray() }
 }
 
 function Write-Inventory {

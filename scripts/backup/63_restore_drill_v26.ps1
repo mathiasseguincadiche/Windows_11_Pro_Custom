@@ -37,6 +37,22 @@ function Assert-Hash {
     }
 }
 
+function Get-WbadminVersionIdentifiers {
+    param([string[]]$Lines)
+    $identifiers = New-Object System.Collections.Generic.List[string]
+    foreach ($line in @($Lines)) {
+        $text = [string]$line
+        if ($text -match '(?i)^\s*(?:Version identifier|Identificateur de version)\s*:\s*(?<id>.+?)\s*$') {
+            $identifiers.Add($Matches.id.Trim())
+            continue
+        }
+        if ($text -match '(?<id>\d{1,4}[/-]\d{1,2}[/-]\d{1,4}-\d{1,2}:\d{2})') {
+            $identifiers.Add($Matches.id.Trim())
+        }
+    }
+    return @($identifiers | Sort-Object -Unique)
+}
+
 foreach ($command in @('wsl.exe', 'wbadmin.exe')) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
         throw "Commande requise indisponible: $command"
@@ -69,6 +85,17 @@ $VersionsExitCode = $LASTEXITCODE
 if ($VersionsExitCode -ne 0 -or $VersionsOutput.Count -eq 0) {
     throw "wbadmin ne peut pas énumérer de version récupérable sur $BackupTargetDrive. code=$VersionsExitCode"
 }
+$EnumeratedVersionIdentifiers = @(Get-WbadminVersionIdentifiers -Lines $VersionsOutput)
+$WbadminIdentifierProperty = $Manifest.PSObject.Properties['wbadminVersionIdentifier']
+$ExpectedWbadminVersionIdentifier = if ($null -eq $WbadminIdentifierProperty) { '' } else { [string]$WbadminIdentifierProperty.Value }
+if (-not [string]::IsNullOrWhiteSpace($ExpectedWbadminVersionIdentifier)) {
+    if ($EnumeratedVersionIdentifiers -notcontains $ExpectedWbadminVersionIdentifier) {
+        throw "La version wbadmin liée au manifeste est introuvable sur $BackupTargetDrive. attendue=$ExpectedWbadminVersionIdentifier"
+    }
+    Write-Host "[OK] Version wbadmin du manifeste retrouvée: $ExpectedWbadminVersionIdentifier" -ForegroundColor Green
+} else {
+    Write-Warning 'Manifest V7 antérieur sans wbadminVersionIdentifier: énumération validée, mais liaison exacte session/image non prouvée.'
+}
 
 Write-Host '[OK] Manifest Golden Backup V7 valide.' -ForegroundColor Green
 Write-Host '[OK] SHA-256 du VHDX WSL valide.' -ForegroundColor Green
@@ -84,11 +111,25 @@ if (-not $ConfirmIsolatedRestoreDrill) {
     throw 'Le mode Sandbox exige -ConfirmIsolatedRestoreDrill.'
 }
 if ([string]::IsNullOrWhiteSpace($ScratchRoot)) {
-    throw 'Le mode Sandbox exige -ScratchRoot sur un emplacement disposant de suffisamment d’espace libre.'
+    throw "Le mode Sandbox exige -ScratchRoot sur un emplacement disposant de suffisamment d'espace libre."
 }
 
 $ScratchRootFull = [IO.Path]::GetFullPath($ScratchRoot)
 New-Item -ItemType Directory -Force -Path $ScratchRootFull | Out-Null
+$ScratchPathRoot = [IO.Path]::GetPathRoot($ScratchRootFull)
+if ([string]::IsNullOrWhiteSpace($ScratchPathRoot)) {
+    throw "Impossible de déterminer le volume du scratch depuis $ScratchRootFull"
+}
+try {
+    $ScratchDrive = [IO.DriveInfo]::new($ScratchPathRoot)
+    $RequiredScratchBytes = [long][math]::Ceiling(([long](Get-Item -LiteralPath $VhdxPath).Length * 1.10) + 1GB)
+    if ($ScratchDrive.AvailableFreeSpace -lt $RequiredScratchBytes) {
+        throw "Espace scratch insuffisant. requis=$([math]::Round($RequiredScratchBytes / 1GB, 2)) Go disponible=$([math]::Round($ScratchDrive.AvailableFreeSpace / 1GB, 2)) Go"
+    }
+    Write-Host "[OK] Capacité scratch validée: $([math]::Round($ScratchDrive.AvailableFreeSpace / 1GB, 2)) Go disponibles." -ForegroundColor Green
+} catch {
+    throw "Impossible de valider la capacité du scratch $ScratchPathRoot. $($_.Exception.Message)"
+}
 $DrillId = (Get-Date -Format 'yyyyMMddHHmmss') + '-' + ([guid]::NewGuid().ToString('N').Substring(0, 8))
 $TemporaryDistribution = "W11PC-RestoreDrill-$DrillId"
 if ($TemporaryDistribution -eq [string]$Manifest.wsl.distribution -or $TemporaryDistribution -eq 'Ubuntu') {

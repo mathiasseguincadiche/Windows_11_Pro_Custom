@@ -41,6 +41,22 @@ function Get-DiskForDriveLetter {
     return Get-Disk -Number $partition.DiskNumber -ErrorAction Stop
 }
 
+function Get-WbadminVersionIdentifiers {
+    param([string[]]$Lines)
+    $identifiers = New-Object System.Collections.Generic.List[string]
+    foreach ($line in @($Lines)) {
+        $text = [string]$line
+        if ($text -match '(?i)^\s*(?:Version identifier|Identificateur de version)\s*:\s*(?<id>.+?)\s*$') {
+            $identifiers.Add($Matches.id.Trim())
+            continue
+        }
+        if ($text -match '(?<id>\d{1,4}[/-]\d{1,2}[/-]\d{1,4}-\d{1,2}:\d{2})') {
+            $identifiers.Add($Matches.id.Trim())
+        }
+    }
+    return @($identifiers | Sort-Object -Unique)
+}
+
 if (-not (Test-Administrator)) {
     throw 'La création de sauvegarde nécessite une session PowerShell élevée.'
 }
@@ -182,6 +198,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "wsl --shutdown a échoué avec le code $LASTEXITCODE."
 }
 
+$VersionsBeforeOutput = @(& wbadmin.exe get versions "-backupTarget:$TargetDrive" 2>&1)
+$VersionsBeforeIdentifiers = @(Get-WbadminVersionIdentifiers -Lines $VersionsBeforeOutput)
+$global:LASTEXITCODE = 0
+$VersionsBeforeOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'wbadmin-get-versions-before.txt')
+
 $WbadminArguments = @(
     'start',
     'backup',
@@ -205,6 +226,12 @@ $VersionsOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'wbad
 if ($VersionsExitCode -ne 0 -or $VersionsOutput.Count -eq 0) {
     throw "Lʼimage Windows est terminée mais wbadmin ne peut pas énumérer de version récupérable."
 }
+$VersionsAfterIdentifiers = @(Get-WbadminVersionIdentifiers -Lines $VersionsOutput)
+$CreatedVersionIdentifiers = @($VersionsAfterIdentifiers | Where-Object { $VersionsBeforeIdentifiers -notcontains $_ })
+if ($CreatedVersionIdentifiers.Count -ne 1) {
+    throw "Impossible d'identifier de manière univoque la version wbadmin créée. Nouvelles versions détectées=$($CreatedVersionIdentifiers.Count). Consulter wbadmin-get-versions-before.txt et wbadmin-get-versions.txt."
+}
+$CreatedWbadminVersionIdentifier = $CreatedVersionIdentifiers[0]
 
 $WslBackupPath = Join-Path $WslBackupDirectory "$Distribution-GOLDEN-V7.vhdx"
 Write-Host "[INFO] Export de la distribution WSL2 '$Distribution' au format VHDX." -ForegroundColor Cyan
@@ -238,6 +265,7 @@ $Manifest = [ordered]@{
     windowsImageBackupRoot = $WindowsImageRoot
     wbadminBackupExitCode = $WbadminExitCode
     wbadminVersionsExitCode = $VersionsExitCode
+    wbadminVersionIdentifier = $CreatedWbadminVersionIdentifier
     winReEnabled = [bool]$WinReEnabled
     restorePointAttempted = [bool]$RestorePointAttempted
     wsl = [ordered]@{
@@ -265,6 +293,7 @@ $Manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $ManifestPath
 
 Write-Host '[OK] Préflight de capacité validé.' -ForegroundColor Green
 Write-Host '[OK] Image Windows créée et énumérée par wbadmin.' -ForegroundColor Green
+Write-Host "[OK] Version wbadmin liée au manifeste: $CreatedWbadminVersionIdentifier" -ForegroundColor Green
 Write-Host '[OK] VHDX WSL2 exporté et SHA-256 enregistré.' -ForegroundColor Green
 Write-Host '[OK] Baseline dʼidentité stockage V25 copiée et signée SHA-256.' -ForegroundColor Green
 Write-Host "[OK] Manifest: $ManifestPath" -ForegroundColor Green

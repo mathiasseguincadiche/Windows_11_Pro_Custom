@@ -191,8 +191,8 @@ $report = [ordered]@{
     IncludeDrivers=[bool]$IncludeDrivers
     IncludeOptionalUpdates=[bool]$IncludeOptionalUpdates
     IncludeUnknownPackages=[bool]$IncludeUnknownPackages
-    Results=@($results)
-    Failures=@($failures)
+    Results=$results.ToArray()
+    Failures=$failures.ToArray()
 }
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 
