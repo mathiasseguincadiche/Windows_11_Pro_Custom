@@ -16,7 +16,7 @@ Pour l'état actuel du projet, utiliser :
   Pro + WSL2 DevOps + desktop/gaming + maintenance + reprise après incident ;
 - séparation claire entre **ce qu'est le projet** et les procédures permettant de
   l'installer ;
-- consolidation de la documentation active dans une série canonique `00` à `19`,
+- consolidation de la documentation active dans une série canonique `00` à `26`,
   sans suffixes de versions historiques dans les noms des guides ;
 - fusion des informations utiles des anciens guides V3 à V13 dans les documents
   canoniques actuels ;
@@ -33,6 +33,19 @@ Pour l'état actuel du projet, utiliser :
 ---
 
 ## Historique des évolutions
+
+### V26 — Preuves, dérive et restaurabilité renforcées
+
+- distinction exécutable entre preuves `SIMULATED` et `PHYSICAL` : un runner CI ne peut plus produire une preuve physique ;
+- ajout du commit Git, d'un diff champ par champ et d'un remplacement de baseline justifié avec archivage de l'état précédent ;
+- liaison des nouvelles sessions Golden Backup à leur identifiant `wbadmin` exact, tout en gardant la compatibilité avec les anciens manifests ;
+- contrôle anticipé de la capacité du scratch avant le drill WSL isolé ;
+- correction du contrat `Invoke-WpcExternalCommand -AllowFailure` et ajout de tests runtime ;
+- intégration des preuves et drills V26 dans le centre de contrôle ;
+- validation globale du menu étendue au matériel, à WSL et à la stack DevOps ;
+- vérification PGP d'AWS CLI conservée lors des mises à jour ;
+- références GitHub Actions épinglées sur des commits immuables ;
+- compteurs historiques d'erreurs NVMe rendus consultatifs, sans affaiblir le blocage sur les erreurs non corrigées.
 
 ### V25 — Identité physique du stockage et garde-fou WSL
 

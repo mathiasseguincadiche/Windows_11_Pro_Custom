@@ -38,6 +38,12 @@ Le centre de contrôle regroupe les intentions principales :
 
 Les intitulés peuvent évoluer avec le dépôt, mais la responsabilité reste la même : **orienter l'utilisateur vers le bon moteur**.
 
+La vérification de conformité globale active réellement les validations matériel,
+WSL et DevOps. Le sous-menu des composants expose également l'empreinte
+`SIMULATED`, les preuves `PHYSICAL`, ainsi que l'enregistrement ou le remplacement
+justifié de la baseline. Les menus Sauvegarde et Restauration donnent accès au
+`Verify` V26 et au drill WSL isolé avec confirmation explicite.
+
 ## Architecture
 
 ```text

@@ -12,7 +12,7 @@ jobs:
   powershell:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Parse PowerShell files
         shell: pwsh
         run: |
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Parse Bash files
         shell: bash
         run: |
@@ -84,7 +84,7 @@ jobs:
   structured-config:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Validate JSON
         shell: bash
         run: |
@@ -120,6 +120,8 @@ jobs:
             (.memory.minimumBytes | type == "number") and
             (.memory.targetConfiguredClockMHz == 6000) and
             (.gpu.nameRegex | type == "string") and
+            (.motherboard.manufacturerContains | type == "string") and
+            (.motherboard.productContains | type == "string") and
             (.storage.minimumCount == 2) and
             (.display.width == 2560) and
             (.display.height == 1440) and
@@ -127,6 +129,7 @@ jobs:
             (.manualChecks | type == "array") and
             (.manualChecks | length == 8)
           ' config/hardware/target-v5.json >/dev/null
+          jq -e '.network.wifiDeviceRegex | test("Wi-Fi 7|FastConnect 7800|NCM865")' config/hardware/symbiosis-v5.json >/dev/null
       - name: Validate WSL profiles and remote tooling
         shell: bash
         run: |
@@ -190,6 +193,9 @@ jobs:
           grep -q 'scripts\\backup\\60_create_backup_v7.ps1' install.ps1
           grep -q 'scripts\\backup\\61_validate_backup_v7.ps1' install.ps1
           grep -q 'scripts\\backup\\62_restore_plan_v7.ps1' install.ps1
+          grep -q 'wbadminVersionIdentifier' scripts/backup/60_create_backup_v7.ps1
+          grep -q 'wbadminVersionIdentifier' scripts/backup/61_validate_backup_v7.ps1
+          grep -q 'wbadminVersionIdentifier' scripts/backup/63_restore_drill_v26.ps1
       - name: Validate WezTerm Lua syntax
         shell: bash
         run: |
@@ -201,7 +207,15 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+      - name: Reject mutable action references
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '^[[:space:]]*uses:[[:space:]]+[^[:space:]#]+@(v[0-9]+|main|master|latest)([[:space:]#]|$)' .github/workflows; then
+            echo 'Every GitHub Action must be pinned to an immutable commit SHA.' >&2
+            exit 1
+          fi
       - name: Install pinned actionlint
         shell: bash
         run: |
@@ -220,7 +234,7 @@ jobs:
   safety-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Reject destructive Windows operations
         shell: bash
         run: |

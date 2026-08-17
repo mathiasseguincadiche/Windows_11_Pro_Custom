@@ -380,7 +380,43 @@ Voir [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-# 13. Vocabulaire de sortie
+# 13. Preuves V26 et restauration isolée
+
+Audit simulé :
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
+```
+
+Audit ou vérification physique sur la workstation réelle :
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+  -Mode Verify `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence
+```
+
+Le premier `Record` exige `-ConfirmHealthyState`. Un remplacement exige en plus
+`-ReplaceBaseline` et `-ReplacementReason`; l'ancienne baseline est archivée.
+
+Vérification d'une session Golden Backup :
+
+```powershell
+.\scripts\backup\63_restore_drill_v26.ps1 `
+  -BackupSessionPath '<session>' `
+  -Mode Verify
+```
+
+Le mode `Sandbox` ajoute `-ScratchRoot` et
+`-ConfirmIsolatedRestoreDrill`. Il ne touche jamais à la distribution de
+production.
+
+Voir [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md).
+
+---
+
+# 14. Vocabulaire de sortie
 
 | Statut | Sens |
 | --- | --- |
@@ -396,7 +432,7 @@ Voir [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-# 14. Logs et rapports
+# 15. Logs et rapports
 
 Les sorties console sont complétées notamment par :
 
@@ -408,6 +444,7 @@ logs\runs\<RunId>\summary.json
 reports\orchestration\latest-run.json
 reports\orchestration\machine-state.json
 reports\updates\latest-run.json
+reports\workstation-v26\latest.json
 ```
 
 ---

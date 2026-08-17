@@ -6,6 +6,7 @@ on:
       - '.github/workflows/orchestration-v9.yml'
       - 'install.ps1'
       - 'scripts/core/**'
+      - 'tests/powershell/generic_list_contract.tests.ps1'
       - 'scripts/bootstrap/**'
       - 'scripts/windows/**'
       - 'scripts/defender/**'
@@ -21,6 +22,7 @@ on:
       - '.github/workflows/orchestration-v9.yml'
       - 'install.ps1'
       - 'scripts/core/**'
+      - 'tests/powershell/generic_list_contract.tests.ps1'
       - 'scripts/bootstrap/**'
       - 'scripts/windows/**'
       - 'scripts/defender/**'
@@ -38,7 +40,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Validate machine-first orchestration contract
         shell: bash
@@ -131,7 +133,7 @@ jobs:
   powershell-runtime:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Parse every PowerShell script and module
         shell: pwsh
@@ -195,6 +197,38 @@ jobs:
           $summary = Get-Content -Raw (Join-Path $context.RunDir 'summary.json') | ConvertFrom-Json
           if ($summary.Counts.FailedScripts -ne 0) { throw 'Expected probe failures polluted the final failure count.' }
           if ($summary.Counts.Changed -lt 1 -or $summary.Counts.AlreadyOk -lt 1) { throw 'Component summary does not prove change then idempotent rerun.' }
+
+      - name: Runtime external-command failure contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\runtime.psm1 -Force
+          $context = New-WpcRunContext -RepoRoot $PWD -Mode Verify -NonInteractive
+
+          $success = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' `
+            -ArgumentList @('-NoProfile','-Command','exit 0') -LogIdentity 'ci/external-success' -Quiet
+          if (-not $success.Success -or $success.ExitCode -ne 0 -or $success.Outcome -ne 'OK') {
+            throw 'External-command success result is incomplete.'
+          }
+
+          $allowed = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' `
+            -ArgumentList @('-NoProfile','-Command','exit 23') -LogIdentity 'ci/external-allowed-failure' -AllowFailure -Quiet
+          if ($allowed.Success -or $allowed.ExitCode -ne 23 -or $allowed.Outcome -ne 'FAILED' -or [string]::IsNullOrWhiteSpace($allowed.Error)) {
+            throw 'AllowFailure must return a structured failed result.'
+          }
+
+          $thrown = $false
+          try {
+            [void](Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' `
+              -ArgumentList @('-NoProfile','-Command','exit 24') -LogIdentity 'ci/external-hard-failure' -Quiet)
+          } catch {
+            $thrown = $_.Exception.Message -match 'code 24'
+          }
+          if (-not $thrown) { throw 'A non-allowed external failure must throw.' }
+
+      - name: Reject unsafe generic List conversions
+        shell: pwsh
+        run: .\tests\powershell\generic_list_contract.tests.ps1
 
       - name: Execute safe factual machine-state discovery
         shell: pwsh

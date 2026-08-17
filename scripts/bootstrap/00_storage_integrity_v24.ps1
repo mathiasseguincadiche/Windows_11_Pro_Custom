@@ -190,12 +190,13 @@ function Invoke-WpcNvmeSafetyCheck {
         }
 
         $reasons = @()
+        $warnings = @()
         if ([string]$disk.HealthStatus -ne 'Healthy') { $reasons += "HealthStatus=$($disk.HealthStatus)" }
         if ($null -eq $counter) { $reasons += "Reliability unavailable: $counterError" }
         if ($null -eq $readTotal) { $reasons += 'ReadErrorsTotal unavailable' }
-        elseif ($readTotal -gt 0) { $reasons += "ReadErrorsTotal=$readTotal" }
+        elseif ($readTotal -gt 0) { $warnings += "ReadErrorsTotal historique=$readTotal" }
         if ($null -eq $writeTotal) { $reasons += 'WriteErrorsTotal unavailable' }
-        elseif ($writeTotal -gt 0) { $reasons += "WriteErrorsTotal=$writeTotal" }
+        elseif ($writeTotal -gt 0) { $warnings += "WriteErrorsTotal historique=$writeTotal" }
         if ($null -eq $readUncorrected) { $reasons += 'ReadErrorsUncorrected unavailable' }
         elseif ($readUncorrected -gt 0) { $reasons += "ReadErrorsUncorrected=$readUncorrected" }
         if ($null -eq $writeUncorrected) { $reasons += 'WriteErrorsUncorrected unavailable' }
@@ -227,6 +228,7 @@ function Invoke-WpcNvmeSafetyCheck {
             WriteErrorsUncorrected = $writeUncorrected
             Clean = $diskClean
             Failure = $diskFailure
+            Warnings = @($warnings)
         }
     }
 
@@ -297,8 +299,7 @@ $report = [ordered]@{
         CorruptionCountMustBeZero = $true
         CorruptionJournalCaptured = $true
         NvmeReliabilityRequired = $true
-        ReadErrorsTotalMustBeZero = $true
-        WriteErrorsTotalMustBeZero = $true
+        LifetimeErrorTotalsAreAdvisory = $true
         UncorrectedErrorsMustBeZero = $true
         TargetModelRegex = $targetModelRegex
         TargetMinimumCount = $targetMinimumCount
@@ -319,6 +320,9 @@ foreach ($disk in @($nvmeState.Disks)) {
         Write-Host "[OK] NVMe $($disk.FriendlyName): Healthy, read/write errors=0." -ForegroundColor Green
     } else {
         Write-Host "[KO] NVMe $($disk.FriendlyName): $($disk.Failure)" -ForegroundColor Red
+    }
+    foreach ($warning in @($disk.Warnings)) {
+        Write-Warning "NVMe $($disk.FriendlyName): $warning. Surveiller l'évolution entre deux rapports."
     }
 }
 Write-Host "[INFO] Storage safety report: $reportPath"

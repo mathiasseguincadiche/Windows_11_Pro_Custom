@@ -106,6 +106,11 @@ Terraform, certains outils qualité et d'autres composants sensibles sont versio
 
 Ils ne doivent pas être remplacés aveuglément par `latest`.
 
+La réconciliation AWS CLI conserve le même niveau de confiance que
+l'installation initiale : archive et signature officielles sont téléchargées,
+l'empreinte complète de la clé AWS est contrôlée, puis la signature PGP est
+validée avant toute installation.
+
 La logique est :
 
 ```text

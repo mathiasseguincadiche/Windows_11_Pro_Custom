@@ -31,7 +31,7 @@ function Get-TableRows {
     for ($i=$separator+1; $i -lt $Lines.Count; $i++) {
         $line = $Lines[$i].TrimEnd(); if ([string]::IsNullOrWhiteSpace($line)) { continue }; if ($line -match '^[\-\\|/\s]+$') { continue }; $rows.Add($line)
     }
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-UpgradeInventory {

@@ -12,7 +12,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Validate V24 storage safety contract
         shell: bash
         run: |
@@ -33,6 +33,7 @@ jobs:
           grep -Fq "WriteErrorsTotal" "$script"
           grep -Fq "ReadErrorsUncorrected" "$script"
           grep -Fq "WriteErrorsUncorrected" "$script"
+          grep -Fq "LifetimeErrorTotalsAreAdvisory" "$script"
           grep -Fq "V24 STORAGE SAFETY BLOCK" "$script"
           grep -Fq "VERDICT: STORAGE SAFETY READY" "$script"
 
@@ -65,7 +66,7 @@ jobs:
   powershell-parse:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Parse V24 and preflight PowerShell
         shell: pwsh
         run: |

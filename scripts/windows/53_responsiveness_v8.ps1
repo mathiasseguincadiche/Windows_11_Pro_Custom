@@ -235,7 +235,7 @@ function Write-Report {
         State = $State
         StartupAutomaticDisable = [bool]$policy.startup.automaticDisable
         BackgroundGlobalDisable = [bool]$policy.backgroundApps.globalDisable
-        Warnings = @($warnings)
+        Warnings = $warnings.ToArray()
     }
     $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $reportPath
     foreach ($warning in $warnings) { Write-Warning $warning }

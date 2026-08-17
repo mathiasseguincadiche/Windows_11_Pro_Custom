@@ -21,6 +21,22 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-WbadminVersionIdentifiers {
+    param([string[]]$Lines)
+    $identifiers = New-Object System.Collections.Generic.List[string]
+    foreach ($line in @($Lines)) {
+        $text = [string]$line
+        if ($text -match '(?i)^\s*(?:Version identifier|Identificateur de version)\s*:\s*(?<id>.+?)\s*$') {
+            $identifiers.Add($Matches.id.Trim())
+            continue
+        }
+        if ($text -match '(?<id>\d{1,4}[/-]\d{1,2}[/-]\d{1,4}-\d{1,2}:\d{2})') {
+            $identifiers.Add($Matches.id.Trim())
+        }
+    }
+    return @($identifiers | Sort-Object -Unique)
+}
+
 if (-not (Test-Administrator)) {
     throw 'La validation de sauvegarde nécessite une session PowerShell élevée.'
 }
@@ -91,6 +107,17 @@ $VersionsValid = $VersionsExitCode -eq 0 -and $VersionsOutput.Count -gt 0
 if (-not $VersionsValid) {
     throw 'wbadmin ne peut pas énumérer de version Windows récupérable sur la cible.'
 }
+$VersionIdentifierProperty = $Manifest.PSObject.Properties['wbadminVersionIdentifier']
+$ExpectedVersionIdentifier = if ($null -eq $VersionIdentifierProperty) { '' } else { [string]$VersionIdentifierProperty.Value }
+$VersionIdentifierMatched = $null
+if (-not [string]::IsNullOrWhiteSpace($ExpectedVersionIdentifier)) {
+    $VersionIdentifierMatched = @(Get-WbadminVersionIdentifiers -Lines $VersionsOutput) -contains $ExpectedVersionIdentifier
+    if (-not $VersionIdentifierMatched) {
+        throw "La version wbadmin du manifest n'est pas présente sur la cible: $ExpectedVersionIdentifier"
+    }
+} else {
+    Write-Warning 'Manifest antérieur sans wbadminVersionIdentifier: preuve exacte session/image indisponible.'
+}
 
 $WinReOutput = @(& reagentc.exe /info 2>&1)
 $WinReExitCode = $LASTEXITCODE
@@ -115,6 +142,8 @@ $Report = [ordered]@{
     manifestPath = $ManifestFile.FullName
     windowsImageBackupPresent = $true
     wbadminRecoverableVersionEnumerated = [bool]$VersionsValid
+    wbadminVersionIdentifier = $ExpectedVersionIdentifier
+    wbadminVersionIdentifierMatched = $VersionIdentifierMatched
     winReEnabled = [bool]$WinReEnabled
     wslBackupPath = $WslBackupPath
     wslSha256Expected = $ExpectedHash
@@ -132,6 +161,7 @@ $Report | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 $ReportPath
 
 Write-Host '[OK] WindowsImageBackup présent.' -ForegroundColor Green
 Write-Host '[OK] wbadmin énumère une version de sauvegarde récupérable.' -ForegroundColor Green
+if ($VersionIdentifierMatched -eq $true) { Write-Host "[OK] Version wbadmin exacte retrouvée: $ExpectedVersionIdentifier" -ForegroundColor Green }
 Write-Host '[OK] Windows RE est actif.' -ForegroundColor Green
 Write-Host '[OK] Le SHA-256 du VHDX WSL correspond au manifest.' -ForegroundColor Green
 Write-Host '[OK] La baseline dʼidentité stockage V25 est présente et son SHA-256 correspond.' -ForegroundColor Green

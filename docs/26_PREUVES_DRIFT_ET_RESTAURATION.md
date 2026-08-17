@@ -26,8 +26,21 @@ Une CI verte prouve les niveaux `STATIC` et une partie de `SIMULATED`. Elle ne r
 
 La sortie est écrite sous `reports/workstation-v26/` et accompagnée d'un SHA-256.
 
+Un audit sans confirmation explicite produit une preuve `SIMULATED`, y compris
+sur un runner Windows :
+
 ```powershell
 .\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
+```
+
+Sur la workstation réelle uniquement, la preuve physique est demandée
+explicitement :
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+  -Mode Audit `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence
 ```
 
 Après une validation physique complète et uniquement sur un état sain, une baseline locale peut être enregistrée :
@@ -41,7 +54,22 @@ Après une validation physique complète et uniquement sur un état sain, une ba
 Puis comparée après maintenance ou Windows Update :
 
 ```powershell
-.\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Verify
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+  -Mode Verify `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence
+```
+
+Une maintenance intentionnelle peut nécessiter un nouvel enrôlement. Le
+remplacement reste explicite, exige une raison et archive la baseline précédente
+avec le diff complet :
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+  -Mode Record `
+  -ConfirmHealthyState `
+  -ReplaceBaseline `
+  -ReplacementReason 'Windows Update validé et requalification complète réussie'
 ```
 
 La baseline locale est conservée sous :
@@ -50,7 +78,10 @@ La baseline locale est conservée sous :
 %ProgramData%\Windows11ProCustom\workstation-v26\workstation-fingerprint.json
 ```
 
-Elle ne remplace aucune source de vérité. Une différence est un signal de dérive à expliquer, pas une autorisation de forcer la convergence.
+Elle ne remplace aucune source de vérité. Une différence est un signal de dérive
+à expliquer, pas une autorisation de forcer la convergence. Le rapport de dérive
+indique les champs attendus et actuels ; l'empreinte contient également le commit
+Git du dépôt lorsqu'il est disponible.
 
 ## Test de restauration WSL isolé
 
@@ -64,15 +95,19 @@ Mode lecture seule :
   -Mode Verify
 ```
 
-Le mode `Verify` contrôle le manifeste, le VHDX et son SHA-256, la copie de baseline V25 et l'énumérabilité de la sauvegarde Windows.
+Le mode `Verify` contrôle le manifeste, le VHDX et son SHA-256, la copie de
+baseline V25 et la présence de la version `wbadmin` exacte liée au manifeste.
+Une session créée avant l'ajout de cet identifiant reste vérifiable, mais reçoit
+un avertissement indiquant que seule l'énumérabilité globale est prouvée.
 
 Pour prouver qu'un VHDX WSL est réellement amorçable, le mode `Sandbox` :
 
-1. copie le VHDX vers un répertoire temporaire distinct ;
-2. l'importe sous un nom de distribution temporaire unique ;
-3. vérifie `/etc/os-release`, le filesystem racine et l'accès shell ;
-4. désenregistre uniquement la distribution temporaire dans un bloc `finally` ;
-5. supprime uniquement la copie temporaire créée par le drill.
+1. vérifie que le volume temporaire dispose de la taille du VHDX, de 10 % de marge et de 1 Go supplémentaire ;
+2. copie le VHDX vers un répertoire temporaire distinct ;
+3. l'importe sous un nom de distribution temporaire unique ;
+4. vérifie `/etc/os-release`, le filesystem racine et l'accès shell ;
+5. désenregistre uniquement la distribution temporaire dans un bloc `finally` ;
+6. supprime uniquement la copie temporaire créée par le drill.
 
 Il exige une confirmation explicite :
 

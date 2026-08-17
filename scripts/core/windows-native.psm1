@@ -134,7 +134,7 @@ function Initialize-WpcWindowsNativeModules {
         }
     }
 
-    return @($results)
+    return $results.ToArray()
 }
 
 Export-ModuleMember -Function Test-WpcWindowsHost, Get-WpcWindowsPowerShellModuleRoot, Add-WpcWindowsPowerShellModulePath, Import-WpcWindowsModule, Initialize-WpcWindowsNativeModules

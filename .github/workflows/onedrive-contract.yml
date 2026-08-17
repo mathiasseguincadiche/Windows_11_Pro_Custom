@@ -28,7 +28,7 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Validate OneDrive desired state
         shell: bash
@@ -85,7 +85,7 @@ jobs:
   audit-smoke:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Load contract and execute non-mutating audit
         shell: pwsh
         run: |

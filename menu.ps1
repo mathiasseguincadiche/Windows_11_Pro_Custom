@@ -13,10 +13,12 @@ $RepoRoot = $PSScriptRoot
 $InstallScript = Join-Path $RepoRoot 'install.ps1'
 $UpdateScript = Join-Path $RepoRoot 'update.ps1'
 $AppsScript = Join-Path $RepoRoot 'scripts\bootstrap\03_apps.ps1'
+$FingerprintScript = Join-Path $RepoRoot 'scripts\windows\90_workstation_fingerprint_v26.ps1'
+$RestoreDrillScript = Join-Path $RepoRoot 'scripts\backup\63_restore_drill_v26.ps1'
 $RebootStateModule = Join-Path $RepoRoot 'scripts\core\reboot-state.psm1'
 $script:LastActionRequiresReboot = $false
 
-foreach ($required in @($InstallScript, $UpdateScript, $AppsScript, $RebootStateModule)) {
+foreach ($required in @($InstallScript, $UpdateScript, $AppsScript, $FingerprintScript, $RestoreDrillScript, $RebootStateModule)) {
     if (-not (Test-Path -LiteralPath $required)) {
         throw "Point d'entree introuvable: $required"
     }
@@ -88,6 +90,14 @@ function Confirm-WpcAction {
     return $answer -in @('o','oui','y','yes')
 }
 
+function Read-WpcMenuValue {
+    param([Parameter(Mandatory)][string]$Prompt, [Parameter(Mandatory)][string]$DryRunValue)
+    if ($DryRun) { return $DryRunValue }
+    $value = (Read-Host $Prompt).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) { throw "Valeur obligatoire absente: $Prompt" }
+    return $value
+}
+
 function Invoke-WpcRestartComputer {
     if ($DryRun) {
         Write-Line '[DRY-RUN] Redemarrage Windows demande.' Green
@@ -156,7 +166,7 @@ function Convert-ArgumentsForElevation {
         $list.Add("-$key")
         $list.Add([string]$value)
     }
-    return @($list)
+    return $list.ToArray()
 }
 
 function Format-WpcCommand {
@@ -210,7 +220,7 @@ function Invoke-WpcRepoScript {
             $argList.Add('-File')
             $argList.Add($Path)
             foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) { $argList.Add($arg) }
-            $process = Start-Process -FilePath $exe -Verb RunAs -ArgumentList @($argList) -Wait -PassThru
+            $process = Start-Process -FilePath $exe -Verb RunAs -ArgumentList $argList.ToArray() -Wait -PassThru
             if ($process.ExitCode -ne 0) {
                 $state = Get-WpcPendingRebootState
                 if ($state.Pending) {
@@ -273,6 +283,10 @@ function Invoke-MainAction {
         }
         '4.1' { [void](Invoke-WpcRepoScript -DisplayName 'Creer une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Create' } -RequiresAdmin) }
         '4.2' { [void](Invoke-WpcRepoScript -DisplayName 'Verifier une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Verify' }) }
+        '4.3' {
+            $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'E:\Windows_11_Pro_Custom_Backup\V7\SESSION'
+            [void](Invoke-WpcRepoScript -DisplayName 'Verifier la restaurabilite V26' -Path $RestoreDrillScript -Arguments @{ BackupSessionPath=$session; Mode='Verify' } -RequiresAdmin)
+        }
         '5.1' {
             Write-Line '[SECURITE] Cette option genere uniquement un plan de restauration. Elle ne restaure rien automatiquement.' Yellow
             [void](Invoke-WpcRepoScript -DisplayName 'Plan de restauration' -Path $InstallScript -Arguments @{ BackupAction='RestorePlan' })
@@ -282,14 +296,35 @@ function Invoke-MainAction {
                 [void](Invoke-WpcRepoScript -DisplayName 'Rollback des reglages geres' -Path $InstallScript -Arguments @{ Mode='Rollback' } -RequiresAdmin)
             }
         }
+        '5.3' {
+            $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'E:\Windows_11_Pro_Custom_Backup\V7\SESSION'
+            $scratch = Read-WpcMenuValue -Prompt 'Repertoire scratch local et isole' -DryRunValue 'D:\WSL-RestoreDrill'
+            if (Confirm-WpcAction -Message 'Lancer le drill WSL isole puis supprimer uniquement sa copie temporaire') {
+                [void](Invoke-WpcRepoScript -DisplayName 'Drill WSL isole V26' -Path $RestoreDrillScript -Arguments @{ BackupSessionPath=$session; Mode='Sandbox'; ScratchRoot=$scratch; ConfirmIsolatedRestoreDrill=[switch]::Present } -RequiresAdmin)
+            }
+        }
         '6' { [void](Invoke-WpcRepoScript -DisplayName 'Audit et diagnostic global' -Path $InstallScript -Arguments @{ Mode='Audit' }) }
-        '7' { [void](Invoke-WpcRepoScript -DisplayName 'Verification de conformite globale' -Path $InstallScript -Arguments @{ Mode='Verify' }) }
+        '7' { [void](Invoke-WpcRepoScript -DisplayName 'Verification de conformite globale' -Path $InstallScript -Arguments @{ Mode='Verify'; ValidateHardware=[switch]::Present; ValidateWsl=[switch]::Present; ValidateDevOps=[switch]::Present } -RequiresAdmin) }
         '8.1' {
             if (Confirm-WpcAction -Message 'Installer ou reparer WSL2 et la stack DevOps') {
                 [void](Invoke-WpcRepoScript -DisplayName 'WSL2 + stack DevOps' -Path $InstallScript -Arguments @{ Mode='Apply'; InstallDevOps=[switch]::Present; ValidateWsl=[switch]::Present; ValidateDevOps=[switch]::Present } -RequiresAdmin)
             }
         }
         '8.2' { [void](Invoke-WpcRepoScript -DisplayName 'Qualification materielle guidee' -Path $InstallScript -Arguments @{ Mode='Verify'; ValidateHardware=[switch]::Present } -RequiresAdmin) }
+        '8.3' { [void](Invoke-WpcRepoScript -DisplayName 'Audit empreinte SIMULATED' -Path $FingerprintScript -Arguments @{ Mode='Audit' }) }
+        '8.4' { [void](Invoke-WpcRepoScript -DisplayName 'Audit empreinte PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Audit'; EvidenceLevel='PHYSICAL'; ConfirmPhysicalEvidence=[switch]::Present } -RequiresAdmin) }
+        '8.5' { [void](Invoke-WpcRepoScript -DisplayName 'Verification de derive PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Verify'; EvidenceLevel='PHYSICAL'; ConfirmPhysicalEvidence=[switch]::Present } -RequiresAdmin) }
+        '8.6' {
+            if (Confirm-WpcAction -Message 'Enregistrer la baseline PHYSICAL uniquement apres validation complete') {
+                [void](Invoke-WpcRepoScript -DisplayName 'Enregistrer baseline PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Record'; EvidenceLevel='PHYSICAL'; ConfirmHealthyState=[switch]::Present } -RequiresAdmin)
+            }
+        }
+        '8.7' {
+            $reason = Read-WpcMenuValue -Prompt 'Justification du remplacement de baseline' -DryRunValue 'Maintenance validee et requalification complete reussie'
+            if (Confirm-WpcAction -Message 'Archiver et remplacer la baseline PHYSICAL apres investigation') {
+                [void](Invoke-WpcRepoScript -DisplayName 'Remplacer baseline PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Record'; EvidenceLevel='PHYSICAL'; ConfirmHealthyState=[switch]::Present; ReplaceBaseline=[switch]::Present; ReplacementReason=$reason } -RequiresAdmin)
+            }
+        }
         '9.1' { Invoke-OpenFolder -Path (Join-Path $RepoRoot 'logs') -Label 'les journaux' }
         '9.2' { Invoke-OpenFolder -Path (Join-Path $RepoRoot 'reports') -Label 'les rapports' }
         '10' { Show-Help }
@@ -304,11 +339,12 @@ function Show-BackupMenu {
         Write-Line ''
         Write-Line '  1. Creer une nouvelle sauvegarde' White
         Write-Line '  2. Verifier une sauvegarde existante' White
+        Write-Line '  3. Verifier la restaurabilite V26 d une session' White
         Write-Line '  0. Retour' DarkGray
         Write-Host ''
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2')) { Invoke-MainAction -Selected "4.$value"; Pause-WpcMenu }
+        if ($value -in @('1','2','3')) { Invoke-MainAction -Selected "4.$value"; Pause-WpcMenu }
     }
 }
 
@@ -319,12 +355,13 @@ function Show-RestoreMenu {
         Write-Line ''
         Write-Line '  1. Generer un plan de restauration (aucune ecriture)' White
         Write-Line '  2. Rollback des reglages geres par le depot' Yellow
+        Write-Line '  3. Drill WSL isole V26' White
         Write-Line '  0. Retour' DarkGray
         Write-Host ''
         Write-Line 'La restauration complete destructive reste volontairement non automatique.' DarkGray
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2')) { Invoke-MainAction -Selected "5.$value"; Pause-WpcMenu }
+        if ($value -in @('1','2','3')) { Invoke-MainAction -Selected "5.$value"; Pause-WpcMenu }
     }
 }
 
@@ -335,11 +372,16 @@ function Show-ComponentsMenu {
         Write-Line ''
         Write-Line '  1. WSL2 + stack DevOps + validation' White
         Write-Line '  2. Qualification materielle guidee' White
+        Write-Line '  3. Audit empreinte SIMULATED' White
+        Write-Line '  4. Audit empreinte PHYSICAL' White
+        Write-Line '  5. Verifier la derive PHYSICAL' White
+        Write-Line '  6. Enregistrer la baseline PHYSICAL' White
+        Write-Line '  7. Remplacer la baseline PHYSICAL (archive + justification)' Yellow
         Write-Line '  0. Retour' DarkGray
         Write-Host ''
         $value = (Read-Host 'Ton choix').Trim()
         if ($value -eq '0') { return }
-        if ($value -in @('1','2')) { Invoke-MainAction -Selected "8.$value"; Pause-WpcMenu }
+        if ($value -in @('1','2','3','4','5','6','7')) { Invoke-MainAction -Selected "8.$value"; Pause-WpcMenu }
     }
 }
 

@@ -60,7 +60,7 @@ function Get-PendingRebootReasons {
         $pendingRename = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop
         if ($null -ne $pendingRename) { $reasons.Add('PendingFileRenameOperations') }
     } catch {}
-    return @($reasons)
+    return $reasons.ToArray()
 }
 
 function Get-OptionalFeatureStateSafe {
@@ -315,7 +315,7 @@ $warnings = @($checks | Where-Object { -not $_.Blocking -and -not $_.Passed })
     PowerShell = [ordered]@{ Edition=[string]$PSVersionTable.PSEdition; Version=$psVersion.ToString() }
     Windows = [ordered]@{ Caption=[string]$os.Caption; Build=$build; EditionID=$editionId }
     Wsl = [ordered]@{ Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent }
-    Checks = @($checks)
+    Checks = $checks.ToArray()
     BlockerCount = $blockers.Count
     WarningCount = $warnings.Count
     Ready = ($blockers.Count -eq 0)

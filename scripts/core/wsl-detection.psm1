@@ -31,10 +31,11 @@ function Get-WpcWslRegistrationFact {
             if ($name -eq $Distribution) { $basePath = [string]$item.BasePath }
         }
 
+        $registeredNames = $names.ToArray()
         return [pscustomobject]@{
             Known = $true
-            Present = (@($names) -contains $Distribution)
-            Names = @($names)
+            Present = ($registeredNames -contains $Distribution)
+            Names = $registeredNames
             BasePath = $basePath
             RegistryRoot = $RegistryRoot
             Error = $null

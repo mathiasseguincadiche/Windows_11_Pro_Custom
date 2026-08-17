@@ -272,6 +272,25 @@ Voir [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) et [`21_REFERENCE_COMMANDES.
 
 ---
 
+# Étape 14 — preuve physique et drill de restauration
+
+Après la validation globale, capturer ou vérifier l'empreinte avec une preuve
+explicitement physique :
+
+```powershell
+.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+  -Mode Verify `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence
+```
+
+Puis valider la session Golden Backup et effectuer périodiquement le drill WSL
+isolé décrit dans [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md).
+
+Une CI verte ne remplace pas cette étape sur la workstation réelle.
+
+---
+
 ## Critères de sortie
 
 Le projet peut être déclaré prêt lorsque :
@@ -288,6 +307,7 @@ Le projet peut être déclaré prêt lorsque :
 - les logs et rapports expliquent le verdict ;
 - le second plan démontre l'idempotence ;
 - la sauvegarde de référence est vérifiée.
+- l'empreinte physique ne contient aucune dérive inexpliquée et le drill WSL isolé a réussi.
 
 Checklist complète : [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).
 

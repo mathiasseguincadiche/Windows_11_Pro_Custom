@@ -31,7 +31,7 @@ function Get-WpcPendingRebootState {
 
     return [pscustomobject]@{
         Pending = ($reasons.Count -gt 0)
-        Reasons = @($reasons)
+        Reasons = $reasons.ToArray()
     }
 }
 

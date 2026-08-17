@@ -33,7 +33,7 @@
   },
   "network": {
     "lanDeviceRegex": "Realtek.*8126|8126.*Realtek|Realtek.*5G",
-    "wifiDeviceRegex": "Wi-Fi|Wireless|802\\.11",
+    "wifiDeviceRegex": "Wi-Fi 7|FastConnect 7800|NCM865",
     "requireLanDevice": true,
     "requireWifiDevice": true,
     "expectedLanMaximumLinkBps": 5000000000,

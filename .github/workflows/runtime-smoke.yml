@@ -12,7 +12,7 @@ jobs:
   reproducibility-contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Validate pinned DevOps version matrix
         shell: bash
         run: |
@@ -45,6 +45,7 @@ jobs:
           curl --retry 3 -fsSL "https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64.sha256" | grep -Eq '^[0-9a-f]{64}$'
           curl --retry 3 -fsIL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" >/dev/null
           curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" >/dev/null
+          curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip.sig" >/dev/null
       - name: Enforce external-project boundary
         shell: bash
         run: |
@@ -106,7 +107,7 @@ jobs:
   windows-runtime:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Execute safe Windows runtime audits
         shell: pwsh
         run: |

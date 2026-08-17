@@ -35,7 +35,7 @@ jobs:
     name: Documentation canonique
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
       - name: Vérifier les documents canoniques
         shell: bash
@@ -69,6 +69,8 @@ jobs:
             docs/22_TROUBLESHOOTING.md
             docs/23_SOURCES_DE_VERITE.md
             docs/24_CRITERES_ACCEPTATION.md
+            docs/25_IDENTITE_STOCKAGE_ET_RECUPERATION.md
+            docs/26_PREUVES_DRIFT_ET_RESTAURATION.md
           )
           for file in "${required[@]}"; do
             test -s "$file" || { echo "Documentation canonique absente ou vide: $file" >&2; exit 1; }
@@ -84,8 +86,18 @@ jobs:
             printf '  %s\n' "${stale[@]}" >&2
             exit 1
           fi
-          if grep -RniE '(^|[^[:alnum:]_])V(3|4|5|6|7|8|9|10|11|12|13)([^[:alnum:]_]|$)' README.md docs/*.md; then
+          if grep -RniE '(^|[^[:alnum:]_])V(3|4|5|6|8|9|10|11|12|13)([^[:alnum:]_]|$)' README.md docs/*.md; then
             echo 'La documentation active ne doit pas raconter le projet par anciennes versions.' >&2
+            exit 1
+          fi
+          # V7 reste le numéro de schéma actif du contrat Golden Backup. Il est
+          # accepté uniquement dans les documents de sauvegarde/restauration.
+          if grep -RniE '(^|[^[:alnum:]_])V7([^[:alnum:]_]|$)' README.md docs/*.md \
+              --exclude='10_BACKUP_RESTORE.md' \
+              --exclude='13_RUNBOOK_REINSTALLATION.md' \
+              --exclude='25_IDENTITE_STOCKAGE_ET_RECUPERATION.md' \
+              --exclude='26_PREUVES_DRIFT_ET_RESTAURATION.md'; then
+            echo 'Le label V7 est réservé au schéma Golden Backup actif.' >&2
             exit 1
           fi
 

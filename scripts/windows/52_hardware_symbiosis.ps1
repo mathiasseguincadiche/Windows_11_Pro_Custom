@@ -202,7 +202,7 @@ $report = [ordered]@{
     WifiDrivers = $wifiDrivers | Select-Object DeviceName, Manufacturer, DriverProviderName, DriverVersion, DriverDate, InfName
     PhysicalNetworkAdapters = $physicalAdapters
     LanRss = $lanRss
-    Warnings = @($warnings)
+    Warnings = $warnings.ToArray()
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $reportPath
 
