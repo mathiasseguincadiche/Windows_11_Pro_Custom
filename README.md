@@ -254,7 +254,7 @@ Le projet privilégie la convergence contrôlée plutôt que les transformations
 - les versions reproductibles viennent des contrats du dépôt, pas d'un `latest` pris arbitrairement ;
 - les preuves matérielles non observables automatiquement restent explicites ;
 - les changements sensibles ou destructifs ne sont pas assimilés à de la maintenance normale ;
-- l'identité physique de `C:` et `D:` est enrôlée explicitement puis vérifiée avant toute convergence et avant WSL ;
+- l'identité physique de `C:` et `D:` est enrôlée explicitement puis vérifiée avant toute convergence orchestrée par `install.ps1` et avant toute mutation WSL gérée par le dépôt ;
 - la reconstruction après incident reste séparée du parcours quotidien.
 
 ## Documentation officielle
