@@ -71,12 +71,31 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 
 ## Point de départ
 
+Commencer par l'audit non mutatif :
+
 ```powershell
 .\install.ps1 -Mode Audit
 ```
 
-Puis prévisualiser la workstation complète avec :
+Sur une première installation, `PlanOnly`, `Apply` et `Verify` stricts exigent
+ensuite la baseline d'identité physique V25 :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+  -Mode Record `
+  -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+`Record` n'est autorisé qu'après contrôle humain de `C:` et `D:`. Si la
+baseline existe déjà, exécuter uniquement `-Mode Verify`.
+
+Puis prévisualiser la workstation complète :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
+
+Ordre canonique : [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md).
+Sécurité stockage : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).

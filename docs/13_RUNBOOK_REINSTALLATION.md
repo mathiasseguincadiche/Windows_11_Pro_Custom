@@ -42,6 +42,16 @@ Commence par :
 .\install.ps1 -Mode Audit
 ```
 
+Avant toute planification stricte, vérifier l'identité V25 :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+Si la baseline est absente ou si la topologie a changé volontairement, suivre
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md)
+et ne jamais remplacer la référence pour masquer une alerte.
+
 Puis, si les écarts sont compris :
 
 ```powershell
@@ -275,7 +285,28 @@ L'audit doit être conservé comme premier état factuel de la reconstruction.
 
 ---
 
-# Phase 10 — prévisualiser la convergence
+# Phase 10 — qualifier l'identité physique du stockage
+
+Avant le premier plan strict de la reconstruction :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+```
+
+Comparer le rapport avec la topologie attendue. Si la baseline V25 a été restaurée
+par le Golden Backup et correspond, la vérifier :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+Si la baseline est légitimement absente après réinstallation, contrôler
+humainement `C:` et `D:`, puis l'enrôler explicitement et la vérifier selon
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
+
+---
+
+# Phase 11 — prévisualiser la convergence
 
 Calcule le plan complet :
 
@@ -300,7 +331,7 @@ Guide : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
 
 ---
 
-# Phase 11 — appliquer la configuration actuelle
+# Phase 12 — appliquer la configuration actuelle
 
 Si le plan est cohérent :
 
@@ -324,7 +355,7 @@ Ne considère pas un redémarrage nécessaire comme un échec : traite l'action 
 
 ---
 
-# Phase 12 — WSL2 / Ubuntu
+# Phase 13 — WSL2 / Ubuntu
 
 Le contrat actuel est :
 
@@ -358,7 +389,7 @@ Guide : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-# Phase 13 — restaurer un WSL sauvegardé
+# Phase 14 — restaurer un WSL sauvegardé
 
 Si un VHDX sauvegardé existe, privilégie une restauration parallèle.
 
@@ -394,7 +425,7 @@ Cette commande détruit la distribution ciblée.
 
 ---
 
-# Phase 14 — stack DevOps
+# Phase 15 — stack DevOps
 
 Applique/valide :
 
@@ -415,7 +446,7 @@ Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-# Phase 15 — VS Code, WezTerm et accès distants
+# Phase 16 — VS Code, WezTerm et accès distants
 
 Vérifie que :
 
@@ -430,7 +461,7 @@ Le terminal et la stack sont documentés dans [`07_DEVOPS_STACK.md`](07_DEVOPS_S
 
 ---
 
-# Phase 16 — restaurer les données personnelles
+# Phase 17 — restaurer les données personnelles
 
 Restaure les données **après** avoir stabilisé le système de base lorsque c'est possible.
 
@@ -454,7 +485,7 @@ projets externes, chacun avec sa propre procédure
 
 ---
 
-# Phase 17 — projets externes
+# Phase 18 — projets externes
 
 Une fois la workstation Windows/WSL2/DevOps reconstruite et validée, les projets externes peuvent être restaurés ou réinstallés séparément.
 
@@ -472,7 +503,7 @@ Guide de frontière : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUT
 
 ---
 
-# Phase 18 — validation matérielle
+# Phase 19 — validation matérielle
 
 Une réinstallation Windows ne prouve pas que le BIOS, la RAM ou le GPU sont correctement configurés.
 
@@ -492,7 +523,7 @@ Guide : [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-# Phase 19 — validation globale
+# Phase 20 — validation globale
 
 Commande recommandée :
 
@@ -512,7 +543,7 @@ Guide : [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ---
 
-# Phase 20 — maintenance après reconstruction
+# Phase 21 — maintenance après reconstruction
 
 Audite d'abord :
 
@@ -540,7 +571,7 @@ Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-# Phase 21 — créer une nouvelle sauvegarde de référence
+# Phase 22 — créer une nouvelle sauvegarde de référence
 
 Ne remplace pas immédiatement l'ancienne sauvegarde validée.
 
@@ -566,7 +597,7 @@ Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ---
 
-# Phase 22 — contrôles finaux
+# Phase 23 — contrôles finaux
 
 Checklist :
 

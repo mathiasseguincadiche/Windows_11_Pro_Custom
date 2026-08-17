@@ -441,11 +441,16 @@ Commence par :
 .\install.ps1 -Mode Audit
 ```
 
-Puis :
+Avant le plan strict, confirmer d'abord que l'identité physique du stockage est
+toujours conforme :
 
 ```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
+
+Si V25 échoue, ne pas remplacer la baseline pour contourner l'alerte ; suivre
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 
 Si le stockage, Windows ou WSL sont réellement endommagés, utiliser :
 

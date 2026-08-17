@@ -57,7 +57,40 @@ Ne corrige pas plusieurs composants à l'aveugle lorsqu'un audit signale un éca
 
 ---
 
-# Étape 3 — calculer le plan sans modifier
+# Étape 3 — enrôler et vérifier l'identité physique V25
+
+Cette étape est obligatoire avant le premier `PlanOnly`, `Apply` ou `Verify`
+strict. Ouvrir PowerShell en administrateur et produire l'inventaire non mutatif :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+```
+
+Contrôler humainement dans la Gestion des disques et dans
+`reports\storage-identity-v25\latest-topology.json` que :
+
+- `C:` est le volume Windows attendu ;
+- `D:` est le second Crucial T705 NTFS destiné aux données et à WSL ;
+- les deux rôles sont portés par deux SSD physiques distincts ;
+- `D:` n'est ni boot, ni système, ni masqué.
+
+Enregistrer ensuite la référence une seule fois, puis la vérifier immédiatement :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+  -Mode Record `
+  -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+Si la baseline existe déjà, ne pas exécuter `Record` : utiliser uniquement
+`-Mode Verify`. Toute divergence inexpliquée bloque la suite et doit être
+investiguée selon
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
+
+---
+
+# Étape 4 — calculer le plan sans modifier
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
@@ -88,7 +121,7 @@ Une machine déjà partiellement conforme doit produire un plan partiel, pas une
 
 ---
 
-# Étape 4 — faire converger la workstation
+# Étape 5 — faire converger la workstation
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
@@ -102,7 +135,7 @@ Voir [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
 
 ---
 
-# Étape 5 — vérifier WSL2
+# Étape 6 — vérifier WSL2
 
 Contrat courant :
 
@@ -126,7 +159,7 @@ Voir [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-# Étape 6 — vérifier la stack DevOps et le terminal
+# Étape 7 — vérifier la stack DevOps et le terminal
 
 Installation/réparation DevOps ciblée :
 
@@ -159,7 +192,7 @@ Voir [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-# Étape 7 — qualifier le matériel
+# Étape 8 — qualifier le matériel
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateHardware
@@ -171,7 +204,7 @@ Voir [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
 ---
 
-# Étape 8 — vérifier la frontière avec les projets externes
+# Étape 9 — vérifier la frontière avec les projets externes
 
 `Windows_11_Pro_Custom` ne doit pas installer ou configurer OpenClaw/OpenRouter.
 
@@ -187,7 +220,7 @@ Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 
 ---
 
-# Étape 9 — validation finale
+# Étape 10 — validation finale
 
 ```powershell
 .\install.ps1 `
@@ -203,7 +236,7 @@ Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 
 ---
 
-# Étape 10 — prouver l'idempotence
+# Étape 11 — prouver l'idempotence
 
 Rejouer le même périmètre en `PlanOnly` :
 
@@ -215,7 +248,7 @@ Une workstation conforme doit tendre vers `DÉJÀ OK`. Un composant qui revient 
 
 ---
 
-# Étape 11 — maintenance
+# Étape 12 — maintenance
 
 Toujours commencer par :
 
@@ -229,7 +262,7 @@ Voir [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-# Étape 12 — sauvegarde de référence
+# Étape 13 — sauvegarde de référence
 
 Une workstation validée doit être récupérable.
 
