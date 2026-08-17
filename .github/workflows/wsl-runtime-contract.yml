@@ -67,7 +67,13 @@ jobs:
           grep -Fq 'expectedVersionId' "$wsl"
           grep -Fq 'expectedVersionId' scripts/bootstrap/14_validate_wsl_v6.ps1
           grep -Fq 'Aucune suppression automatique nʼest effectuée' "$wsl"
-          if grep -RInE 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
+          restore_drill='scripts/backup/63_restore_drill_v26.ps1'
+          grep -Fq 'if (-not $ConfirmIsolatedRestoreDrill)' "$restore_drill"
+          grep -Fq '$TemporaryDistribution = "W11PC-RestoreDrill-$DrillId"' "$restore_drill"
+          grep -Fq '$TemporaryDistribution -eq [string]$Manifest.wsl.distribution' "$restore_drill"
+          grep -Fqx '        & wsl.exe --unregister $TemporaryDistribution 2>$null' "$restore_drill"
+          test "$(grep -cE 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' "$restore_drill")" -eq 1
+          if grep -RInE --exclude='63_restore_drill_v26.ps1' 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
             echo 'Destructive WSL automation detected.' >&2
             exit 1
           fi
