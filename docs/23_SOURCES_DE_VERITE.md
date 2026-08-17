@@ -62,9 +62,25 @@ Aucun script de `Windows_11_Pro_Custom` ne doit cloner, installer, configurer ou
 
 Les logs expliquent une exécution. Les rapports fournissent des preuves structurées. `state/` conserve certains états utiles au rollback. Aucun de ces éléments ne remplace une nouvelle observation et un `Verify` réussi.
 
+V26 distingue trois niveaux de preuve :
+
+```text
+STATIC     -> contrat vérifié sans workstation physique
+SIMULATED  -> comportement exercé sur runner Windows ou environnement isolé
+PHYSICAL   -> état vérifié sur la workstation réelle
+```
+
+Une CI verte ne doit jamais être présentée comme une preuve `PHYSICAL`. L'identité V25, l'intégrité V24, le matériel, WSL réel, le réseau et les exercices de sauvegarde/restauration exigent la machine physique.
+
+L'empreinte `scripts/windows/90_workstation_fingerprint_v26.ps1` est une **preuve de dérive** : elle compare un état physique approuvé à un état ultérieur. Elle ne devient pas une source de vérité supérieure aux contrats et ne doit jamais être remplacée pour masquer un écart inexpliqué.
+
+Référence : [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md).
+
 ## Documentation et CI
 
 La documentation active doit décrire le comportement actuel. La CI vérifie les contrats du dépôt et doit empêcher le retour de responsabilités OpenClaw/OpenRouter dans la workstation.
+
+Les workflows historiques Vxx restent actifs tant qu'une migration de leurs protections n'a pas été explicitement prouvée. Le workflow consolidé V26 ajoute une vue transversale sans supprimer ces contrôles.
 
 ```text
 MACHINE RÉELLE     -> vérité observée
