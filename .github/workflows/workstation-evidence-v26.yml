@@ -54,6 +54,8 @@ jobs:
           grep -Fq 'repositoryRevision' "$fingerprint"
           grep -Fq 'contractDigestSha256' "$fingerprint"
           grep -Fq 'storageIdentityV25Sha256' "$fingerprint"
+          grep -Fq 'LocalBaselineHashPath' "$fingerprint"
+          grep -Fq 'Get-WpcBaselineIntegrity' "$fingerprint"
           grep -Fq 'Aucun remplacement silencieux' "$fingerprint"
           grep -Fq 'WORKSTATION FINGERPRINT DRIFT' "$fingerprint"
 
@@ -67,6 +69,8 @@ jobs:
           grep -Fq 'RESTORE DRILL SANDBOX READY' "$restore"
           grep -Fq 'wbadminVersionIdentifier' "$restore"
           grep -Fq 'RequiredScratchBytes' "$restore"
+          grep -Fq 'UnregisterExitCode' "$restore"
+          grep -Fq 'Copie scratch conservée' "$restore"
 
           # shellcheck disable=SC2016
           grep -Fq '`STATIC`' "$doc"

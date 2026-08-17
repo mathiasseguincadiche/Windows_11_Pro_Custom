@@ -124,11 +124,11 @@ Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 - [ ] une CI verte n'est pas considérée comme une preuve physique ;
 - [ ] `90_workstation_fingerprint_v26.ps1 -Mode Audit` produit une preuve `SIMULATED`, un rapport structuré et son SHA-256 ;
 - [ ] une preuve `PHYSICAL` exige `-EvidenceLevel PHYSICAL -ConfirmPhysicalEvidence` sur la workstation réelle ;
-- [ ] une baseline V26 n'est enregistrée qu'après validation physique complète ;
+- [ ] une baseline V26 n'est enregistrée qu'après validation physique complète et possède un sidecar SHA-256 valide ;
 - [ ] `-Mode Verify` ne signale aucune dérive inexpliquée ;
 - [ ] un remplacement de baseline est justifié, archivé et accompagné d'un diff ;
 - [ ] le Golden Backup passe `63_restore_drill_v26.ps1 -Mode Verify` ;
-- [ ] au moins un drill WSL `Sandbox` a prouvé que le VHDX peut être importé et démarré sans toucher à la distribution `Ubuntu` réelle ;
+- [ ] au moins un drill WSL `Sandbox` a prouvé que le VHDX peut être importé et démarré sans toucher à la distribution `Ubuntu` réelle ; en cas d'échec du désenregistrement temporaire, le VHDX scratch n'est pas supprimé ;
 - [ ] l'exercice de restauration Windows complet reste planifié sous WinRE/offline et n'est jamais automatisé sur le système actif.
 
 ```powershell

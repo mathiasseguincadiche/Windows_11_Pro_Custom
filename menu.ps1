@@ -316,13 +316,13 @@ function Invoke-MainAction {
         '8.5' { [void](Invoke-WpcRepoScript -DisplayName 'Verification de derive PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Verify'; EvidenceLevel='PHYSICAL'; ConfirmPhysicalEvidence=[switch]::Present } -RequiresAdmin) }
         '8.6' {
             if (Confirm-WpcAction -Message 'Enregistrer la baseline PHYSICAL uniquement apres validation complete') {
-                [void](Invoke-WpcRepoScript -DisplayName 'Enregistrer baseline PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Record'; EvidenceLevel='PHYSICAL'; ConfirmHealthyState=[switch]::Present } -RequiresAdmin)
+                [void](Invoke-WpcRepoScript -DisplayName 'Enregistrer baseline PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Record'; EvidenceLevel='PHYSICAL'; ConfirmPhysicalEvidence=[switch]::Present; ConfirmHealthyState=[switch]::Present } -RequiresAdmin)
             }
         }
         '8.7' {
             $reason = Read-WpcMenuValue -Prompt 'Justification du remplacement de baseline' -DryRunValue 'Maintenance validee et requalification complete reussie'
             if (Confirm-WpcAction -Message 'Archiver et remplacer la baseline PHYSICAL apres investigation') {
-                [void](Invoke-WpcRepoScript -DisplayName 'Remplacer baseline PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Record'; EvidenceLevel='PHYSICAL'; ConfirmHealthyState=[switch]::Present; ReplaceBaseline=[switch]::Present; ReplacementReason=$reason } -RequiresAdmin)
+                [void](Invoke-WpcRepoScript -DisplayName 'Remplacer baseline PHYSICAL' -Path $FingerprintScript -Arguments @{ Mode='Record'; EvidenceLevel='PHYSICAL'; ConfirmPhysicalEvidence=[switch]::Present; ConfirmHealthyState=[switch]::Present; ReplaceBaseline=[switch]::Present; ReplacementReason=$reason } -RequiresAdmin)
             }
         }
         '9.1' { Invoke-OpenFolder -Path (Join-Path $RepoRoot 'logs') -Label 'les journaux' }

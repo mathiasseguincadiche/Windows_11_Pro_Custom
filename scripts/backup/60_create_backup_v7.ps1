@@ -183,11 +183,17 @@ if (-not $WinReEnabled) {
 }
 
 $RestorePointAttempted = $false
+$RestorePointExitCode = $null
 if (-not $SkipRestorePoint) {
     $RestorePointAttempted = $true
     $RestorePointScript = Join-Path $RepoRoot 'scripts\windows\41_restore_point.ps1'
     $RestorePointOutput = @(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestorePointScript -Description 'Windows_11_Pro_Custom Golden Backup' 2>&1)
+    $RestorePointExitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
     $RestorePointOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
+    if ($RestorePointExitCode -ne 0) {
+        throw "Le point de restauration Golden Backup a échoué avec le code $RestorePointExitCode. Utilise -SkipRestorePoint uniquement après une décision explicite et documentée."
+    }
 } else {
     'Restore point explicitly skipped by operator.' | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
 }
@@ -268,6 +274,7 @@ $Manifest = [ordered]@{
     wbadminVersionIdentifier = $CreatedWbadminVersionIdentifier
     winReEnabled = [bool]$WinReEnabled
     restorePointAttempted = [bool]$RestorePointAttempted
+    restorePointExitCode = $RestorePointExitCode
     wsl = [ordered]@{
         distribution = $Distribution
         exportPath = $WslBackupPath
