@@ -80,6 +80,22 @@ Restaure uniquement les états initiaux que le dépôt sait réellement remettre
 
 # 3. Planification
 
+## Prérequis V25 des modes stricts
+
+Avant le premier `PlanOnly`, `Apply` ou `Verify` strict :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+  -Mode Record `
+  -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+`Record` est un enrôlement unique après contrôle humain. Si la baseline existe,
+exécuter seulement `-Mode Verify`. Référence :
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
+
 ## `-PlanOnly`
 
 ```powershell
@@ -400,6 +416,10 @@ reports\updates\latest-run.json
 
 ```powershell
 .\install.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+# Premier enrôlement seulement, après contrôle humain :
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 .\install.ps1 -Mode Apply -FullInstall
 .\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps

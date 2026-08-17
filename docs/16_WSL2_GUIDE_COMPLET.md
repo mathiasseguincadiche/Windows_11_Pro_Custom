@@ -187,9 +187,16 @@ Pourquoi :
 
 # 5. Installer WSL2 avec le dépôt
 
-La voie recommandée est l'orchestrateur :
+La voie recommandée est l'orchestrateur. Avant sa première exécution stricte,
+enrôler et vérifier l'identité de `C:` et `D:` selon
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) :
 
 ```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+  -Mode Record `
+  -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
 .\install.ps1 -Mode Apply -FullInstall
 ```
 

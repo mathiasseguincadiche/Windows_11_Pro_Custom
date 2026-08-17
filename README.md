@@ -168,19 +168,39 @@ Il ne déclenche aucun projet externe.
 .\install.ps1 -Mode Audit
 ```
 
-### 2. Prévisualiser
+### 2. Enrôler et vérifier l'identité physique V25
+
+Cette étape est obligatoire une seule fois sur une topologie saine, avant tout
+`PlanOnly`, `Apply` ou `Verify` strict :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+  -Mode Record `
+  -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+Avant `Record`, vérifier humainement que `C:` est le volume Windows attendu et
+que `D:` est le second Crucial T705 NTFS destiné aux données et à WSL. Une
+baseline existante se vérifie simplement avec `-Mode Verify` et ne doit jamais
+être remplacée pour masquer une alerte inexpliquée.
+
+Référence : [`docs/25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](docs/25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
+
+### 3. Prévisualiser
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-### 3. Faire converger
+### 4. Faire converger
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall
 ```
 
-### 4. Prouver la conformité
+### 5. Prouver la conformité
 
 ```powershell
 .\install.ps1 `
@@ -190,7 +210,7 @@ Il ne déclenche aucun projet externe.
   -ValidateDevOps
 ```
 
-### 5. Prouver l'idempotence
+### 6. Prouver l'idempotence
 
 Recalculer ensuite le même plan :
 

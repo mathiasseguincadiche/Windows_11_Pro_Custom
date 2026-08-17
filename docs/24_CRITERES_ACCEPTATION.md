@@ -33,11 +33,21 @@ Cette page transforme le résultat attendu de `Windows_11_Pro_Custom` en critèr
 
 ## 4. Stockage
 
-- [ ] `C:` contient Windows ;
-- [ ] `D:` est le volume NTFS attendu ;
+- [ ] `C:` contient Windows et correspond à l'identité physique V25 enrôlée ;
+- [ ] `D:` est le volume NTFS attendu et correspond à l'identité physique V25 enrôlée ;
+- [ ] `C:` et `D:` résident sur deux SSD physiques distincts ;
+- [ ] la baseline V25 a été enregistrée après contrôle humain puis vérifiée ;
+- [ ] le contrôle V24 confirme NTFS/NVMe sans corruption bloquante ;
 - [ ] WSL est sous `D:\WSL\Ubuntu-DevOps` ;
 - [ ] le filesystem Linux est fourni par le VHDX WSL2 ;
 - [ ] le support de sauvegarde est distinct des SSD internes.
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_integrity_v24.ps1 -Mode Verify
+```
+
+Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 
 ## 5. WSL2
 

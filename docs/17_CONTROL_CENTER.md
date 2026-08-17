@@ -58,6 +58,7 @@ Aucune fonctionnalité métier importante ne doit exister uniquement dans le men
 
 Le choix d'installation complète correspond à l'orchestration globale de la workstation :
 
+- vérification stricte de la baseline d'identité physique V25 de `C:` et `D:` ;
 - inspection de l'état réel ;
 - applications Windows ;
 - réglages gérés ;
@@ -65,6 +66,12 @@ Le choix d'installation complète correspond à l'orchestration globale de la wo
 - environnement DevOps ;
 - workstation VS Code / WezTerm ;
 - validations pertinentes.
+
+Lors d'une première configuration, le menu bloque volontairement si la baseline
+V25 n'a pas encore été enregistrée après contrôle humain. Effectuer d'abord
+`Audit → V25 Record → V25 Verify` selon
+[`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md),
+puis relancer exactement **Installation complète**.
 
 Il ne déclenche aucun projet externe. En particulier, OpenClaw/OpenRouter n'est ni installé ni configuré depuis ce menu.
 

@@ -49,6 +49,12 @@ Les projets Linux actifs restent sur le filesystem ext4 de WSL2 sous `~/projects
 ```text
 Audit
   ↓
+Contrôle humain C: / D:
+  ↓
+V25 Record (premier enrôlement uniquement)
+  ↓
+V25 Verify
+  ↓
 PlanOnly
   ↓
 Apply
@@ -59,6 +65,9 @@ PlanOnly de contrôle
   ↓
 Sauvegarde vérifiée
 ```
+
+Si la baseline V25 existe déjà et correspond à la topologie physique, seul
+`V25 Verify` est rejoué avant les parcours stricts.
 
 Une exécution réussie d'`Apply` ne suffit pas : la conformité vient de l'état réellement observé et des validateurs.
 

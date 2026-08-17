@@ -409,9 +409,9 @@ Ne mets pas le dépôt dans un dossier temporaire ou un emplacement synchronisé
 
 ---
 
-## Première inspection
+## Première inspection et enrôlement V25
 
-Avant toute installation complète :
+Commencer par l'audit non mutatif :
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
@@ -420,13 +420,35 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 L'audit doit observer l'état réel et signaler les éléments manquants ou incohérents.
 
-Pour voir ce que l'installation complète ferait sans appliquer :
+Avant le premier `PlanOnly` ou la première installation complète, ouvrir
+PowerShell en administrateur et qualifier l'identité physique des deux volumes :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+```
+
+Contrôler humainement que `C:` est le volume Windows attendu, que `D:` est le
+second Crucial T705 NTFS destiné aux données/WSL, et qu'ils résident sur deux SSD
+physiques distincts. Enregistrer ensuite la baseline une seule fois :
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+  -Mode Record `
+  -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+```
+
+Si une baseline existe déjà, ne pas la remplacer : exécuter seulement
+`-Mode Verify`. Une divergence inexpliquée doit interrompre l'installation et
+être investiguée selon [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
+
+Après le verdict `STORAGE IDENTITY READY`, prévisualiser :
 
 ```powershell
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-Guide : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
+Guide d'orchestration : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
 
 ---
 
