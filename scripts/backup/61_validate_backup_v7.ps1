@@ -43,7 +43,7 @@ $ManifestFile = Get-ChildItem -Path $V7Root -Filter 'backup-manifest.json' -File
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 if (-not $ManifestFile) {
-    throw "Aucun manifest de sauvegarde n’a été trouvé."
+    throw "Aucun manifest de sauvegarde nʼa été trouvé."
 }
 
 $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
@@ -69,7 +69,7 @@ $StorageIdentityExpectedHash = ([string]$Manifest.storageIdentity.sha256).ToUppe
 $StorageIdentityActualHash = (Get-FileHash -LiteralPath $StorageIdentityBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
 $StorageIdentityHashValid = $StorageIdentityExpectedHash -eq $StorageIdentityActualHash
 if (-not $StorageIdentityHashValid) {
-    throw 'La vérification SHA-256 de la baseline d’identité stockage V25 a échoué.'
+    throw 'La vérification SHA-256 de la baseline dʼidentité stockage V25 a échoué.'
 }
 
 $WslFileName = Split-Path ([string]$Manifest.wsl.exportPath) -Leaf
@@ -97,7 +97,7 @@ $WinReExitCode = $LASTEXITCODE
 $WinReText = $WinReOutput -join [Environment]::NewLine
 $WinReEnabled = $WinReExitCode -eq 0 -and $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw "Windows Recovery Environment n’est pas confirmé comme actif."
+    throw "Windows Recovery Environment nʼest pas confirmé comme actif."
 }
 
 $SafetyValid = ($Manifest.safety.destructiveRestoreAutomation -eq $false) -and
@@ -134,7 +134,7 @@ Write-Host '[OK] WindowsImageBackup présent.' -ForegroundColor Green
 Write-Host '[OK] wbadmin énumère une version de sauvegarde récupérable.' -ForegroundColor Green
 Write-Host '[OK] Windows RE est actif.' -ForegroundColor Green
 Write-Host '[OK] Le SHA-256 du VHDX WSL correspond au manifest.' -ForegroundColor Green
-Write-Host '[OK] La baseline d’identité stockage V25 est présente et son SHA-256 correspond.' -ForegroundColor Green
+Write-Host '[OK] La baseline dʼidentité stockage V25 est présente et son SHA-256 correspond.' -ForegroundColor Green
 Write-Host '[OK] La restauration destructive automatique reste désactivée.' -ForegroundColor Green
 Write-Host "[OK] Rapport de validation: $ReportPath" -ForegroundColor Green
 Write-Host 'VERDICT: BACKUP READY' -ForegroundColor Green

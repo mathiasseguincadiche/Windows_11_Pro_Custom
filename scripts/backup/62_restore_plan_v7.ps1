@@ -28,7 +28,7 @@ $ManifestFile = Get-ChildItem -Path $V7Root -Filter 'backup-manifest.json' -File
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 if (-not $ManifestFile) {
-    throw "Aucun manifest de sauvegarde n’a été trouvé."
+    throw "Aucun manifest de sauvegarde nʼa été trouvé."
 }
 
 $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
@@ -56,7 +56,7 @@ if (-not (Test-Path -LiteralPath $StorageIdentityBackupPath)) {
 $StorageIdentityExpectedHash = ([string]$Manifest.storageIdentity.sha256).ToUpperInvariant()
 $StorageIdentityActualHash = (Get-FileHash -LiteralPath $StorageIdentityBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
 if ($StorageIdentityExpectedHash -ne $StorageIdentityActualHash) {
-    throw 'Hash de la baseline d’identité stockage V25 incorrect. Le plan de restauration est bloqué.'
+    throw 'Hash de la baseline dʼidentité stockage V25 incorrect. Le plan de restauration est bloqué.'
 }
 
 if ($RestoreDistribution -eq [string]$Manifest.wsl.distribution) {
@@ -70,8 +70,8 @@ $Lines.Add("Manifest de sauvegarde: $($ManifestFile.FullName)")
 $Lines.Add("Cible de sauvegarde: $TargetDrive")
 $Lines.Add('')
 $Lines.Add('POLITIQUE DE SÉCURITÉ')
-$Lines.Add("- Ce script génère uniquement des instructions. Il n’exécute aucune restauration.")
-$Lines.Add("- Ne jamais désenregistrer Ubuntu avant d’avoir validé une copie restaurée.")
+$Lines.Add("- Ce script génère uniquement des instructions. Il nʼexécute aucune restauration.")
+$Lines.Add("- Ne jamais désenregistrer Ubuntu avant dʼavoir validé une copie restaurée.")
 $Lines.Add('- Ne jamais recréer ou formater automatiquement les disques depuis le dépôt.')
 $Lines.Add("- Baseline V25 de référence forensique: $StorageIdentityBackupPath")
 $Lines.Add('- Ne jamais recopier automatiquement cette baseline après un remplacement de disque ou une recréation de partition; comparer puis ré-enrôler explicitement la nouvelle topologie saine.')
@@ -97,7 +97,7 @@ if ($Scenario -in @('All', 'Windows')) {
     $Lines.Add('1. Préférer System Restore pour une petite régression de configuration Windows.')
     $Lines.Add('2. Pour un incident de boot ou de disque, démarrer dans Windows Recovery Environment ou sur le Recovery Drive.')
     $Lines.Add("3. Depuis WinRE, énumérer les versions avec: wbadmin get versions -backupTarget:$TargetDrive")
-    $Lines.Add("4. Sélectionner l’identifiant de version voulu et vérifier les disques cibles avant toute récupération.")
+    $Lines.Add("4. Sélectionner lʼidentifiant de version voulu et vérifier les disques cibles avant toute récupération.")
     $Lines.Add("5. Modèle de commande bare-metal, À EXÉCUTER MANUELLEMENT DEPUIS WINRE UNIQUEMENT: wbadmin start sysrecovery -version:<VERSION_IDENTIFIER> -backupTarget:$TargetDrive -restoreAllVolumes")
     $Lines.Add('6. Ne pas ajouter -recreateDisks sans vérification humaine explicite du layout et acceptation du risque de repartitionnement.')
     $Lines.Add('')

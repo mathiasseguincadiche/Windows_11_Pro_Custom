@@ -41,19 +41,19 @@ jobs:
           grep -Fq 'VERDICT: STORAGE IDENTITY READY' "$script"
 
           grep -Fq '00_storage_identity_v25.ps1' "$preflight"
-          grep -Fq '& $storageIdentityScript -Mode Verify' "$preflight"
+          grep -Fq "& \$storageIdentityScript -Mode Verify" "$preflight"
           grep -Fq '00_storage_identity_v25.ps1' "$wsl"
-          grep -Fq '& $storageIdentityScript -Mode Verify' "$wsl"
+          grep -Fq "& \$storageIdentityScript -Mode Verify" "$wsl"
           grep -Fq 'storage-identity-v25.json' "$backup_create"
           grep -Fq 'storageIdentity' "$backup_create"
           grep -Fq 'storage-identity-v25.json' "$backup_validate"
           grep -Fq 'storageIdentitySha256Valid' "$backup_validate"
           grep -Fq 'référence forensique' "$restore_plan"
 
-          pending_line=$(grep -n 'if ($pendingReboot.Pending -and ($StrictPhysicalReadiness -or -not $AllowPendingReboot))' "$preflight" | head -1 | cut -d: -f1)
-          identity_line=$(grep -n '& $storageIdentityScript -Mode Verify' "$preflight" | head -1 | cut -d: -f1)
-          integrity_line=$(grep -n '& $storageSafetyScript -Mode Verify' "$preflight" | head -1 | cut -d: -f1)
-          physical_line=$(grep -n '& $physicalReadinessScript -Strict:$StrictPhysicalReadiness' "$preflight" | head -1 | cut -d: -f1)
+          pending_line=$(grep -n "if (\$pendingReboot.Pending -and (\$StrictPhysicalReadiness -or -not \$AllowPendingReboot))" "$preflight" | head -1 | cut -d: -f1)
+          identity_line=$(grep -n "& \$storageIdentityScript -Mode Verify" "$preflight" | head -1 | cut -d: -f1)
+          integrity_line=$(grep -n "& \$storageSafetyScript -Mode Verify" "$preflight" | head -1 | cut -d: -f1)
+          physical_line=$(grep -n "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight" | head -1 | cut -d: -f1)
           test "$pending_line" -lt "$identity_line"
           test "$identity_line" -lt "$integrity_line"
           test "$integrity_line" -lt "$physical_line"
@@ -62,13 +62,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          files='scripts/bootstrap/00_storage_identity_v25.ps1 scripts/bootstrap/06_wsl.ps1'
+          files=(
+            'scripts/bootstrap/00_storage_identity_v25.ps1'
+            'scripts/bootstrap/06_wsl.ps1'
+          )
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|Resize-Partition|Set-Partition|Remove-PartitionAccessPath|Add-PartitionAccessPath|Set-Disk|diskpart|mountvol[[:space:]]+[^#]|Repair-Volume|chkdsk|ntfsfix'
-          if grep -InE "$forbidden" $files; then
+          if grep -InE "$forbidden" "${files[@]}"; then
             echo 'V25 identity and WSL paths must never mutate disks, partitions, letters or filesystems.' >&2
             exit 1
           fi
-          if grep -InE 'SkipIdentity|AllowIdentityMismatch|IgnoreIdentity|ForceIdentity' $files; then
+          if grep -InE 'SkipIdentity|AllowIdentityMismatch|IgnoreIdentity|ForceIdentity' "${files[@]}"; then
             echo 'V25 identity verification must not expose a convergence bypass.' >&2
             exit 1
           fi
