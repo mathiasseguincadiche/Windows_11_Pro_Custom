@@ -94,10 +94,10 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedWbadminVersionIdentifier)) {
     }
     Write-Host "[OK] Version wbadmin du manifeste retrouvée: $ExpectedWbadminVersionIdentifier" -ForegroundColor Green
 } else {
-    Write-Warning 'Manifest V7 antérieur sans wbadminVersionIdentifier: énumération validée, mais liaison exacte session/image non prouvée.'
+    Write-Warning 'Ancien manifeste sans wbadminVersionIdentifier: énumération validée, mais liaison exacte session/image non prouvée.'
 }
 
-Write-Host '[OK] Manifest Golden Backup V7 valide.' -ForegroundColor Green
+Write-Host '[OK] Manifest Golden Backup conforme.' -ForegroundColor Green
 Write-Host '[OK] SHA-256 du VHDX WSL valide.' -ForegroundColor Green
 Write-Host '[OK] SHA-256 de la baseline V25 valide.' -ForegroundColor Green
 Write-Host '[OK] wbadmin énumère au moins une version récupérable.' -ForegroundColor Green
