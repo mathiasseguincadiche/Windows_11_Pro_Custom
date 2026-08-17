@@ -12,6 +12,7 @@ on:
       - update.ps1
       - scripts/**
       - config/**
+      - manifests/**
       - .github/workflows/**
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - update.ps1
       - scripts/**
       - config/**
+      - manifests/**
       - .github/workflows/**
 
 permissions:
@@ -134,6 +136,71 @@ jobs:
           done
           grep -Fq 'vue consolidée' docs/18_GUIDE_MAITRE.md
           grep -Fq '20_RUNBOOK_OPERATIONNEL.md' docs/18_GUIDE_MAITRE.md
+
+      - name: Vérifier la synchronisation du catalogue applicatif
+        shell: python
+        run: |
+          import json
+          import re
+          from pathlib import Path
+
+          manifest = json.loads(Path('manifests/winget/apps-core.json').read_text(encoding='utf-8'))
+          documentation = Path('docs/08_APPLICATIONS.md').read_text(encoding='utf-8')
+
+          def section(start, end):
+              if start not in documentation or end not in documentation:
+                  raise SystemExit(f'Section applicative absente: {start} / {end}')
+              return documentation.split(start, 1)[1].split(end, 1)[0]
+
+          automatic_section = section(
+              '## Applications automatiques actuelles',
+              '## Applications volontairement manuelles',
+          )
+          manual_section = section(
+              '## Applications volontairement manuelles',
+              '## Installer ou réparer uniquement les logiciels',
+          )
+
+          documented_automatic = {
+              (name.strip(), winget_id.strip())
+              for name, winget_id in re.findall(
+                  r'^\|\s*([^|]+?)\s*\|\s*`([^`]+)`\s*\|\s*$',
+                  automatic_section,
+                  flags=re.MULTILINE,
+              )
+          }
+          documented_manual = {
+              name.strip()
+              for name in re.findall(
+                  r'^\|\s*([^|]+?)\s*\|\s*`autoInstall=false`\s*\|\s*$',
+                  manual_section,
+                  flags=re.MULTILINE,
+              )
+          }
+
+          expected_automatic = {
+              (app['name'], app['wingetId'])
+              for app in manifest['apps']
+              if app['autoInstall']
+          }
+          expected_manual = {
+              app['name']
+              for app in manifest['apps']
+              if not app['autoInstall']
+          }
+
+          if documented_automatic != expected_automatic:
+              raise SystemExit(
+                  'Catalogue automatique désynchronisé: '
+                  f'documentation={sorted(documented_automatic)} '
+                  f'manifeste={sorted(expected_automatic)}'
+              )
+          if documented_manual != expected_manual:
+              raise SystemExit(
+                  'Catalogue manuel désynchronisé: '
+                  f'documentation={sorted(documented_manual)} '
+                  f'manifeste={sorted(expected_manual)}'
+              )
 
       - name: Vérifier le contrat terminal workstation
         shell: bash

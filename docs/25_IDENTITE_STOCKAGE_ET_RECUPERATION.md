@@ -1,6 +1,6 @@
 # Identité du stockage et reprise après disparition d'un volume
 
-Ce document définit le garde-fou V25 utilisé avant toute convergence Windows/WSL.
+Ce document définit le garde-fou V25 imposé par les parcours stricts de `install.ps1` et par le bootstrap WSL avant leurs mutations.
 Il répond à deux risques différents :
 
 - une lettre `C:` ou `D:` peut désigner un autre volume après un redémarrage ;
@@ -10,6 +10,16 @@ Il répond à deux risques différents :
 V25 ne crée, ne supprime, ne formate, ne redimensionne et ne répare aucune
 partition. Il observe la topologie et bloque l'installation si l'identité réelle
 ne correspond plus à la référence explicitement approuvée.
+
+## Portée d'application
+
+Le contrôle est appelé automatiquement par le préflight strict de `install.ps1`
+en modes `Apply` et `Verify`, puis directement par le bootstrap WSL avant toute
+création ou modification de son emplacement.
+
+Les scripts internes exécutés isolément restent des composants ciblés : leur
+succès ne constitue pas une preuve de conformité globale. Avant un `Apply` direct,
+exécuter explicitement V25 puis V24, ou préférer le parcours orchestré.
 
 ## Identités contrôlées
 

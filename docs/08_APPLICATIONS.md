@@ -21,7 +21,6 @@ Le bootstrap ne cherche jamais une application « au nom approximatif ». Pour l
 | Notion | `Notion.Notion` |
 | Firefox | `Mozilla.Firefox` |
 | Brave | `Brave.Brave` |
-| FileZilla | `TimKosse.FileZilla.Client` |
 | WezTerm | `wez.wezterm` |
 | LibreOffice | `TheDocumentFoundation.LibreOffice` |
 | Steam | `Valve.Steam` |
@@ -35,7 +34,17 @@ Le manifeste versionné reste la source de vérité si cette liste évolue.
 
 ## Applications volontairement manuelles
 
-Certaines applications peuvent rester déclarées avec `autoInstall=false`, par exemple lorsqu'une licence, un compte ou un canal d'installation ambigu empêche une automatisation fiable.
+Certaines applications restent déclarées avec `autoInstall=false` lorsqu'une licence, un compte ou un canal d'installation ambigu empêche une automatisation fiable.
+
+| Application | Contrat |
+| --- | --- |
+| MarkText | `autoInstall=false` |
+| FileZilla | `autoInstall=false` |
+| Microsoft Office | `autoInstall=false` |
+| PDFgear | `autoInstall=false` |
+| Files | `autoInstall=false` |
+
+FileZilla ne possède volontairement aucun `wingetId` approuvé dans le manifeste courant. Il reste donc manuel tant qu'une décision explicite n'a pas validé un package et son canal d'installation.
 
 Le principe est :
 
@@ -65,6 +74,13 @@ ou directement :
 
 ```powershell
 .\scripts\bootstrap\03_apps.ps1 -Mode Apply
+```
+
+Cette commande directe est un composant ciblé : elle ne remplace pas la préqualification complète de la workstation. Avant un `Apply` direct, vérifier au minimum les garde-fous V25 et V24 ; pour une convergence globale, utiliser `install.ps1`.
+
+```powershell
+.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_integrity_v24.ps1 -Mode Verify
 ```
 
 Audit :
