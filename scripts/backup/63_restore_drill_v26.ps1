@@ -138,6 +138,8 @@ if ($TemporaryDistribution -eq [string]$Manifest.wsl.distribution -or $Temporary
 $DrillRoot = Join-Path $ScratchRootFull $TemporaryDistribution
 $CopiedVhdx = Join-Path $DrillRoot 'ext4.vhdx'
 $Imported = $false
+$DrillFailure = $null
+$CleanupFailures = New-Object System.Collections.Generic.List[string]
 
 try {
     New-Item -ItemType Directory -Force -Path $DrillRoot | Out-Null
@@ -167,15 +169,52 @@ try {
 
     Write-Host "[OK] VHDX restauré et amorcé sous $TemporaryDistribution." -ForegroundColor Green
     Write-Host '[OK] Ubuntu 26.04 et racine ext4 confirmés dans le sandbox.' -ForegroundColor Green
-    Write-Host 'VERDICT: RESTORE DRILL SANDBOX READY' -ForegroundColor Green
+}
+catch {
+    $DrillFailure = $_
 }
 finally {
     if ($Imported) {
         Write-Host "[INFO] Désenregistrement de la distribution temporaire $TemporaryDistribution" -ForegroundColor Yellow
         & wsl.exe --terminate $TemporaryDistribution 2>$null
+        $TerminateExitCode = $LASTEXITCODE
+        if ($TerminateExitCode -ne 0) {
+            Write-Warning "wsl --terminate a échoué pour la distribution temporaire. code=$TerminateExitCode"
+        }
         & wsl.exe --unregister $TemporaryDistribution 2>$null
+        $UnregisterExitCode = $LASTEXITCODE
+        if ($UnregisterExitCode -ne 0) {
+            $CleanupFailures.Add("wsl --unregister a échoué pour $TemporaryDistribution. code=$UnregisterExitCode")
+        } else {
+            $RemainingNames = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
+            $ListExitCode = $LASTEXITCODE
+            if ($ListExitCode -ne 0) {
+                $CleanupFailures.Add("Impossible de confirmer le désenregistrement de $TemporaryDistribution. code=$ListExitCode")
+            } elseif ($RemainingNames -contains $TemporaryDistribution) {
+                $CleanupFailures.Add("La distribution temporaire reste enregistrée après wsl --unregister: $TemporaryDistribution")
+            } else {
+                $Imported = $false
+            }
+        }
     }
-    if (Test-Path -LiteralPath $DrillRoot) {
-        Remove-Item -LiteralPath $DrillRoot -Recurse -Force
+    if (-not $Imported -and (Test-Path -LiteralPath $DrillRoot)) {
+        try {
+            Remove-Item -LiteralPath $DrillRoot -Recurse -Force
+        } catch {
+            $CleanupFailures.Add("Impossible de supprimer la copie scratch $DrillRoot. $($_.Exception.Message)")
+        }
+    } elseif ($Imported) {
+        Write-Warning "Copie scratch conservée pour éviter de supprimer le VHDX d'une distribution encore enregistrée: $DrillRoot"
     }
 }
+
+if ($null -ne $DrillFailure) {
+    if ($CleanupFailures.Count -gt 0) {
+        throw "$($DrillFailure.Exception.Message) Échec(s) de nettoyage: $($CleanupFailures.ToArray() -join ' | ')"
+    }
+    throw $DrillFailure
+}
+if ($CleanupFailures.Count -gt 0) {
+    throw "Le drill a réussi, mais son nettoyage isolé a échoué: $($CleanupFailures.ToArray() -join ' | ')"
+}
+Write-Host 'VERDICT: RESTORE DRILL SANDBOX READY' -ForegroundColor Green

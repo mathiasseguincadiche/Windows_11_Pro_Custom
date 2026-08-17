@@ -397,8 +397,10 @@ Audit ou vérification physique sur la workstation réelle :
   -ConfirmPhysicalEvidence
 ```
 
-Le premier `Record` exige `-ConfirmHealthyState`. Un remplacement exige en plus
-`-ReplaceBaseline` et `-ReplacementReason`; l'ancienne baseline est archivée.
+Le premier `Record` exige explicitement `-EvidenceLevel PHYSICAL`,
+`-ConfirmPhysicalEvidence` et `-ConfirmHealthyState`. Un remplacement exige en
+plus `-ReplaceBaseline` et `-ReplacementReason`; l'ancienne baseline et son
+SHA-256 sont archivés.
 
 Vérification d'une session Golden Backup :
 

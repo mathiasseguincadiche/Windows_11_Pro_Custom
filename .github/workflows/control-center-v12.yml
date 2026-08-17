@@ -116,6 +116,13 @@ jobs:
             throw 'Physical fingerprint verification route incorrect.'
           }
 
+          foreach ($choice in @('8.6','8.7')) {
+            $record = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
+            foreach ($flag in @('PHYSICAL','ConfirmPhysicalEvidence','ConfirmHealthyState')) {
+              if (-not $record.Contains($flag)) { throw "Physical baseline route $choice missing $flag." }
+            }
+          }
+
   launcher-contract:
     runs-on: ubuntu-latest
     steps:

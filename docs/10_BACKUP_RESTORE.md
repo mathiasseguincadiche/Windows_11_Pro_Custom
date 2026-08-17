@@ -92,7 +92,7 @@ Le parcours vérifie notamment :
 3. espace libre ;
 4. séparation physique avec `C:` et `D:` ;
 5. disponibilité de WinRE ;
-6. création d'un point de restauration lorsque possible ;
+6. création et confirmation d'un point de restauration, sauf contournement explicite `-SkipBackupRestorePoint` ;
 7. arrêt propre de WSL ;
 8. création de l'image Windows ;
 9. export de la distribution Ubuntu en VHDX ;
@@ -100,6 +100,9 @@ Le parcours vérifie notamment :
 11. écriture d'un manifest de sauvegarde.
 
 Le script ne doit pas annoncer une sauvegarde fiable uniquement parce que `wbadmin` ou `wsl --export` a démarré : les artefacts doivent être vérifiables.
+Lorsque le point de restauration est demandé, son code de sortie est contrôlé et
+conservé dans le manifeste ; un échec arrête la création avant l'image Golden
+Backup. Le contournement reste une décision opérateur explicite.
 
 ---
 

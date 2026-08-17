@@ -196,6 +196,10 @@ jobs:
           grep -q 'wbadminVersionIdentifier' scripts/backup/60_create_backup_v7.ps1
           grep -q 'wbadminVersionIdentifier' scripts/backup/61_validate_backup_v7.ps1
           grep -q 'wbadminVersionIdentifier' scripts/backup/63_restore_drill_v26.ps1
+          # shellcheck disable=SC2016
+          grep -q 'RestorePointExitCode = $LASTEXITCODE' scripts/backup/60_create_backup_v7.ps1
+          # shellcheck disable=SC2016
+          grep -q 'restorePointExitCode = $RestorePointExitCode' scripts/backup/60_create_backup_v7.ps1
       - name: Validate WezTerm Lua syntax
         shell: bash
         run: |

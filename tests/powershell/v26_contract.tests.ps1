@@ -33,8 +33,39 @@ $fingerprintScript = Join-Path $RepoRoot 'scripts\windows\90_workstation_fingerp
 Import-FunctionFromScript -Path $fingerprintScript -Name @(
     'Get-ComparableFingerprint',
     'ConvertTo-FlatFingerprintMap',
-    'Get-FingerprintDifferences'
+    'Get-FingerprintDifferences',
+    'Get-WpcBaselineIntegrity',
+    'Write-WpcBaselineWithHash'
 )
+
+$integrityRoot = Join-Path ([IO.Path]::GetTempPath()) "wpc-v26-integrity-$([guid]::NewGuid().ToString('N'))"
+$integrityBaseline = Join-Path $integrityRoot 'workstation-fingerprint.json'
+$integritySidecar = "$integrityBaseline.sha256"
+try {
+    $writtenHash = Write-WpcBaselineWithHash -Json '{"contractVersion":"V26"}' -BaselinePath $integrityBaseline -HashPath $integritySidecar
+    $integrity = Get-WpcBaselineIntegrity -BaselinePath $integrityBaseline -HashPath $integritySidecar
+    if ($integrity.Status -ne 'VERIFIED' -or $integrity.Sha256 -ne $writtenHash) {
+        throw 'A newly written V26 baseline must have a verified SHA-256 sidecar.'
+    }
+
+    Add-Content -LiteralPath $integrityBaseline -Value 'tamper' -Encoding UTF8
+    $tamperRejected = $false
+    try {
+        [void](Get-WpcBaselineIntegrity -BaselinePath $integrityBaseline -HashPath $integritySidecar)
+    } catch {
+        $tamperRejected = $_.Exception.Message -match 'Intégrité de baseline V26 invalide'
+    }
+    if (-not $tamperRejected) { throw 'A modified V26 baseline must be rejected.' }
+
+    [void](Write-WpcBaselineWithHash -Json '{"contractVersion":"V26"}' -BaselinePath $integrityBaseline -HashPath $integritySidecar)
+    Remove-Item -LiteralPath $integritySidecar -Force
+    $legacyIntegrity = Get-WpcBaselineIntegrity -BaselinePath $integrityBaseline -HashPath $integritySidecar
+    if ($legacyIntegrity.Status -ne 'LEGACY_UNVERIFIED') {
+        throw 'A pre-sidecar V26 baseline must remain readable with an explicit legacy status.'
+    }
+} finally {
+    Remove-Item -LiteralPath $integrityRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 $baseline = [pscustomobject]@{
     contractVersion = 'V26'
@@ -71,6 +102,22 @@ foreach ($relativePath in @(
     if ($identifiers.Count -ne 2) {
         throw "The wbadmin identifier parser failed for $relativePath"
     }
+}
+
+$restoreDrillSource = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'scripts\backup\63_restore_drill_v26.ps1')
+foreach ($requiredFragment in @(
+    '$UnregisterExitCode = $LASTEXITCODE',
+    '$RemainingNames -contains $TemporaryDistribution',
+    'Copie scratch conservée'
+)) {
+    if (-not $restoreDrillSource.Contains($requiredFragment)) {
+        throw "Restore drill cleanup contract missing: $requiredFragment"
+    }
+}
+
+$backupSource = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'scripts\backup\60_create_backup_v7.ps1')
+if (-not ($backupSource.Contains('$RestorePointExitCode = $LASTEXITCODE') -and $backupSource.Contains('restorePointExitCode = $RestorePointExitCode'))) {
+    throw 'Golden Backup must capture and persist the restore-point exit code.'
 }
 
 Write-Host 'V26 contract self-tests: OK' -ForegroundColor Green

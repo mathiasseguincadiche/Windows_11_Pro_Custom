@@ -42,6 +42,10 @@ Pour l'état actuel du projet, utiliser :
 - contrôle anticipé de la capacité du scratch avant le drill WSL isolé ;
 - correction du contrat `Invoke-WpcExternalCommand -AllowFailure` et ajout de tests runtime ;
 - intégration des preuves et drills V26 dans le centre de contrôle ;
+- sidecar SHA-256 atomique pour les nouvelles baselines V26, avec détection de corruption et migration explicite des baselines antérieures ;
+- confirmation PHYSICAL désormais obligatoire séparément de l'attestation d'état sain ;
+- nettoyage du drill WSL rendu fail-closed : la copie VHDX est conservée si le désenregistrement temporaire échoue ;
+- code de sortie du point de restauration Golden Backup contrôlé et inscrit dans le manifeste ;
 - validation globale du menu étendue au matériel, à WSL et à la stack DevOps ;
 - vérification PGP d'AWS CLI conservée lors des mises à jour ;
 - références GitHub Actions épinglées sur des commits immuables ;

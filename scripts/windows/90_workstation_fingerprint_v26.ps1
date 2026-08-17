@@ -22,6 +22,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $ReportRoot = Join-Path $RepoRoot 'reports\workstation-v26'
 $LocalBaselineRoot = Join-Path $env:ProgramData 'Windows11ProCustom\workstation-v26'
 $LocalBaselinePath = Join-Path $LocalBaselineRoot 'workstation-fingerprint.json'
+$LocalBaselineHashPath = "$LocalBaselinePath.sha256"
 $StorageIdentityPath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 
 function Resolve-EvidenceLevel {
@@ -33,10 +34,63 @@ function Resolve-EvidenceLevel {
         return 'SIMULATED'
     }
     if ($EvidenceLevel -eq 'AUTO') { return 'SIMULATED' }
-    if ($EvidenceLevel -eq 'PHYSICAL' -and -not $ConfirmPhysicalEvidence -and -not ($Mode -eq 'Record' -and $ConfirmHealthyState)) {
+    if ($EvidenceLevel -eq 'PHYSICAL' -and -not $ConfirmPhysicalEvidence) {
         throw 'Le niveau PHYSICAL exige -ConfirmPhysicalEvidence sur la workstation réelle.'
     }
     return $EvidenceLevel
+}
+
+function Get-WpcBaselineIntegrity {
+    param(
+        [Parameter(Mandatory)][string]$BaselinePath,
+        [Parameter(Mandatory)][string]$HashPath
+    )
+
+    if (-not (Test-Path -LiteralPath $BaselinePath)) {
+        throw "Baseline V26 absente: $BaselinePath"
+    }
+    $actual = (Get-FileHash -LiteralPath $BaselinePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if (-not (Test-Path -LiteralPath $HashPath)) {
+        return [pscustomobject]@{ Status = 'LEGACY_UNVERIFIED'; Sha256 = $actual }
+    }
+
+    $text = (Get-Content -Raw -LiteralPath $HashPath).Trim()
+    if ($text -notmatch '^(?<hash>[A-Fa-f0-9]{64})\s{2}(?<file>[^\r\n]+)$') {
+        throw "Sidecar SHA-256 de baseline invalide: $HashPath"
+    }
+    $expectedFileName = [IO.Path]::GetFileName($BaselinePath)
+    if ($Matches.file -ne $expectedFileName) {
+        throw "Le sidecar SHA-256 référence un fichier inattendu: $($Matches.file)"
+    }
+    $expected = $Matches.hash.ToUpperInvariant()
+    if ($actual -ne $expected) {
+        throw "Intégrité de baseline V26 invalide. attendu=$expected actuel=$actual"
+    }
+    return [pscustomobject]@{ Status = 'VERIFIED'; Sha256 = $actual }
+}
+
+function Write-WpcBaselineWithHash {
+    param(
+        [Parameter(Mandatory)][string]$Json,
+        [Parameter(Mandatory)][string]$BaselinePath,
+        [Parameter(Mandatory)][string]$HashPath
+    )
+
+    $parent = Split-Path -Parent $BaselinePath
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $token = [guid]::NewGuid().ToString('N')
+    $temporaryBaseline = "$BaselinePath.$token.tmp"
+    $temporaryHash = "$HashPath.$token.tmp"
+    try {
+        $Json | Set-Content -LiteralPath $temporaryBaseline -Encoding UTF8
+        $hash = (Get-FileHash -LiteralPath $temporaryBaseline -Algorithm SHA256).Hash.ToUpperInvariant()
+        "$hash  $([IO.Path]::GetFileName($BaselinePath))" | Set-Content -LiteralPath $temporaryHash -Encoding ASCII
+        Move-Item -LiteralPath $temporaryBaseline -Destination $BaselinePath -Force
+        Move-Item -LiteralPath $temporaryHash -Destination $HashPath -Force
+        return $hash
+    } finally {
+        Remove-Item -LiteralPath $temporaryBaseline, $temporaryHash -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Get-RepositoryRevision {
@@ -249,17 +303,23 @@ switch ($Mode) {
         }
         New-Item -ItemType Directory -Force -Path $LocalBaselineRoot | Out-Null
         if ($baselinePresent) {
+            $previousIntegrity = Get-WpcBaselineIntegrity -BaselinePath $LocalBaselinePath -HashPath $LocalBaselineHashPath
+            if ($previousIntegrity.Status -eq 'LEGACY_UNVERIFIED') {
+                Write-Warning 'Baseline V26 antérieure sans sidecar SHA-256: elle sera archivée comme preuve historique non vérifiée.'
+            }
             $previous = Get-Content -Raw -LiteralPath $LocalBaselinePath | ConvertFrom-Json
-            $previousHash = (Get-FileHash -LiteralPath $LocalBaselinePath -Algorithm SHA256).Hash
+            $previousHash = $previousIntegrity.Sha256
             $historyRoot = Join-Path $LocalBaselineRoot 'history'
             New-Item -ItemType Directory -Force -Path $historyRoot | Out-Null
             $archivePath = Join-Path $historyRoot "workstation-fingerprint-$timestamp-$($previousHash.Substring(0, 12)).json"
             Copy-Item -LiteralPath $LocalBaselinePath -Destination $archivePath
+            "$previousHash  $([IO.Path]::GetFileName($archivePath))" | Set-Content -LiteralPath "$archivePath.sha256" -Encoding ASCII
             $replacement = [ordered]@{
                 contractVersion = 'V26'
                 replacedAt = (Get-Date).ToString('o')
                 reason = $ReplacementReason.Trim()
                 previousBaselineSha256 = $previousHash
+                previousBaselineIntegrity = $previousIntegrity.Status
                 previousBaselineArchive = $archivePath
                 differences = @(Get-FingerprintDifferences -Expected $previous -Actual $fingerprint)
             }
@@ -269,14 +329,21 @@ switch ($Mode) {
             Write-Host "[INFO] Ancienne baseline archivée: $archivePath" -ForegroundColor Cyan
             Write-Host "[INFO] Justification et diff: $replacementPath" -ForegroundColor Cyan
         }
-        $json | Set-Content -LiteralPath $LocalBaselinePath -Encoding UTF8
+        $baselineHash = Write-WpcBaselineWithHash -Json $json -BaselinePath $LocalBaselinePath -HashPath $LocalBaselineHashPath
         Write-Host "[OK] Baseline V26 enregistrée: $LocalBaselinePath" -ForegroundColor Green
+        Write-Host "[OK] Intégrité baseline SHA-256: $baselineHash" -ForegroundColor Green
         Write-Host 'VERDICT: WORKSTATION FINGERPRINT RECORDED' -ForegroundColor Green
         return
     }
     'Verify' {
         if (-not (Test-Path -LiteralPath $LocalBaselinePath)) {
             throw "Baseline V26 absente: $LocalBaselinePath. Exécuter d'abord Audit puis Record sur un état sain."
+        }
+        $baselineIntegrity = Get-WpcBaselineIntegrity -BaselinePath $LocalBaselinePath -HashPath $LocalBaselineHashPath
+        if ($baselineIntegrity.Status -eq 'LEGACY_UNVERIFIED') {
+            Write-Warning 'Baseline V26 antérieure sans sidecar SHA-256: vérification compatible, mais remplacement contrôlé recommandé après requalification.'
+        } else {
+            Write-Host "[OK] Intégrité de la baseline V26 vérifiée: $($baselineIntegrity.Sha256)" -ForegroundColor Green
         }
         $expected = Get-Content -Raw -LiteralPath $LocalBaselinePath | ConvertFrom-Json
         if ([string]$expected.contractVersion -ne 'V26') {

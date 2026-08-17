@@ -48,6 +48,8 @@ Après une validation physique complète et uniquement sur un état sain, une ba
 ```powershell
 .\scripts\windows\90_workstation_fingerprint_v26.ps1 `
   -Mode Record `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence `
   -ConfirmHealthyState
 ```
 
@@ -67,6 +69,8 @@ avec le diff complet :
 ```powershell
 .\scripts\windows\90_workstation_fingerprint_v26.ps1 `
   -Mode Record `
+  -EvidenceLevel PHYSICAL `
+  -ConfirmPhysicalEvidence `
   -ConfirmHealthyState `
   -ReplaceBaseline `
   -ReplacementReason 'Windows Update validé et requalification complète réussie'
@@ -76,7 +80,14 @@ La baseline locale est conservée sous :
 
 ```text
 %ProgramData%\Windows11ProCustom\workstation-v26\workstation-fingerprint.json
+%ProgramData%\Windows11ProCustom\workstation-v26\workstation-fingerprint.json.sha256
 ```
+
+Toute nouvelle baseline reçoit un sidecar SHA-256, vérifié avant comparaison ou
+remplacement. Une baseline créée avant ce durcissement reste lisible avec le
+statut `LEGACY_UNVERIFIED`; un remplacement contrôlé après requalification est
+alors recommandé. Le sidecar rend les corruptions accidentelles détectables,
+mais ne remplace pas une signature cryptographique protégée hors de la machine.
 
 Elle ne remplace aucune source de vérité. Une différence est un signal de dérive
 à expliquer, pas une autorisation de forcer la convergence. Le rapport de dérive
@@ -106,8 +117,12 @@ Pour prouver qu'un VHDX WSL est réellement amorçable, le mode `Sandbox` :
 2. copie le VHDX vers un répertoire temporaire distinct ;
 3. l'importe sous un nom de distribution temporaire unique ;
 4. vérifie `/etc/os-release`, le filesystem racine et l'accès shell ;
-5. désenregistre uniquement la distribution temporaire dans un bloc `finally` ;
-6. supprime uniquement la copie temporaire créée par le drill.
+5. désenregistre uniquement la distribution temporaire dans un bloc `finally` et vérifie sa disparition ;
+6. supprime uniquement la copie temporaire créée par le drill, après confirmation du désenregistrement.
+
+Si le désenregistrement échoue ou ne peut pas être confirmé, le drill échoue et
+conserve volontairement la copie scratch afin de ne jamais supprimer le VHDX
+d'une distribution encore enregistrée.
 
 Il exige une confirmation explicite :
 
