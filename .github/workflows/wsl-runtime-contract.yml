@@ -68,9 +68,17 @@ jobs:
           grep -Fq 'expectedVersionId' scripts/bootstrap/14_validate_wsl_v6.ps1
           grep -Fq 'Aucune suppression automatique nʼest effectuée' "$wsl"
           restore_drill='scripts/backup/63_restore_drill_v26.ps1'
+          # PowerShell variables are matched literally.
+          # shellcheck disable=SC2016
           grep -Fq 'if (-not $ConfirmIsolatedRestoreDrill)' "$restore_drill"
+          # PowerShell variables are matched literally.
+          # shellcheck disable=SC2016
           grep -Fq '$TemporaryDistribution = "W11PC-RestoreDrill-$DrillId"' "$restore_drill"
+          # PowerShell variables are matched literally.
+          # shellcheck disable=SC2016
           grep -Fq '$TemporaryDistribution -eq [string]$Manifest.wsl.distribution' "$restore_drill"
+          # PowerShell variables are matched literally.
+          # shellcheck disable=SC2016
           grep -Fqx '        & wsl.exe --unregister $TemporaryDistribution 2>$null' "$restore_drill"
           test "$(grep -cE 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' "$restore_drill")" -eq 1
           if grep -RInE --exclude='63_restore_drill_v26.ps1' 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
