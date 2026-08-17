@@ -34,6 +34,16 @@ Pour l'état actuel du projet, utiliser :
 
 ## Historique des évolutions
 
+### V25 — Identité physique du stockage et garde-fou WSL
+
+- ajout d'une baseline locale, explicitement approuvée, pour les identités stables de `C:` et `D:` ;
+- vérification du numéro de série et de l'UniqueId du disque, des identités de partition et du VolumeUniqueId ;
+- blocage fail-closed si une lettre pointe vers un autre disque/volume, si un rôle disparaît ou si `D:` devient boot/système/masqué ;
+- exigence de deux disques physiques distincts pour les rôles Windows et données/WSL ;
+- appel du gate V25 avant V24, avant les fondations Windows et directement depuis le script WSL ;
+- aucun enrôlement ou remplacement silencieux de la baseline ;
+- rapport topologique complet et runbook de diagnostic sans écriture.
+
 ### V13 — Documentation consolidée
 
 - refonte du `README.md` pour refléter l'état réel V12 du projet ;

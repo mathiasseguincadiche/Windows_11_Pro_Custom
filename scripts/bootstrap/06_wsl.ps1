@@ -17,6 +17,7 @@ Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
+$storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity_v25.ps1'
 $swapDir = 'D:\WSL\swap'
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
@@ -24,6 +25,7 @@ if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
 }
 if (-not (Test-Path $configSource)) { throw "Profil WSL introuvable: $configSource" }
 if (-not (Test-Path $runtimeContractPath)) { throw "Contrat runtime WSL absent: $runtimeContractPath" }
+if (-not (Test-Path $storageIdentityScript)) { throw "Gate d'identité stockage V25 absent: $storageIdentityScript" }
 
 $runtimeContract = Get-Content -Raw $runtimeContractPath | ConvertFrom-Json
 $expectedDistribution = [string]$runtimeContract.distribution
@@ -122,19 +124,22 @@ function Assert-WslInstallCapabilities {
         if ($help -notmatch [regex]::Escape($option)) { $missing.Add($option) }
     }
     if ($missing.Count -gt 0) {
-        throw "Runtime WSL trop ancien pour l’installation déterministe requise. Options absentes: $($missing -join ', '). Exécute wsl --update, redémarre Windows si demandé, puis relance."
+        throw "Runtime WSL trop ancien pour lʼinstallation déterministe requise. Options absentes: $($missing -join ', '). Exécute wsl --update, redémarre Windows si demandé, puis relance."
     }
 
     $online = (& wsl.exe --list --online 2>&1 | Out-String) -replace "`0", ''
     $onlineCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($onlineCode -ne 0) {
-        throw "Impossible d’interroger le catalogue WSL en ligne (code=$onlineCode). Vérifie la connexion réseau et le runtime WSL."
+        throw "Impossible dʼinterroger le catalogue WSL en ligne (code=$onlineCode). Vérifie la connexion réseau et le runtime WSL."
     }
     if ($online -notmatch "(?m)^\s*$([regex]::Escape($sourceDistribution))(?:\s|$)") {
         throw "Source WSL épinglée indisponible: $sourceDistribution. Aucune autre version Ubuntu ne sera substituée silencieusement."
     }
 }
+
+Write-Host '[ANALYSE] Vérification V25 de lʼidentité physique de D: avant toute opération WSL...' -ForegroundColor Cyan
+& $storageIdentityScript -Mode Verify
 
 $dVolume = Get-Volume -DriveLetter D -ErrorAction Stop
 if ($dVolume.FileSystem -ne 'NTFS') { throw 'D: doit rester NTFS.' }
@@ -146,7 +151,7 @@ $state = Get-WslState -ReadRelease:$readRelease
 if ($Mode -eq 'Audit') {
     Write-Host "WSL executable: $((Get-Command wsl.exe).Source)"
     Write-Host "Distribution enregistrée $Distribution présente: $($state.Present)"
-    Write-Host "Source d’installation épinglée: $sourceDistribution"
+    Write-Host "Source dʼinstallation épinglée: $sourceDistribution"
     Write-Host "Version WSL de la distribution: $($state.Version)"
     Write-Host "Profil $Profile conforme: $($state.ConfigMatches)"
     Write-Host "Emplacement observé: $(if ($state.BasePath) { $state.BasePath } else { '<non disponible>' })"

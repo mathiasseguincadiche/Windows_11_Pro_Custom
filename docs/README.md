@@ -17,7 +17,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 | Comprendre l'orchestration | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |
 | Trouver une commande | [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md) |
 | Vérifier la conformité | [`11_VALIDATION.md`](11_VALIDATION.md) → [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) |
-| Diagnostiquer | [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md) |
+| Diagnostiquer | [`22_TROUBLESHOOTING.md`](22_TROUBLESHOOTING.md) → [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
 | Identifier les sources de vérité | [`23_SOURCES_DE_VERITE.md`](23_SOURCES_DE_VERITE.md) |
 | Reconstruire après incident | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) → [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) |
 
@@ -55,6 +55,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 - [`11_VALIDATION.md`](11_VALIDATION.md) — preuves de conformité ;
 - [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) — qualification matérielle ;
 - [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) — checklist finale ;
+- [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) — identité physique C:/D: et reprise après disparition d'un volume ;
 - [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) — sauvegarde ;
 - [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) — reconstruction.
 

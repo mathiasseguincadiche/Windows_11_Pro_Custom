@@ -43,7 +43,7 @@ $ManifestFile = Get-ChildItem -Path $V7Root -Filter 'backup-manifest.json' -File
     Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
 if (-not $ManifestFile) {
-    throw "Aucun manifest de sauvegarde n’a été trouvé."
+    throw "Aucun manifest de sauvegarde nʼa été trouvé."
 }
 
 $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
@@ -52,6 +52,26 @@ if ($Manifest.version -ne 'V7') {
 }
 
 $SessionRoot = Split-Path (Split-Path $ManifestFile.FullName -Parent) -Parent
+$MetadataDirectory = Split-Path $ManifestFile.FullName -Parent
+$StorageIdentityManifestProperty = $Manifest.PSObject.Properties['storageIdentity']
+if ($null -eq $StorageIdentityManifestProperty) {
+    throw 'Le manifest ne contient aucune preuve storageIdentity V25. Cette sauvegarde antérieure ne peut pas recevoir le verdict V25.'
+}
+$StorageIdentityBackupPath = Join-Path $MetadataDirectory 'storage-identity-v25.json'
+if (-not (Test-Path -LiteralPath $StorageIdentityBackupPath)) {
+    throw "Baseline V25 absente des métadonnées: $StorageIdentityBackupPath"
+}
+$StorageIdentityDocument = Get-Content -Raw -LiteralPath $StorageIdentityBackupPath | ConvertFrom-Json
+if ([string]$StorageIdentityDocument.ContractVersion -ne 'V25') {
+    throw "Contrat baseline sauvegardé inattendu: $($StorageIdentityDocument.ContractVersion)"
+}
+$StorageIdentityExpectedHash = ([string]$Manifest.storageIdentity.sha256).ToUpperInvariant()
+$StorageIdentityActualHash = (Get-FileHash -LiteralPath $StorageIdentityBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
+$StorageIdentityHashValid = $StorageIdentityExpectedHash -eq $StorageIdentityActualHash
+if (-not $StorageIdentityHashValid) {
+    throw 'La vérification SHA-256 de la baseline dʼidentité stockage V25 a échoué.'
+}
+
 $WslFileName = Split-Path ([string]$Manifest.wsl.exportPath) -Leaf
 $WslBackupPath = Join-Path (Join-Path $SessionRoot 'WSL') $WslFileName
 if (-not (Test-Path $WslBackupPath)) {
@@ -77,7 +97,7 @@ $WinReExitCode = $LASTEXITCODE
 $WinReText = $WinReOutput -join [Environment]::NewLine
 $WinReEnabled = $WinReExitCode -eq 0 -and $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw "Windows Recovery Environment n’est pas confirmé comme actif."
+    throw "Windows Recovery Environment nʼest pas confirmé comme actif."
 }
 
 $SafetyValid = ($Manifest.safety.destructiveRestoreAutomation -eq $false) -and
@@ -100,6 +120,11 @@ $Report = [ordered]@{
     wslSha256Expected = $ExpectedHash
     wslSha256Actual = $ActualHash
     wslSha256Valid = [bool]$HashValid
+    storageIdentityBackupPath = $StorageIdentityBackupPath
+    storageIdentityContractVersion = [string]$StorageIdentityDocument.ContractVersion
+    storageIdentitySha256Expected = $StorageIdentityExpectedHash
+    storageIdentitySha256Actual = $StorageIdentityActualHash
+    storageIdentitySha256Valid = [bool]$StorageIdentityHashValid
     destructiveRestoreAutomation = $false
     verdict = 'BACKUP READY'
 }
@@ -109,6 +134,7 @@ Write-Host '[OK] WindowsImageBackup présent.' -ForegroundColor Green
 Write-Host '[OK] wbadmin énumère une version de sauvegarde récupérable.' -ForegroundColor Green
 Write-Host '[OK] Windows RE est actif.' -ForegroundColor Green
 Write-Host '[OK] Le SHA-256 du VHDX WSL correspond au manifest.' -ForegroundColor Green
+Write-Host '[OK] La baseline dʼidentité stockage V25 est présente et son SHA-256 correspond.' -ForegroundColor Green
 Write-Host '[OK] La restauration destructive automatique reste désactivée.' -ForegroundColor Green
 Write-Host "[OK] Rapport de validation: $ReportPath" -ForegroundColor Green
 Write-Host 'VERDICT: BACKUP READY' -ForegroundColor Green

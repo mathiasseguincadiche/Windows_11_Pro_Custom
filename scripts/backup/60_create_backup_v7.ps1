@@ -23,6 +23,7 @@ $SessionRoot = Join-Path $TargetDrive "Windows_11_Pro_Custom_Backup\V7\$Timestam
 $WslBackupDirectory = Join-Path $SessionRoot 'WSL'
 $MetadataDirectory = Join-Path $SessionRoot 'metadata'
 $WindowsImageRoot = Join-Path $TargetDrive 'WindowsImageBackup'
+$StorageIdentityBaselinePath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -42,6 +43,14 @@ function Get-DiskForDriveLetter {
 
 if (-not (Test-Administrator)) {
     throw 'La création de sauvegarde nécessite une session PowerShell élevée.'
+}
+
+if (-not (Test-Path -LiteralPath $StorageIdentityBaselinePath)) {
+    throw "Baseline d'identité V25 absente: $StorageIdentityBaselinePath. Enrôle et vérifie C:/D: avant de créer un Golden Backup."
+}
+$StorageIdentityDocument = Get-Content -Raw -LiteralPath $StorageIdentityBaselinePath | ConvertFrom-Json
+if ([string]$StorageIdentityDocument.ContractVersion -ne 'V25') {
+    throw "Version de baseline stockage inattendue: $($StorageIdentityDocument.ContractVersion)"
 }
 
 foreach ($command in @('wbadmin.exe', 'reagentc.exe', 'wsl.exe', 'powershell.exe')) {
@@ -123,6 +132,12 @@ if ($FreeGB -lt $RequiredTargetFreeGB) {
 
 New-Item -ItemType Directory -Force -Path $WslBackupDirectory, $MetadataDirectory | Out-Null
 
+$StorageIdentityBackupPath = Join-Path $MetadataDirectory 'storage-identity-v25.json'
+Copy-Item -LiteralPath $StorageIdentityBaselinePath -Destination $StorageIdentityBackupPath -Force
+$StorageIdentityHash = Get-FileHash -LiteralPath $StorageIdentityBackupPath -Algorithm SHA256
+"$($StorageIdentityHash.Hash)  $([IO.Path]::GetFileName($StorageIdentityBackupPath))" |
+    Set-Content -Encoding ASCII (Join-Path $MetadataDirectory 'storage-identity-v25.sha256')
+
 $CapacityPreflight = [ordered]@{
     checkedAt = (Get-Date).ToString('o')
     targetFreeGB = $FreeGB
@@ -148,7 +163,7 @@ if ($WinReExitCode -ne 0) {
 
 $WinReEnabled = $WinReText -match '(?im)(Windows RE status\s*:\s*Enabled|État Windows RE\s*:\s*Activ)'
 if (-not $WinReEnabled) {
-    throw "Windows Recovery Environment n’est pas confirmé comme actif. La sauvegarde de référence exige un WinRE utilisable."
+    throw "Windows Recovery Environment nʼest pas confirmé comme actif. La sauvegarde de référence exige un WinRE utilisable."
 }
 
 $RestorePointAttempted = $false
@@ -161,7 +176,7 @@ if (-not $SkipRestorePoint) {
     'Restore point explicitly skipped by operator.' | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
 }
 
-Write-Host "[INFO] Arrêt de WSL avant l’image de C: et D:." -ForegroundColor Yellow
+Write-Host "[INFO] Arrêt de WSL avant lʼimage de C: et D:." -ForegroundColor Yellow
 & wsl.exe --shutdown
 if ($LASTEXITCODE -ne 0) {
     throw "wsl --shutdown a échoué avec le code $LASTEXITCODE."
@@ -188,18 +203,18 @@ $VersionsOutput = @(& wbadmin.exe get versions "-backupTarget:$TargetDrive" 2>&1
 $VersionsExitCode = $LASTEXITCODE
 $VersionsOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'wbadmin-get-versions.txt')
 if ($VersionsExitCode -ne 0 -or $VersionsOutput.Count -eq 0) {
-    throw "L’image Windows est terminée mais wbadmin ne peut pas énumérer de version récupérable."
+    throw "Lʼimage Windows est terminée mais wbadmin ne peut pas énumérer de version récupérable."
 }
 
 $WslBackupPath = Join-Path $WslBackupDirectory "$Distribution-GOLDEN-V7.vhdx"
 Write-Host "[INFO] Export de la distribution WSL2 '$Distribution' au format VHDX." -ForegroundColor Cyan
 & wsl.exe --export $Distribution $WslBackupPath --vhd
 if ($LASTEXITCODE -ne 0) {
-    throw "L’export WSL a échoué avec le code $LASTEXITCODE."
+    throw "Lʼexport WSL a échoué avec le code $LASTEXITCODE."
 }
 
 if (-not (Test-Path $WslBackupPath)) {
-    throw "L’export WSL a retourné un succès mais le fichier VHDX est absent."
+    throw "Lʼexport WSL a retourné un succès mais le fichier VHDX est absent."
 }
 
 $WslHash = Get-FileHash -Path $WslBackupPath -Algorithm SHA256
@@ -232,6 +247,12 @@ $Manifest = [ordered]@{
         sha256 = $WslHash.Hash
         format = 'vhdx'
     }
+    storageIdentity = [ordered]@{
+        contractVersion = [string]$StorageIdentityDocument.ContractVersion
+        sourcePath = $StorageIdentityBaselinePath
+        backupPath = $StorageIdentityBackupPath
+        sha256 = $StorageIdentityHash.Hash
+    }
     safety = [ordered]@{
         destructiveRestoreAutomation = $false
         unregisterExistingDistribution = $false
@@ -245,5 +266,6 @@ $Manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $ManifestPath
 Write-Host '[OK] Préflight de capacité validé.' -ForegroundColor Green
 Write-Host '[OK] Image Windows créée et énumérée par wbadmin.' -ForegroundColor Green
 Write-Host '[OK] VHDX WSL2 exporté et SHA-256 enregistré.' -ForegroundColor Green
+Write-Host '[OK] Baseline dʼidentité stockage V25 copiée et signée SHA-256.' -ForegroundColor Green
 Write-Host "[OK] Manifest: $ManifestPath" -ForegroundColor Green
 Write-Host 'VERDICT: GOLDEN BACKUP CREATED' -ForegroundColor Green
