@@ -21,15 +21,16 @@ Pour les rôles `C:` et `D:`, le contrat enregistre puis vérifie :
 - la lettre, le filesystem, la taille et les indicateurs boot/system ;
 - la présence de `C:` et `D:` sur deux disques physiques distincts.
 
-La baseline locale se trouve dans :
+La baseline locale, indépendante du checkout Git et conservée sur le volume
+système, se trouve dans :
 
 ```text
-state\storage-v25\volume-identity.json
+%ProgramData%\Windows11ProCustom\storage-v25\volume-identity.json
 ```
 
-`state/` est volontairement exclu de Git car il contient l'identité physique de
-la machine. La sauvegarde opérationnelle de la workstation doit conserver ce
-fichier avec les autres états locaux.
+Elle n'est jamais publiée dans Git car elle contient l'identité physique de la
+machine. Le Golden Backup en conserve une copie contrôlée et son SHA-256 dans les
+métadonnées de la session, en plus de l'image Windows qui protège `C:`.
 
 ## Premier enrôlement sur une machine saine
 

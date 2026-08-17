@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
-    $BaselinePath = Join-Path $repoRoot 'state\storage-v25\volume-identity.json'
+    $BaselinePath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 }
 $reportDir = Join-Path $repoRoot 'reports\storage-identity-v25'
 $reportPath = Join-Path $reportDir 'latest-topology.json'
@@ -32,6 +32,14 @@ function ConvertTo-WpcIdentityText {
     param($Value)
     if ($null -eq $Value) { return '' }
     return ([string]$Value).Trim().ToLowerInvariant()
+}
+
+function Test-WpcAdministrator {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch { return $false }
 }
 
 function Get-WpcStorageTopology {
@@ -225,9 +233,17 @@ if ($baselinePresent) {
 }
 
 if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $dPartition) {
-    if ([string]$baseline.ContractVersion -ne 'V25') { $failures += "Version baseline=$($baseline.ContractVersion), attendue=V25" }
-    $failures += @(Compare-WpcRoleIdentity -Expected $baseline.Roles.C -Actual (ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C') -Role 'C')
-    $failures += @(Compare-WpcRoleIdentity -Expected $baseline.Roles.D -Actual (ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D') -Role 'D')
+    $contractVersion = Get-WpcPropertyValue -InputObject $baseline -Name 'ContractVersion'
+    $roles = Get-WpcPropertyValue -InputObject $baseline -Name 'Roles'
+    $expectedC = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'C' } else { $null }
+    $expectedD = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'D' } else { $null }
+    if ([string]$contractVersion -ne 'V25') { $failures += "Version baseline=$contractVersion, attendue=V25" }
+    if ($null -eq $expectedC -or $null -eq $expectedD) {
+        $failures += 'Schéma baseline V25 invalide: Roles.C et Roles.D sont obligatoires.'
+    } else {
+        $failures += @(Compare-WpcRoleIdentity -Expected $expectedC -Actual (ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C') -Role 'C')
+        $failures += @(Compare-WpcRoleIdentity -Expected $expectedD -Actual (ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D') -Role 'D')
+    }
 }
 
 $report = [ordered]@{
@@ -236,7 +252,7 @@ $report = [ordered]@{
     Mode = $Mode
     BaselinePath = $BaselinePath
     BaselinePresent = $baselinePresent
-    BaselineContractVersion = if ($null -ne $baseline) { [string]$baseline.ContractVersion } else { $null }
+    BaselineContractVersion = if ($null -ne $baseline) { [string](Get-WpcPropertyValue -InputObject $baseline -Name 'ContractVersion') } else { $null }
     Clean = ($failures.Count -eq 0)
     Failures = @($failures)
     Topology = $topology
@@ -244,6 +260,9 @@ $report = [ordered]@{
 $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
 
 if ($Mode -eq 'Record') {
+    if (-not (Test-WpcAdministrator)) {
+        throw 'Enrôlement refusé: PowerShell administrateur est requis pour écrire la baseline machine dans ProgramData.'
+    }
     if (-not $ConfirmHealthyTopology) {
         throw 'Enrôlement refusé: utilise explicitement -ConfirmHealthyTopology après vérification humaine de la topologie C:/D:.'
     }

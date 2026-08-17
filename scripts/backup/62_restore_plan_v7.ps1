@@ -35,6 +35,7 @@ $Manifest = Get-Content -Raw $ManifestFile.FullName | ConvertFrom-Json
 $SessionRoot = Split-Path (Split-Path $ManifestFile.FullName -Parent) -Parent
 $WslFileName = Split-Path ([string]$Manifest.wsl.exportPath) -Leaf
 $WslBackupPath = Join-Path (Join-Path $SessionRoot 'WSL') $WslFileName
+$StorageIdentityBackupPath = Join-Path (Split-Path $ManifestFile.FullName -Parent) 'storage-identity-v25.json'
 
 if (-not (Test-Path $WslBackupPath)) {
     throw "Sauvegarde WSL VHDX manquante: $WslBackupPath"
@@ -44,6 +45,18 @@ $ExpectedHash = ([string]$Manifest.wsl.sha256).ToUpperInvariant()
 $ActualHash = (Get-FileHash -Path $WslBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
 if ($ExpectedHash -ne $ActualHash) {
     throw 'Hash de sauvegarde WSL incorrect. La génération du plan de restauration est bloquée.'
+}
+
+if ($null -eq $Manifest.PSObject.Properties['storageIdentity']) {
+    throw 'Le manifest ne contient pas la preuve storageIdentity V25.'
+}
+if (-not (Test-Path -LiteralPath $StorageIdentityBackupPath)) {
+    throw "Baseline V25 de référence absente: $StorageIdentityBackupPath"
+}
+$StorageIdentityExpectedHash = ([string]$Manifest.storageIdentity.sha256).ToUpperInvariant()
+$StorageIdentityActualHash = (Get-FileHash -LiteralPath $StorageIdentityBackupPath -Algorithm SHA256).Hash.ToUpperInvariant()
+if ($StorageIdentityExpectedHash -ne $StorageIdentityActualHash) {
+    throw 'Hash de la baseline d’identité stockage V25 incorrect. Le plan de restauration est bloqué.'
 }
 
 if ($RestoreDistribution -eq [string]$Manifest.wsl.distribution) {
@@ -60,6 +73,8 @@ $Lines.Add('POLITIQUE DE SÉCURITÉ')
 $Lines.Add("- Ce script génère uniquement des instructions. Il n’exécute aucune restauration.")
 $Lines.Add("- Ne jamais désenregistrer Ubuntu avant d’avoir validé une copie restaurée.")
 $Lines.Add('- Ne jamais recréer ou formater automatiquement les disques depuis le dépôt.')
+$Lines.Add("- Baseline V25 de référence forensique: $StorageIdentityBackupPath")
+$Lines.Add('- Ne jamais recopier automatiquement cette baseline après un remplacement de disque ou une recréation de partition; comparer puis ré-enrôler explicitement la nouvelle topologie saine.')
 $Lines.Add('')
 
 if ($Scenario -in @('All', 'WSL')) {

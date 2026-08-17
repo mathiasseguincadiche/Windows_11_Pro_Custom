@@ -23,6 +23,7 @@ $SessionRoot = Join-Path $TargetDrive "Windows_11_Pro_Custom_Backup\V7\$Timestam
 $WslBackupDirectory = Join-Path $SessionRoot 'WSL'
 $MetadataDirectory = Join-Path $SessionRoot 'metadata'
 $WindowsImageRoot = Join-Path $TargetDrive 'WindowsImageBackup'
+$StorageIdentityBaselinePath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -42,6 +43,14 @@ function Get-DiskForDriveLetter {
 
 if (-not (Test-Administrator)) {
     throw 'La création de sauvegarde nécessite une session PowerShell élevée.'
+}
+
+if (-not (Test-Path -LiteralPath $StorageIdentityBaselinePath)) {
+    throw "Baseline d'identité V25 absente: $StorageIdentityBaselinePath. Enrôle et vérifie C:/D: avant de créer un Golden Backup."
+}
+$StorageIdentityDocument = Get-Content -Raw -LiteralPath $StorageIdentityBaselinePath | ConvertFrom-Json
+if ([string]$StorageIdentityDocument.ContractVersion -ne 'V25') {
+    throw "Version de baseline stockage inattendue: $($StorageIdentityDocument.ContractVersion)"
 }
 
 foreach ($command in @('wbadmin.exe', 'reagentc.exe', 'wsl.exe', 'powershell.exe')) {
@@ -122,6 +131,12 @@ if ($FreeGB -lt $RequiredTargetFreeGB) {
 }
 
 New-Item -ItemType Directory -Force -Path $WslBackupDirectory, $MetadataDirectory | Out-Null
+
+$StorageIdentityBackupPath = Join-Path $MetadataDirectory 'storage-identity-v25.json'
+Copy-Item -LiteralPath $StorageIdentityBaselinePath -Destination $StorageIdentityBackupPath -Force
+$StorageIdentityHash = Get-FileHash -LiteralPath $StorageIdentityBackupPath -Algorithm SHA256
+"$($StorageIdentityHash.Hash)  $([IO.Path]::GetFileName($StorageIdentityBackupPath))" |
+    Set-Content -Encoding ASCII (Join-Path $MetadataDirectory 'storage-identity-v25.sha256')
 
 $CapacityPreflight = [ordered]@{
     checkedAt = (Get-Date).ToString('o')
@@ -232,6 +247,12 @@ $Manifest = [ordered]@{
         sha256 = $WslHash.Hash
         format = 'vhdx'
     }
+    storageIdentity = [ordered]@{
+        contractVersion = [string]$StorageIdentityDocument.ContractVersion
+        sourcePath = $StorageIdentityBaselinePath
+        backupPath = $StorageIdentityBackupPath
+        sha256 = $StorageIdentityHash.Hash
+    }
     safety = [ordered]@{
         destructiveRestoreAutomation = $false
         unregisterExistingDistribution = $false
@@ -245,5 +266,6 @@ $Manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $ManifestPath
 Write-Host '[OK] Préflight de capacité validé.' -ForegroundColor Green
 Write-Host '[OK] Image Windows créée et énumérée par wbadmin.' -ForegroundColor Green
 Write-Host '[OK] VHDX WSL2 exporté et SHA-256 enregistré.' -ForegroundColor Green
+Write-Host '[OK] Baseline d’identité stockage V25 copiée et signée SHA-256.' -ForegroundColor Green
 Write-Host "[OK] Manifest: $ManifestPath" -ForegroundColor Green
 Write-Host 'VERDICT: GOLDEN BACKUP CREATED' -ForegroundColor Green
