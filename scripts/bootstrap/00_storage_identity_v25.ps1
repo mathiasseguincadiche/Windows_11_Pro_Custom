@@ -217,9 +217,9 @@ function Get-WpcRolePartition {
         [Parameter(Mandatory)]$Topology,
         [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$DriveLetter
     )
-    $matches = @($Topology.Partitions | Where-Object DriveLetter -EQ $DriveLetter)
-    if ($matches.Count -ne 1) { return $null }
-    return $matches[0]
+    $partitions = @($Topology.Partitions | Where-Object DriveLetter -EQ $DriveLetter)
+    if ($partitions.Count -ne 1) { return $null }
+    return $partitions[0]
 }
 
 function Get-WpcRoleFailures {
