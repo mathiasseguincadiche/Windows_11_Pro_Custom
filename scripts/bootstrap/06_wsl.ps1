@@ -142,9 +142,9 @@ function Assert-WslInstallCapabilities {
 Write-Host '[ANALYSE] Vérification V25 de lʼidentité physique de E: avant toute opération WSL...' -ForegroundColor Cyan
 & $storageIdentityScript -Mode Verify
 
-$dVolume = Get-Volume -DriveLetter E -ErrorAction Stop
-if ($dVolume.FileSystem -ne 'NTFS') { throw 'E: doit rester NTFS.' }
-if ($Mode -eq 'Apply' -and $dVolume.SizeRemaining -lt 50GB) { throw "E: dispose de moins de 50 Go libres. Libère de lʼespace avant lʼinstallation WSL." }
+$eVolume = Get-Volume -DriveLetter E -ErrorAction Stop
+if ($eVolume.FileSystem -ne 'NTFS') { throw 'E: doit rester NTFS.' }
+if ($Mode -eq 'Apply' -and $eVolume.SizeRemaining -lt 50GB) { throw "E: dispose de moins de 50 Go libres. Libère de lʼespace avant lʼinstallation WSL." }
 
 $readRelease = $Mode -eq 'Verify'
 $state = Get-WslState -ReadRelease:$readRelease
