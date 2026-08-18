@@ -14,7 +14,7 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
     $BaselinePath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 }
-$BaselineHashPath = "$BaselinePath.sha256"
+$BaselineHashPath = "$BaselinePath" + ".sha256"
 $reportDir = Join-Path $repoRoot 'reports\storage-identity-v25'
 $reportPath = Join-Path $reportDir 'latest-topology.json'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
