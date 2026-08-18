@@ -125,7 +125,61 @@ Add-ReadinessCheck -Name 'Processus et OS 64 bits' -Passed ([Environment]::Is64B
 
 $isWindows11 = ([string]$os.Caption -match 'Windows 11')
 $build = [int]$os.BuildNumber
-Add-ReadinessCheck -Name 'Windows 11 22H2 ou ultérieur' -Passed ($isWindows11 -and $build -ge 22621) -Detail "Caption=$($os.Caption) Build=$build ; build minimal=22621 pour le réseau WSL mirrored."
+$featureCompatible = ($isWindows11 -and $build -ge 22621)
+Add-ReadinessCheck `
+    -Name 'Windows 11 22H2 ou ultérieur' `
+    -Passed $featureCompatible `
+    -Detail "FEATURE_COMPATIBLE=$featureCompatible ; Caption=$($os.Caption) Build=$build ; build minimal=22621 pour le réseau WSL mirrored."
+
+$displayVersion = 'UNKNOWN'
+try {
+    $displayVersion = [string](Get-ItemPropertyValue `
+        -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
+        -Name DisplayVersion `
+        -ErrorAction Stop)
+} catch {}
+
+$homeProSupportEnds = @{
+    '22H2' = [datetime]'2024-10-08'
+    '23H2' = [datetime]'2025-11-11'
+    '24H2' = [datetime]'2026-10-13'
+    '25H2' = [datetime]'2027-10-12'
+    '26H1' = [datetime]'2028-03-14'
+}
+
+$supportEnd = $null
+if ($homeProSupportEnds.ContainsKey($displayVersion)) {
+    $supportEnd = $homeProSupportEnds[$displayVersion]
+}
+
+$supportState = if (-not $isWindows11) {
+    'UNSUPPORTED'
+} elseif ($null -eq $supportEnd) {
+    'UNKNOWN'
+} elseif ((Get-Date).Date -le $supportEnd.Date) {
+    'SUPPORTED'
+} else {
+    'UNSUPPORTED'
+}
+
+$supportEndText = if ($null -ne $supportEnd) {
+    $supportEnd.ToString('yyyy-MM-dd')
+} else {
+    'unknown'
+}
+
+Add-ReadinessCheck `
+    -Name 'Support Windows 11 Home/Pro' `
+    -Passed ($supportState -eq 'SUPPORTED') `
+    -Detail "SUPPORTED_OS=$supportState ; DisplayVersion=$displayVersion ; supportEnd=$supportEndText" `
+    -Blocking $false
+
+$recommendedOs = ($displayVersion -eq '25H2')
+Add-ReadinessCheck `
+    -Name 'Baseline Windows recommandée' `
+    -Passed $recommendedOs `
+    -Detail "RECOMMENDED_OS=$recommendedOs ; cible recommandée pour une workstation existante=25H2" `
+    -Blocking $false
 
 $editionId = [string](Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop)
 Add-ReadinessCheck -Name 'Édition Windows non-Home' -Passed ($editionId -notmatch '^Core') -Detail "EditionID=$editionId"
@@ -313,7 +367,16 @@ $warnings = @($checks | Where-Object { -not $_.Blocking -and -not $_.Passed })
     Computer = $env:COMPUTERNAME
     User = $env:USERNAME
     PowerShell = [ordered]@{ Edition=[string]$PSVersionTable.PSEdition; Version=$psVersion.ToString() }
-    Windows = [ordered]@{ Caption=[string]$os.Caption; Build=$build; EditionID=$editionId }
+    Windows = [ordered]@{
+        Caption = [string]$os.Caption
+        Build = $build
+        DisplayVersion = $displayVersion
+        EditionID = $editionId
+        FeatureCompatible = $featureCompatible
+        SupportState = $supportState
+        SupportEnd = $supportEndText
+        Recommended = $recommendedOs
+    }
     Wsl = [ordered]@{ Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent }
     Checks = $checks.ToArray()
     BlockerCount = $blockers.Count
