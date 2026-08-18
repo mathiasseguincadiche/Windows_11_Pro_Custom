@@ -289,7 +289,7 @@ Exemples :
 .\install.ps1 -BackupAction RestorePlan -BackupTargetDrive F:
 ```
 
-`E:` est un exemple ; utiliser la lettre réelle du support.
+`F:` est un exemple ; utiliser la lettre réelle du support.
 
 Paramètres associés :
 
