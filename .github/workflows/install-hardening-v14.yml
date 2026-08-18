@@ -128,10 +128,10 @@ jobs:
             $key = Join-Path $root '{00000000-0000-0000-0000-000000000001}'
             New-Item -Path $key -Force | Out-Null
             New-ItemProperty -LiteralPath $key -Name DistributionName -PropertyType String -Value Ubuntu -Force | Out-Null
-            New-ItemProperty -LiteralPath $key -Name BasePath -PropertyType String -Value 'D:\WSL\Ubuntu-DevOps' -Force | Out-Null
+            New-ItemProperty -LiteralPath $key -Name BasePath -PropertyType String -Value 'E:\WSL\Ubuntu-DevOps' -Force | Out-Null
             $present = Get-WpcWslRegistrationFact -Distribution Ubuntu -RegistryRoot $root
             if (-not $present.Known -or -not $present.Present) { throw 'Present WSL registration detection failed.' }
-            if ($present.BasePath -ne 'D:\WSL\Ubuntu-DevOps') { throw "Unexpected WSL BasePath: $($present.BasePath)" }
+            if ($present.BasePath -ne 'E:\WSL\Ubuntu-DevOps') { throw "Unexpected WSL BasePath: $($present.BasePath)" }
           }
           finally {
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }

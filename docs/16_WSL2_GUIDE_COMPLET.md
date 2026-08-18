@@ -59,7 +59,7 @@ SSD 1 — Crucial T705
     └── Windows 11 Pro
 
 SSD 2 — Crucial T705
-└── D:\ NTFS
+└── E:\ NTFS
     └── WSL\Ubuntu-DevOps\
         └── VHDX WSL
             └── filesystem ext4 Linux
@@ -68,7 +68,7 @@ SSD 2 — Crucial T705
 Le point essentiel :
 
 ```text
-D: reste NTFS
+E: reste NTFS
 Ubuntu utilise ext4
 ext4 se trouve à l'intérieur du VHDX
 ```
@@ -87,8 +87,8 @@ Chemins :
 
 ```text
 C:\Users\...
-D:\DATA\...
-D:\WSL\...
+E:\DATA\...
+E:\WSL\...
 ```
 
 Shell principal d'administration :
@@ -167,10 +167,10 @@ alors le dépôt doit vivre dans le filesystem Linux :
 
 ```text
 /mnt/c/...
-/mnt/d/...
+/mnt/e/...
 ```
 
-Les montages `/mnt/c` et `/mnt/d` sont utiles pour **échanger** des fichiers avec Windows, mais les workloads Linux intensifs se comportent mieux sur ext4.
+Les montages `/mnt/c` et `/mnt/e` sont utiles pour **échanger** des fichiers avec Windows, mais les workloads Linux intensifs se comportent mieux sur ext4.
 
 Pourquoi :
 
@@ -188,7 +188,7 @@ Pourquoi :
 # 5. Installer WSL2 avec le dépôt
 
 La voie recommandée est l'orchestrateur. Avant sa première exécution stricte,
-enrôler et vérifier l'identité de `C:` et `D:` selon
+enrôler et vérifier l'identité de `C:` et `E:` selon
 [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) :
 
 ```powershell
@@ -209,7 +209,7 @@ START_MENU.cmd
 Le dépôt prépare WSL selon le contrat actuel et place Ubuntu sous :
 
 ```text
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 ```
 
 Après installation, vérifie depuis PowerShell :
@@ -832,13 +832,13 @@ Ne manipule jamais directement le fichier VHDX comme un fichier ordinaire pendan
 
 ```text
 C: -> /mnt/c
-D: -> /mnt/d
+E: -> /mnt/e
 ```
 
 Exemple :
 
 ```bash
-ls /mnt/d
+ls /mnt/e
 ```
 
 Utilise ces chemins pour des échanges ponctuels, pas comme racine de projet Linux intensif.
@@ -935,7 +935,7 @@ définit les ressources globales de la VM WSL2.
 memory=20GB
 processors=8
 swap=8GB
-swapFile=D:\\WSL\\swap\\wsl-swap.vhdx
+swapFile=E:\\WSL\\swap\\wsl-swap.vhdx
 networkingMode=mirrored
 dnsTunneling=true
 firewall=true
@@ -1393,7 +1393,7 @@ La validation doit contrôler l'état réel :
 ```text
 Ubuntu 26.04
 WSL 2
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 HOME ext4
 systemd
 ressources du profil
@@ -1446,7 +1446,7 @@ Si tu ne retiens que dix règles :
 2. Le second SSD reste NTFS.
 3. Le filesystem Linux est dans un VHDX ext4.
 4. Les projets Linux actifs vivent dans `/home/<user>/...`.
-5. `/mnt/c` et `/mnt/d` servent surtout aux échanges.
+5. `/mnt/c` et `/mnt/e` servent surtout aux échanges.
 6. Le profil quotidien est 20 Go RAM / 8 threads / 8 Go swap.
 7. `wsl --shutdown` recharge complètement la configuration.
 8. Docker tourne directement dans Ubuntu avec systemd.

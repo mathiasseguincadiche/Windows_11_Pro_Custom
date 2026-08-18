@@ -127,7 +127,7 @@ Le contrat WSL2 courant exige notamment :
 Distribution : Ubuntu
 Release      : 26.04 / resolute
 Mode         : WSL2
-Emplacement  : D:\WSL\Ubuntu-DevOps
+Emplacement  : E:\WSL\Ubuntu-DevOps
 HOME         : filesystem Linux ext4
 ```
 

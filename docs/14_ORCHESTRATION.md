@@ -204,7 +204,7 @@ ValidateHardware
 
 Ce paramètre ne contourne pas le modèle machine-first : chaque composant doit toujours être vérifié avant d'être modifié.
 
-La baseline d'identité physique V25 de `C:` et `D:` est un prérequis strict.
+La baseline d'identité physique V25 de `C:` et `E:` est un prérequis strict.
 Sur une première installation, exécuter le parcours `Audit → V25 Record → V25
 Verify` décrit dans [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 
@@ -228,7 +228,7 @@ Le moteur réalise la phase de découverte, teste les composants, affiche le pla
 
 `PlanOnly` est non mutatif, mais il utilise la préqualification physique stricte :
 une baseline V25 absente ou divergente le bloque avant le calcul du plan. Ce
-blocage est attendu et protège les rôles physiques de `C:` et `D:`.
+blocage est attendu et protège les rôles physiques de `C:` et `E:`.
 
 À utiliser avant une intervention sensible ou pour prouver l'idempotence d'une machine déjà prête.
 
@@ -331,7 +331,7 @@ Le composant WSL vérifie notamment :
 - nom de distribution ;
 - mode WSL2 ;
 - profil `.wslconfig` ;
-- emplacement sur `D:` ;
+- emplacement sur `E:` ;
 - release Ubuntu attendue ;
 - préconditions de stockage.
 

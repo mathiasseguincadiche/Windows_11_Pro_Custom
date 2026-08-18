@@ -15,7 +15,7 @@ Il ne remplace pas :
 ```text
 Windows 11 Pro stable et qualifié
 + applications et réglages attendus
-+ WSL2 Ubuntu 26.04 sous D:\WSL\Ubuntu-DevOps
++ WSL2 Ubuntu 26.04 sous E:\WSL\Ubuntu-DevOps
 + projets Linux sur ext4
 + stack DevOps qualifiée
 + terminal / VS Code cohérents
@@ -37,7 +37,7 @@ Lire au minimum :
 3. ce Runbook ;
 4. [`11_VALIDATION.md`](11_VALIDATION.md).
 
-La base Windows doit être exploitable avec les volumes `C:` et `D:` correctement identifiés, les pilotes essentiels présents et les prérequis firmware nécessaires à Windows 11 / WSL2 disponibles.
+La base Windows doit être exploitable avec les volumes `C:` et `E:` correctement identifiés, les pilotes essentiels présents et les prérequis firmware nécessaires à Windows 11 / WSL2 disponibles.
 
 Les éléments qui nécessitent une preuve matérielle ou firmware sont traités dans [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md).
 
@@ -70,9 +70,9 @@ Contrôler humainement dans la Gestion des disques et dans
 `reports\storage-identity-v25\latest-topology.json` que :
 
 - `C:` est le volume Windows attendu ;
-- `D:` est le second Crucial T705 NTFS destiné aux données et à WSL ;
+- `E:` est le second Crucial T705 NTFS destiné aux données et à WSL ;
 - les deux rôles sont portés par deux SSD physiques distincts ;
-- `D:` n'est ni boot, ni système, ni masqué.
+- `E:` n'est ni boot, ni système, ni masqué.
 
 Enregistrer ensuite la référence une seule fois, puis la vérifier immédiatement :
 
@@ -142,7 +142,7 @@ Contrat courant :
 ```text
 Distribution : Ubuntu
 Release      : 26.04 / resolute
-Emplacement  : D:\WSL\Ubuntu-DevOps
+Emplacement  : E:\WSL\Ubuntu-DevOps
 Filesystem   : ext4 dans le VHDX WSL2
 Profil       : standard = 20 Go RAM / 8 threads / 8 Go swap
 ```
@@ -214,7 +214,7 @@ Vérifier notamment que :
 - le menu ne propose pas d'installation OpenClaw/OpenRouter ;
 - aucun bootstrap ne clone ou n'exécute `openclaw_openrouter` ;
 - WezTerm ne contient pas de profil OpenClaw spécifique ;
-- la conformité de la workstation ne dépend pas de `D:\AI\OpenClaw`.
+- la conformité de la workstation ne dépend pas de `E:\AI\OpenClaw`.
 
 Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
 

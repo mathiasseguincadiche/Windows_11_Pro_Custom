@@ -28,7 +28,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 
 - [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) — Windows / WSL2 / WezTerm / VS Code et frontières ;
 - [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) — base Windows 11 Pro ;
-- [`03_STOCKAGE.md`](03_STOCKAGE.md) — `C:`, `D:`, VHDX WSL2 et ext4 ;
+- [`03_STOCKAGE.md`](03_STOCKAGE.md) — `C:`, `E:`, VHDX WSL2 et ext4 ;
 - [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md) — vue consolidée ;
 - [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) — parcours officiel.
 
@@ -56,7 +56,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 - [`11_VALIDATION.md`](11_VALIDATION.md) — preuves de conformité ;
 - [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) — qualification matérielle ;
 - [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md) — checklist finale ;
-- [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) — identité physique C:/D: et reprise après disparition d'un volume ;
+- [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) — identité physique C:/E: et reprise après disparition d'un volume ;
 - [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md) — niveaux `STATIC`/`SIMULATED`/`PHYSICAL`, empreinte V26 et restauration WSL isolée ;
 - [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) — sauvegarde ;
 - [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_REINSTALLATION.md) — reconstruction.
@@ -91,7 +91,7 @@ ensuite la baseline d'identité physique V25 :
 .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
 ```
 
-`Record` n'est autorisé qu'après contrôle humain de `C:` et `D:`. Si la
+`Record` n'est autorisé qu'après contrôle humain de `C:` et `E:`. Si la
 baseline existe déjà, exécuter uniquement `-Mode Verify`.
 
 Puis prévisualiser la workstation complète :

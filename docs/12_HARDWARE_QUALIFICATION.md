@@ -127,7 +127,7 @@ Le dépôt qualifie l'environnement ; il ne remplace pas la validation UEFI et l
 Les SSD sont traités comme des composants critiques de la workstation :
 
 - `C:` pour Windows et les applications ;
-- `D:` pour les données, WSL2, OpenClaw, ISO et exports ;
+- `E:` pour les données, WSL2, OpenClaw, ISO et exports ;
 - aucun benchmark d'écriture massif exécuté automatiquement ;
 - TRIM et Scheduled Optimize Windows restent actifs ;
 - le dépôt préfère les contrôles de santé et de cohérence aux pseudo-optimisations SSD.

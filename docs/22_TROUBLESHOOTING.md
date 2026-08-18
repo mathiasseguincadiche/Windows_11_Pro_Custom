@@ -95,7 +95,7 @@ Le contrat attend notamment :
 Ubuntu
 WSL2
 Ubuntu 26.04 / resolute
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 ```
 
 Une distribution qui démarre mais se trouve au mauvais emplacement reste un écart réel.
@@ -251,7 +251,7 @@ et non :
 
 ```text
 /mnt/c/...
-/mnt/d/...
+/mnt/e/...
 ```
 
 comme racine quotidienne du projet Linux.
@@ -314,7 +314,7 @@ Le projet préfère `ACTION REQUISE` à une preuve inventée.
 
 # 8. Stockage
 
-## Symptôme : `D:` n'est pas conforme
+## Symptôme : `E:` n'est pas conforme
 
 Vérifier :
 
@@ -331,7 +331,7 @@ Get-Disk
 Points importants :
 
 ```text
-D: existe
+E: existe
 NTFS
 espace disponible
 bon SSD physique
@@ -387,7 +387,7 @@ Vérifier :
 Commande :
 
 ```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
+.\install.ps1 -BackupAction Verify -BackupTargetDrive F:
 ```
 
 Utilise la lettre réelle de ton support externe.

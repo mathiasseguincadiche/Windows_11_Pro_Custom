@@ -49,7 +49,7 @@ Les projets Linux actifs restent sur le filesystem ext4 de WSL2 sous `~/projects
 ```text
 Audit
   ↓
-Contrôle humain C: / D:
+Contrôle humain C: / E:
   ↓
 V25 Record (premier enrôlement uniquement)
   ↓
@@ -78,7 +78,7 @@ Une exécution réussie d'`Apply` ne suffit pas : la conformité vient de l'éta
 | Architecture et frontières | [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) |
 | Installation Windows | [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) |
 | Stockage | [`03_STOCKAGE.md`](03_STOCKAGE.md) |
-| Identité physique C:/D: et reprise | [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
+| Identité physique C:/E: et reprise | [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
 | WSL2 | [`06_WSL2.md`](06_WSL2.md) |
 | Stack DevOps et WezTerm | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
 | Backup / restore | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) |

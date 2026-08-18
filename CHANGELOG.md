@@ -53,9 +53,9 @@ Pour l'état actuel du projet, utiliser :
 
 ### V25 — Identité physique du stockage et garde-fou WSL
 
-- ajout d'une baseline locale, explicitement approuvée, pour les identités stables de `C:` et `D:` ;
+- ajout d'une baseline locale, explicitement approuvée, pour les identités stables de `C:` et `E:` ;
 - vérification du numéro de série et de l'UniqueId du disque, des identités de partition et du VolumeUniqueId ;
-- blocage fail-closed si une lettre pointe vers un autre disque/volume, si un rôle disparaît ou si `D:` devient boot/système/masqué ;
+- blocage fail-closed si une lettre pointe vers un autre disque/volume, si un rôle disparaît ou si `E:` devient boot/système/masqué ;
 - exigence de deux disques physiques distincts pour les rôles Windows et données/WSL ;
 - appel du gate V25 avant V24, avant les fondations Windows et directement depuis le script WSL ;
 - aucun enrôlement ou remplacement silencieux de la baseline ;
@@ -135,8 +135,8 @@ Pour l'état actuel du projet, utiliser :
 ### V7 — Backup / Disaster Recovery / OpenClaw
 
 - ajout d'un bootstrap optionnel OpenClaw + OpenRouter natif Windows ;
-- séparation stricte entre `D:\WSL` pour les workloads Linux DevOps et `D:\AI\OpenClaw` pour la pile IA ;
-- clone/mise à jour protégée du plan de contrôle `openclaw_openrouter` sous `D:\AI\OpenClaw\control-plane` ;
+- séparation stricte entre `E:\WSL` pour les workloads Linux DevOps et `E:\AI\OpenClaw` pour la pile IA ;
+- clone/mise à jour protégée du plan de contrôle `openclaw_openrouter` sous `E:\AI\OpenClaw\control-plane` ;
 - installation et qualification depuis `install.ps1` avec `-InstallOpenClawAI` et `-ValidateOpenClawAI` ;
 - aucun effacement automatique de l'état OpenClaw pendant un rollback ;
 - ajout de la stratégie de sauvegarde : image Windows, export WSL2 VHDX, manifest et SHA-256 ;
@@ -146,7 +146,7 @@ Pour l'état actuel du projet, utiliser :
 ### V6 — WSL2 matériel et accès distant
 
 - profils WSL2 `standard`, `lab-heavy` et `nat-fallback` dimensionnés pour le Ryzen 7 7700 et 48 Go de RAM ;
-- stockage Ubuntu sous `D:\WSL\Ubuntu-DevOps` avec projets Linux dans le filesystem ext4 WSL2 ;
+- stockage Ubuntu sous `E:\WSL\Ubuntu-DevOps` avec projets Linux dans le filesystem ext4 WSL2 ;
 - réseau mirrored, DNS tunneling, firewall WSL/Hyper-V, sparse VHD et autoMemoryReclaim ;
 - PowerShell 7 dans le socle Windows ;
 - VS Code Remote - WSL, Remote - SSH et SFTP/FTP ;
@@ -189,7 +189,7 @@ Pour l'état actuel du projet, utiliser :
 ### V1
 
 - architecture Windows 11 Pro + deux SSD NTFS ;
-- WSL2 stocké sur `D:` sans partition EXT4 physique ;
+- WSL2 stocké sur `E:` sans partition EXT4 physique ;
 - profils WSL2 standard / lab-heavy / NAT fallback ;
 - bootstrap applications WinGet ;
 - audit initial Defender ;

@@ -2,7 +2,7 @@
 
 ## Politique
 
-Defender reste actif. Le dépôt ne désactive pas la protection temps réel et n'exclut jamais automatiquement `C:\`, `D:\`, `wsl.exe`, PowerShell, des extensions génériques ou des processus.
+Defender reste actif. Le dépôt ne désactive pas la protection temps réel et n'exclut jamais automatiquement `C:\`, `E:\`, `wsl.exe`, PowerShell, des extensions génériques ou des processus.
 
 Une exclusion éventuelle doit être :
 
@@ -48,7 +48,7 @@ est vide par défaut.
 
 Une exclusion n'y est ajoutée qu'après analyse d'un hotspot démontré. Le moteur refuse :
 
-- une racine de disque telle que `C:\` ou `D:\` ;
+- une racine de disque telle que `C:\` ou `E:\` ;
 - les wildcards ;
 - les racines de partage réseau ;
 - les fichiers exécutables et scripts ;
@@ -67,7 +67,7 @@ L'état des exclusions existantes est sauvegardé localement dans `state/` avant
 
 ## WSL2
 
-Le dépôt n'exclut pas automatiquement `D:\WSL`, le VHDX Ubuntu ou `wsl.exe`. Une optimisation de ce type serait beaucoup trop large sans preuve issue de Defender Performance Analyzer.
+Le dépôt n'exclut pas automatiquement `E:\WSL`, le VHDX Ubuntu ou `wsl.exe`. Une optimisation de ce type serait beaucoup trop large sans preuve issue de Defender Performance Analyzer.
 
 ## Objectif réel
 

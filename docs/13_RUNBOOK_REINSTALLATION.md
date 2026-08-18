@@ -19,7 +19,7 @@ Avant de toucher aux disques, réponds à ces questions :
 ```text
 Windows démarre-t-il ?
 Les données C: sont-elles accessibles ?
-Les données D: sont-elles accessibles ?
+Les données E: sont-elles accessibles ?
 WSL2 démarre-t-il ?
 Le VHDX Ubuntu existe-t-il ?
 Une image Windows validée existe-t-elle ?
@@ -168,10 +168,10 @@ La workstation utilise deux Crucial T705 similaires :
 
 ```text
 T705 #1 -> C: -> Windows 11 Pro
-T705 #2 -> D: -> données / WSL / données lourdes
+T705 #2 -> E: -> données / WSL / données lourdes
 ```
 
-La meilleure protection contre une erreur de sélection est de déconnecter ou désactiver temporairement le SSD `D:` pendant l'installation Windows si cela peut être fait sans risque.
+La meilleure protection contre une erreur de sélection est de déconnecter ou désactiver temporairement le SSD `E:` pendant l'installation Windows si cela peut être fait sans risque.
 
 Sinon, vérifie numéro et capacité à chaque suppression de partition.
 
@@ -232,7 +232,7 @@ Ne lance pas les optimisations tant que des périphériques essentiels restent i
 
 ---
 
-# Phase 8 — reconstruire `D:`
+# Phase 8 — reconstruire `E:`
 
 Si le second SSD est intact, ne le reformate pas inutilement.
 
@@ -240,13 +240,13 @@ S'il a été remplacé ou doit réellement être recréé :
 
 ```text
 GPT
-└── D: NTFS
+└── E: NTFS
 ```
 
 Architecture logique :
 
 ```text
-D:\
+E:\
 ├── DATA\
 ├── WSL\
 │   ├── Ubuntu-DevOps\
@@ -257,7 +257,7 @@ D:\
 
 Aucune partition EXT4 physique n'est nécessaire.
 
-Les projets externes peuvent utiliser d'autres dossiers sur `D:` mais ces emplacements ne sont pas créés ni gouvernés par ce dépôt.
+Les projets externes peuvent utiliser d'autres dossiers sur `E:` mais ces emplacements ne sont pas créés ni gouvernés par ce dépôt.
 
 Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
@@ -301,7 +301,7 @@ par le Golden Backup et correspond, la vérifier :
 ```
 
 Si la baseline est légitimement absente après réinstallation, contrôler
-humainement `C:` et `D:`, puis l'enrôler explicitement et la vérifier selon
+humainement `C:` et `E:`, puis l'enrôler explicitement et la vérifier selon
 [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 
 ---
@@ -361,7 +361,7 @@ Le contrat actuel est :
 
 ```text
 Ubuntu 26.04
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 HOME ext4
 ```
 
@@ -578,19 +578,19 @@ Ne remplace pas immédiatement l'ancienne sauvegarde validée.
 Quand la reconstruction est stable et réellement vérifiée, crée une nouvelle sauvegarde sur un disque USB NTFS distinct :
 
 ```powershell
-.\install.ps1 -BackupAction Create -BackupTargetDrive E:
+.\install.ps1 -BackupAction Create -BackupTargetDrive F:
 ```
 
 Puis :
 
 ```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
+.\install.ps1 -BackupAction Verify -BackupTargetDrive F:
 ```
 
 Et, pour confirmer que le plan de reprise peut être généré :
 
 ```powershell
-.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
+.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive F:
 ```
 
 Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
@@ -609,7 +609,7 @@ Checklist :
 [ ] Secure Boot / TPM / SVM corrects
 [ ] ReBAR / Above 4G vérifiés
 [ ] C: NTFS correct
-[ ] D: NTFS correct
+[ ] E: NTFS correct
 [ ] WSL2 Ubuntu démarre
 [ ] HOME Linux sur ext4
 [ ] ressources WSL conformes

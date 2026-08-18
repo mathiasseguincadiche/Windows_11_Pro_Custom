@@ -138,7 +138,7 @@ jobs:
           grep -Fq 'workstation DevOps/Ops reproductible' README.md
           grep -Fq 'workstation-as-code' README.md
           grep -Fq 'Ubuntu 26.04' README.md
-          grep -Fq 'D:\WSL\Ubuntu-DevOps' README.md
+          grep -Fq 'E:\WSL\Ubuntu-DevOps' README.md
           grep -Fq '20 Go' README.md
           grep -Fq '8 threads' README.md
           grep -Fq '20_RUNBOOK_OPERATIONNEL.md' README.md

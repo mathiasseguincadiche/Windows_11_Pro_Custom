@@ -3,7 +3,7 @@
 Ce document définit le garde-fou V25 imposé par les parcours stricts de `install.ps1` et par le bootstrap WSL avant leurs mutations.
 Il répond à deux risques différents :
 
-- une lettre `C:` ou `D:` peut désigner un autre volume après un redémarrage ;
+- une lettre `C:` ou `E:` peut désigner un autre volume après un redémarrage ;
 - un volume peut être présent physiquement mais ne plus être monté, être hors ligne,
   verrouillé ou absent de la table de partitions.
 

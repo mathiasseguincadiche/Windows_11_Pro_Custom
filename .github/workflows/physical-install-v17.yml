@@ -61,7 +61,7 @@ jobs:
           grep -Fq "Secure Boot actif" "$readiness"
           grep -Fq "TPM prêt" "$readiness"
           grep -Fq "Virtualisation firmware active" "$readiness"
-          grep -Fq "Espace WSL sur D:" "$readiness"
+          grep -Fq "Espace WSL sur E:" "$readiness"
           grep -Fq "Symbiose matériel/pilotes" "$readiness"
           grep -Fq "Microsoft-Windows-Subsystem-Linux" "$readiness"
           grep -Fq "VirtualMachinePlatform" "$readiness"
