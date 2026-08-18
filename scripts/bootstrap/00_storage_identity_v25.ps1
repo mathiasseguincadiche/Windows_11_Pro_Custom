@@ -172,7 +172,7 @@ function Get-WpcRoleFailures {
         $failures += "${Role}: aucune identité de partition stable disponible"
     }
     if ([string]::IsNullOrWhiteSpace($Partition.VolumeUniqueId)) { $failures += "${Role}: VolumeUniqueId indisponible" }
-    if ($Role -eq 'D') {
+    if ($Role -eq 'E') {
         if ($Partition.IsBoot) { $failures += 'E: ne doit jamais être la partition de démarrage Windows' }
         if ($Partition.IsSystem) { $failures += 'E: ne doit jamais être une partition système/EFI' }
         if ($Partition.IsHidden) { $failures += 'E: ne doit jamais être une partition masquée' }
