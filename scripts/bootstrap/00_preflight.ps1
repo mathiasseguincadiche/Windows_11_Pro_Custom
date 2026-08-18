@@ -101,9 +101,9 @@ if ($StrictPhysicalReadiness) {
 }
 
 $c = Get-Volume -DriveLetter C -ErrorAction Stop
-$d = Get-Volume -DriveLetter E -ErrorAction Stop
+$e = Get-Volume -DriveLetter E -ErrorAction Stop
 if ($c.FileSystem -ne 'NTFS') { throw 'C: doit être NTFS.' }
-if ($d.FileSystem -ne 'NTFS') { throw 'E: doit être NTFS. Aucun EXT4 physique n est attendu.' }
+if ($e.FileSystem -ne 'NTFS') { throw 'E: doit être NTFS. Aucun EXT4 physique n est attendu.' }
 
 $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module)
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
