@@ -29,9 +29,14 @@ Les projets Linux restent dans le filesystem WSL2 :
 /home/<user>/repositories
 ```
 
-`/mnt/c` et `/mnt/d` servent aux échanges avec Windows, pas de racines quotidiennes aux projets Linux.
+`/mnt/c` et `/mnt/e` servent aux échanges avec Windows, pas de racines quotidiennes aux projets Linux.
 
 Docker Desktop n'est pas requis : Docker Engine tourne directement dans Ubuntu.
+
+L'utilisateur Ubuntu est volontairement autorisé à utiliser Docker Engine sans
+`sudo` via le groupe `docker`. Cette appartenance doit être traitée comme un
+privilège de niveau root dans la distribution WSL : un compte membre du groupe
+`docker` est donc un principal privilégié de la workstation.
 
 ---
 
