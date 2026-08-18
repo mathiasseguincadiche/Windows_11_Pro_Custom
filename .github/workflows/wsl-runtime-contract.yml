@@ -12,6 +12,8 @@ on:
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
+      - 'scripts/wsl/validate-devops.sh'
+      - 'docs/07_DEVOPS_STACK.md'
       - '.github/workflows/wsl-runtime-contract.yml'
   pull_request:
     paths:
@@ -23,6 +25,8 @@ on:
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
+      - 'scripts/wsl/validate-devops.sh'
+      - 'docs/07_DEVOPS_STACK.md'
       - '.github/workflows/wsl-runtime-contract.yml'
 
 permissions:
@@ -39,6 +43,8 @@ jobs:
         run: |
           set -euo pipefail
           contract='config/wsl/runtime-contract.json'
+          validator='scripts/wsl/validate-devops.sh'
+          devops_doc='docs/07_DEVOPS_STACK.md'
           jq -e '
             (.schemaVersion == "1.1") and
             (.distribution == "Ubuntu") and
@@ -50,6 +56,15 @@ jobs:
             (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
             (.forbiddenRoots == ["/mnt/c", "/mnt/e"])
           ' "$contract" >/dev/null
+
+          test -f "$validator"
+          grep -Fq 'config/wsl/runtime-contract.json' "$validator"
+          grep -Fq '.forbiddenRoots' "$validator"
+
+          if grep -Fq '/mnt/d' "$validator" "$devops_doc"; then
+            echo 'Stale /mnt/d DATA/WSL reference detected.' >&2
+            exit 1
+          fi
 
       - name: Validate deterministic WSL source wiring
         shell: bash

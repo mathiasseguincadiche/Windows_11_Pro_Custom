@@ -82,6 +82,10 @@ jobs:
           }
           if ($failed) { exit 1 }
 
+      - name: Exercise V24 C/E contract self-test
+        shell: pwsh
+        run: .\tests\powershell\storage_v24_contract.tests.ps1
+
       - name: Verify Windows APIs required by V24 exist
         shell: pwsh
         run: |
