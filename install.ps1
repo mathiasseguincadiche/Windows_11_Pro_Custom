@@ -10,7 +10,7 @@ param(
     [string[]]$OptimizationProfiles = @('standard'),
 
     [string]$Distribution = 'Ubuntu',
-    [string]$WslInstallLocation = 'D:\WSL\Ubuntu-DevOps',
+    [string]$WslInstallLocation = 'E:\WSL\Ubuntu-DevOps',
     [string]$WslUser = '',
 
     [switch]$InstallDevOps,

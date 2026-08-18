@@ -62,7 +62,7 @@ if (-not (Test-Administrator)) {
 }
 
 if (-not (Test-Path -LiteralPath $StorageIdentityBaselinePath)) {
-    throw "Baseline d'identité V25 absente: $StorageIdentityBaselinePath. Enrôle et vérifie C:/D: avant de créer un Golden Backup."
+    throw "Baseline d'identité V25 absente: $StorageIdentityBaselinePath. Enrôle et vérifie C:/E: avant de créer un Golden Backup."
 }
 $StorageIdentityDocument = Get-Content -Raw -LiteralPath $StorageIdentityBaselinePath | ConvertFrom-Json
 if ([string]$StorageIdentityDocument.ContractVersion -ne 'V25') {
@@ -198,7 +198,7 @@ if (-not $SkipRestorePoint) {
     'Restore point explicitly skipped by operator.' | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
 }
 
-Write-Host "[INFO] Arrêt de WSL avant lʼimage de C: et D:." -ForegroundColor Yellow
+Write-Host "[INFO] Arrêt de WSL avant lʼimage de C: et E:." -ForegroundColor Yellow
 & wsl.exe --shutdown
 if ($LASTEXITCODE -ne 0) {
     throw "wsl --shutdown a échoué avec le code $LASTEXITCODE."
@@ -213,7 +213,7 @@ $WbadminArguments = @(
     'start',
     'backup',
     "-backupTarget:$TargetDrive",
-    '-include:C:,D:',
+    '-include:C:,E:',
     '-allCritical',
     '-vssCopy'
 )

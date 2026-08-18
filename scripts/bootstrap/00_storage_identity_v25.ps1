@@ -142,7 +142,7 @@ function Get-WpcStorageTopology {
 function Get-WpcRolePartition {
     param(
         [Parameter(Mandatory)]$Topology,
-        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$DriveLetter
+        [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$DriveLetter
     )
     $matches = @($Topology.Partitions | Where-Object DriveLetter -EQ $DriveLetter)
     if ($matches.Count -ne 1) { return $null }
@@ -152,7 +152,7 @@ function Get-WpcRolePartition {
 function Get-WpcRoleFailures {
     param(
         [Parameter(Mandatory)][AllowNull()]$Partition,
-        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$Role
+        [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$Role
     )
     $failures = @()
     if ($null -eq $Partition) { return @("${Role}: partition introuvable ou ambiguë") }
@@ -169,9 +169,9 @@ function Get-WpcRoleFailures {
     }
     if ([string]::IsNullOrWhiteSpace($Partition.VolumeUniqueId)) { $failures += "${Role}: VolumeUniqueId indisponible" }
     if ($Role -eq 'D') {
-        if ($Partition.IsBoot) { $failures += 'D: ne doit jamais être la partition de démarrage Windows' }
-        if ($Partition.IsSystem) { $failures += 'D: ne doit jamais être une partition système/EFI' }
-        if ($Partition.IsHidden) { $failures += 'D: ne doit jamais être une partition masquée' }
+        if ($Partition.IsBoot) { $failures += 'E: ne doit jamais être la partition de démarrage Windows' }
+        if ($Partition.IsSystem) { $failures += 'E: ne doit jamais être une partition système/EFI' }
+        if ($Partition.IsHidden) { $failures += 'E: ne doit jamais être une partition masquée' }
     }
     return @($failures)
 }
@@ -179,7 +179,7 @@ function Get-WpcRoleFailures {
 function ConvertTo-WpcRoleIdentity {
     param(
         [Parameter(Mandatory)]$Partition,
-        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$Role
+        [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$Role
     )
     return [ordered]@{
         Role = $Role
@@ -217,12 +217,12 @@ function Compare-WpcRoleIdentity {
 
 $topology = Get-WpcStorageTopology
 $cPartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'C'
-$dPartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'D'
+$ePartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'E'
 $failures = @()
 $failures += @(Get-WpcRoleFailures -Partition $cPartition -Role 'C')
-$failures += @(Get-WpcRoleFailures -Partition $dPartition -Role 'D')
-if ($null -ne $cPartition -and $null -ne $dPartition -and $cPartition.DiskNumber -eq $dPartition.DiskNumber) {
-    $failures += 'C: et D: doivent résider sur deux disques physiques distincts.'
+$failures += @(Get-WpcRoleFailures -Partition $ePartition -Role 'E')
+if ($null -ne $cPartition -and $null -ne $ePartition -and $cPartition.DiskNumber -eq $ePartition.DiskNumber) {
+    $failures += 'C: et E: doivent résider sur deux disques physiques distincts.'
 }
 
 $baselinePresent = Test-Path -LiteralPath $BaselinePath
@@ -232,17 +232,17 @@ if ($baselinePresent) {
     catch { $failures += "Baseline V25 illisible: $($_.Exception.Message)" }
 }
 
-if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $dPartition) {
+if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $ePartition) {
     $contractVersion = Get-WpcPropertyValue -InputObject $baseline -Name 'ContractVersion'
     $roles = Get-WpcPropertyValue -InputObject $baseline -Name 'Roles'
     $expectedC = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'C' } else { $null }
-    $expectedD = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'D' } else { $null }
+    $expectedE = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'E' } else { $null }
     if ([string]$contractVersion -ne 'V25') { $failures += "Version baseline=$contractVersion, attendue=V25" }
-    if ($null -eq $expectedC -or $null -eq $expectedD) {
-        $failures += 'Schéma baseline V25 invalide: Roles.C et Roles.D sont obligatoires.'
+    if ($null -eq $expectedC -or $null -eq $expectedE) {
+        $failures += 'Schéma baseline V25 invalide: Roles.C et Roles.E sont obligatoires.'
     } else {
         $failures += @(Compare-WpcRoleIdentity -Expected $expectedC -Actual (ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C') -Role 'C')
-        $failures += @(Compare-WpcRoleIdentity -Expected $expectedD -Actual (ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D') -Role 'D')
+        $failures += @(Compare-WpcRoleIdentity -Expected $expectedE -Actual (ConvertTo-WpcRoleIdentity -Partition $ePartition -Role 'E') -Role 'E')
     }
 }
 
@@ -264,7 +264,7 @@ if ($Mode -eq 'Record') {
         throw 'Enrôlement refusé: PowerShell administrateur est requis pour écrire la baseline machine dans ProgramData.'
     }
     if (-not $ConfirmHealthyTopology) {
-        throw 'Enrôlement refusé: utilise explicitement -ConfirmHealthyTopology après vérification humaine de la topologie C:/D:.'
+        throw 'Enrôlement refusé: utilise explicitement -ConfirmHealthyTopology après vérification humaine de la topologie C:/E:.'
     }
     if ($baselinePresent -and -not $ReplaceBaseline) {
         throw "Baseline V25 déjà présente: $BaselinePath. Aucun remplacement silencieux. Utilise -ReplaceBaseline avec -ConfirmHealthyTopology uniquement après investigation."
@@ -278,7 +278,7 @@ if ($Mode -eq 'Record') {
         Policy = 'explicit-trust-enrollment; fail-closed; no-automatic-repair; distinct-physical-disks'
         Roles = [ordered]@{
             C = ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C'
-            D = ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D'
+            E = ConvertTo-WpcRoleIdentity -Partition $ePartition -Role 'E'
         }
     }
     $baselineDir = Split-Path -Parent $BaselinePath
@@ -290,7 +290,7 @@ if ($Mode -eq 'Record') {
 }
 
 if (-not $baselinePresent) {
-    $message = "Baseline V25 absente. Après contrôle humain de C:/D:, exécute: .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology"
+    $message = "Baseline V25 absente. Après contrôle humain de C:/E:, exécute: .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology"
     if ($Mode -eq 'Verify') { throw $message }
     Write-Host "[ACTION REQUISE] $message" -ForegroundColor Yellow
 }
@@ -301,7 +301,7 @@ if ($failures.Count -gt 0) {
     }
     Write-Host "[ALERTE] Topologie V25 non qualifiée: $($failures -join ' | ')" -ForegroundColor Yellow
 } elseif ($baselinePresent) {
-    Write-Host '[OK] V25: C: et D: correspondent exactement aux identités enrôlées.' -ForegroundColor Green
+    Write-Host '[OK] V25: C: et E: correspondent exactement aux identités enrôlées.' -ForegroundColor Green
     Write-Host 'VERDICT: STORAGE IDENTITY READY' -ForegroundColor Green
 }
 Write-Host "[INFO] Rapport topologique V25: $reportPath" -ForegroundColor DarkGray

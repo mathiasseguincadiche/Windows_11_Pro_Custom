@@ -3,7 +3,7 @@ param(
     [ValidateSet('standard', 'lab-heavy', 'nat-fallback')]
     [string]$WslProfile = 'standard',
     [string]$Distribution = 'Ubuntu',
-    [string]$InstallLocation = 'D:\WSL\Ubuntu-DevOps'
+    [string]$InstallLocation = 'E:\WSL\Ubuntu-DevOps'
 )
 
 Set-StrictMode -Version Latest

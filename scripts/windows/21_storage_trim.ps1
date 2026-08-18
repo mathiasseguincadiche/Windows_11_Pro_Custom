@@ -7,7 +7,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$letters = @('C', 'D')
+$letters = @('C', 'E')
 
 foreach ($letter in $letters) {
     $volume = Get-Volume -DriveLetter $letter -ErrorAction Stop
@@ -36,4 +36,4 @@ foreach ($letter in $letters) {
     Optimize-Volume -DriveLetter $letter -ReTrim -Verbose
 }
 
-Write-Host '[OK] ReTrim demande pour C: et D:. La planification Windows reste active.' -ForegroundColor Green
+Write-Host '[OK] ReTrim demande pour C: et E:. La planification Windows reste active.' -ForegroundColor Green

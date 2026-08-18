@@ -5,7 +5,7 @@ param(
     [ValidateSet('standard', 'lab-heavy', 'nat-fallback')]
     [string]$Profile = 'standard',
     [string]$Distribution = 'Ubuntu',
-    [string]$InstallLocation = 'D:\WSL\Ubuntu-DevOps',
+    [string]$InstallLocation = 'E:\WSL\Ubuntu-DevOps',
     [switch]$UpdateWsl
 )
 
@@ -18,7 +18,7 @@ $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
 $storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity_v25.ps1'
-$swapDir = 'D:\WSL\swap'
+$swapDir = 'E:\WSL\swap'
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
     throw 'wsl.exe est introuvable. Vérifie que Windows 11 est à jour puis exécute « wsl --install --no-distribution » dans PowerShell administrateur et relance la même commande.'
@@ -138,12 +138,12 @@ function Assert-WslInstallCapabilities {
     }
 }
 
-Write-Host '[ANALYSE] Vérification V25 de lʼidentité physique de D: avant toute opération WSL...' -ForegroundColor Cyan
+Write-Host '[ANALYSE] Vérification V25 de lʼidentité physique de E: avant toute opération WSL...' -ForegroundColor Cyan
 & $storageIdentityScript -Mode Verify
 
-$dVolume = Get-Volume -DriveLetter D -ErrorAction Stop
-if ($dVolume.FileSystem -ne 'NTFS') { throw 'D: doit rester NTFS.' }
-if ($Mode -eq 'Apply' -and $dVolume.SizeRemaining -lt 50GB) { throw "D: dispose de moins de 50 Go libres. Libère de lʼespace avant lʼinstallation WSL." }
+$dVolume = Get-Volume -DriveLetter E -ErrorAction Stop
+if ($dVolume.FileSystem -ne 'NTFS') { throw 'E: doit rester NTFS.' }
+if ($Mode -eq 'Apply' -and $dVolume.SizeRemaining -lt 50GB) { throw "E: dispose de moins de 50 Go libres. Libère de lʼespace avant lʼinstallation WSL." }
 
 $readRelease = $Mode -eq 'Verify'
 $state = Get-WslState -ReadRelease:$readRelease
@@ -175,7 +175,7 @@ if ($Mode -eq 'Verify') {
         }
     }
     if ($failures.Count -gt 0) { throw "WSL2 non conforme: $($failures -join '; ')" }
-    Write-Host "[OK] WSL2 vérifié: $Distribution WSL2, Ubuntu $expectedVersionId ($expectedCodename), profil $Profile, stockage D:." -ForegroundColor Green
+    Write-Host "[OK] WSL2 vérifié: $Distribution WSL2, Ubuntu $expectedVersionId ($expectedCodename), profil $Profile, stockage E:." -ForegroundColor Green
     return
 }
 

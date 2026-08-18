@@ -3,7 +3,7 @@ param(
     [ValidateSet('standard', 'lab-heavy', 'nat-fallback')]
     [string]$WslProfile = 'standard',
     [string]$Distribution = 'Ubuntu',
-    [string]$WslInstallLocation = 'D:\WSL\Ubuntu-DevOps'
+    [string]$WslInstallLocation = 'E:\WSL\Ubuntu-DevOps'
 )
 
 Set-StrictMode -Version Latest
@@ -188,7 +188,7 @@ $computer = Get-CimInstance Win32_ComputerSystem
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 $pendingReboot = Test-PendingReboot
 $c = Get-VolumeFact -DriveLetter 'C'
-$d = Get-VolumeFact -DriveLetter 'D'
+$e = Get-VolumeFact -DriveLetter 'E'
 
 $winget = Get-WpcNativeApplication -Name 'winget.exe'
 $manifest = Get-Content -Raw (Join-Path $repoRoot 'manifests\winget\apps-core.json') | ConvertFrom-Json
@@ -252,7 +252,7 @@ $report = [ordered]@{
         Cpu = [string]$cpu.Name
         LogicalProcessors = [int]$computer.NumberOfLogicalProcessors
     }
-    Storage = @($c, $d)
+    Storage = @($c, $e)
     WinGet = [ordered]@{
         Available = ($null -ne $winget)
         InventorySuccess = [bool]$wingetInventory.Success
@@ -288,7 +288,7 @@ switch ($state) {
     'READY_CANDIDATE' { Write-WpcStatus -Status 'DEJA_OK' -Message 'Machine proche de la cible complète' -Detail 'Les signaux principaux sont conformes; Verify reste lʼautorité finale.' -Context $context }
 }
 Write-WpcStatus -Status $(if ($c.Present -and $c.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume C:' -Detail "Présent=$($c.Present) FS=$($c.FileSystem) Santé=$($c.HealthStatus) Libre=$($c.FreeGB) Go" -Context $context
-Write-WpcStatus -Status $(if ($d.Present -and $d.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume D:' -Detail "Présent=$($d.Present) FS=$($d.FileSystem) Santé=$($d.HealthStatus) Libre=$($d.FreeGB) Go" -Context $context
+Write-WpcStatus -Status $(if ($e.Present -and $e.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume E:' -Detail "Présent=$($e.Present) FS=$($e.FileSystem) Santé=$($e.HealthStatus) Libre=$($e.FreeGB) Go" -Context $context
 if ($unknownApps -gt 0) {
     Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Applications WinGet' -Detail "État incomplet: $unknownApps application(s) indéterminée(s). $($wingetInventory.Error)" -Context $context
 } elseif ($missingApps -gt 0) {

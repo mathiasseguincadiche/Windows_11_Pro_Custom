@@ -4,7 +4,7 @@
   "sourceDistribution": "Ubuntu-26.04",
   "expectedVersionId": "26.04",
   "expectedCodename": "resolute",
-  "installLocation": "D:\\WSL\\Ubuntu-DevOps",
+  "installLocation": "E:\\WSL\\Ubuntu-DevOps",
   "homeFilesystem": "ext4",
   "workingRoots": [
     "~/projects",
@@ -13,6 +13,6 @@
   ],
   "forbiddenRoots": [
     "/mnt/c",
-    "/mnt/d"
+    "/mnt/e"
   ]
 }

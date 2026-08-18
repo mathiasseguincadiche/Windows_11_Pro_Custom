@@ -298,7 +298,7 @@ function Invoke-MainAction {
         }
         '5.3' {
             $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'E:\Windows_11_Pro_Custom_Backup\V7\SESSION'
-            $scratch = Read-WpcMenuValue -Prompt 'Repertoire scratch local et isole' -DryRunValue 'D:\WSL-RestoreDrill'
+            $scratch = Read-WpcMenuValue -Prompt 'Repertoire scratch local et isole' -DryRunValue 'E:\WSL-RestoreDrill'
             if (Confirm-WpcAction -Message 'Lancer le drill WSL isole puis supprimer uniquement sa copie temporaire') {
                 [void](Invoke-WpcRepoScript -DisplayName 'Drill WSL isole V26' -Path $RestoreDrillScript -Arguments @{ BackupSessionPath=$session; Mode='Sandbox'; ScratchRoot=$scratch; ConfirmIsolatedRestoreDrill=[switch]::Present } -RequiresAdmin)
             }
