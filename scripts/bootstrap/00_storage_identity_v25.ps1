@@ -14,6 +14,7 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
     $BaselinePath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 }
+$BaselineHashPath = "$BaselinePath.sha256"
 $reportDir = Join-Path $repoRoot 'reports\storage-identity-v25'
 $reportPath = Join-Path $reportDir 'latest-topology.json'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
@@ -36,6 +37,65 @@ function ConvertTo-WpcIdentityText {
     param($Value)
     if ($null -eq $Value) { return '' }
     return ([string]$Value).Trim().ToLowerInvariant()
+}
+
+function ConvertTo-WpcGuidText {
+    param($Value)
+    if ($null -eq $Value) { return '' }
+    return (([string]$Value).Trim().Trim('{}')).ToUpperInvariant()
+}
+
+function Get-WpcBaselineIntegrity {
+    param(
+        [Parameter(Mandatory)][string]$BaselinePath,
+        [Parameter(Mandatory)][string]$HashPath
+    )
+
+    if (-not (Test-Path -LiteralPath $BaselinePath)) {
+        throw "Baseline V25 absente: $BaselinePath"
+    }
+    $actual = (Get-FileHash -LiteralPath $BaselinePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if (-not (Test-Path -LiteralPath $HashPath)) {
+        return [pscustomobject]@{ Status = 'MISSING_HASH'; Sha256 = $actual }
+    }
+
+    $text = (Get-Content -Raw -LiteralPath $HashPath).Trim()
+    if ($text -notmatch '^(?<hash>[A-Fa-f0-9]{64})\s{2}(?<file>[^\r\n]+)$') {
+        throw "Sidecar SHA-256 V25 invalide: $HashPath"
+    }
+    $expectedFileName = [IO.Path]::GetFileName($BaselinePath)
+    if ($Matches.file -ne $expectedFileName) {
+        throw "Le sidecar SHA-256 V25 référence un fichier inattendu: $($Matches.file)"
+    }
+    $expected = $Matches.hash.ToUpperInvariant()
+    if ($actual -ne $expected) {
+        throw "Intégrité baseline V25 invalide. attendu=$expected actuel=$actual"
+    }
+    return [pscustomobject]@{ Status = 'VERIFIED'; Sha256 = $actual }
+}
+
+function Write-WpcBaselineWithHash {
+    param(
+        [Parameter(Mandatory)][string]$Json,
+        [Parameter(Mandatory)][string]$BaselinePath,
+        [Parameter(Mandatory)][string]$HashPath
+    )
+
+    $parent = Split-Path -Parent $BaselinePath
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $token = [guid]::NewGuid().ToString('N')
+    $temporaryBaseline = "$BaselinePath.$token.tmp"
+    $temporaryHash = "$HashPath.$token.tmp"
+    try {
+        $Json | Set-Content -LiteralPath $temporaryBaseline -Encoding UTF8
+        $hash = (Get-FileHash -LiteralPath $temporaryBaseline -Algorithm SHA256).Hash.ToUpperInvariant()
+        "$hash  $([IO.Path]::GetFileName($BaselinePath))" | Set-Content -LiteralPath $temporaryHash -Encoding ASCII
+        Move-Item -LiteralPath $temporaryBaseline -Destination $BaselinePath -Force
+        Move-Item -LiteralPath $temporaryHash -Destination $HashPath -Force
+        return $hash
+    } finally {
+        Remove-Item -LiteralPath $temporaryBaseline, $temporaryHash -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Test-WpcAdministrator {
@@ -173,6 +233,13 @@ function Get-WpcRoleFailures {
     }
     if ([string]::IsNullOrWhiteSpace($Partition.VolumeUniqueId)) { $failures += "${Role}: VolumeUniqueId indisponible" }
     if ($Role -eq 'E') {
+        $basicDataGptType = 'EBD0A0A2-B9E5-4433-87C0-68B6B72699C7'
+        $gptType = ConvertTo-WpcGuidText $Partition.GptType
+        if ([string]::IsNullOrWhiteSpace($gptType)) {
+            $failures += 'E: GptType indisponible ; partition de données GPT requise'
+        } elseif ($gptType -ne $basicDataGptType) {
+            $failures += "E: gptType=$($Partition.GptType), attendu=Basic data ($basicDataGptType)"
+        }
         if ($Partition.IsBoot) { $failures += 'E: ne doit jamais être la partition de démarrage Windows' }
         if ($Partition.IsSystem) { $failures += 'E: ne doit jamais être une partition système/EFI' }
         if ($Partition.IsHidden) { $failures += 'E: ne doit jamais être une partition masquée' }
@@ -231,9 +298,17 @@ if ($null -ne $cPartition -and $null -ne $ePartition -and $cPartition.DiskNumber
 
 $baselinePresent = Test-Path -LiteralPath $BaselinePath
 $baseline = $null
+$baselineIntegrity = $null
 if ($baselinePresent) {
     try { $baseline = Get-Content -Raw -LiteralPath $BaselinePath | ConvertFrom-Json }
     catch { $failures += "Baseline V25 illisible: $($_.Exception.Message)" }
+    if ($Mode -in @('Audit', 'Verify')) {
+        try { $baselineIntegrity = Get-WpcBaselineIntegrity -BaselinePath $BaselinePath -HashPath $BaselineHashPath }
+        catch { $failures += $_.Exception.Message }
+        if ($null -ne $baselineIntegrity -and [string]$baselineIntegrity.Status -ne 'VERIFIED') {
+            $failures += "Intégrité baseline V25 insuffisante: statut=$($baselineIntegrity.Status). Ré-enrôle explicitement la topologie saine pour générer le SHA-256 local."
+        }
+    }
 }
 
 if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $ePartition) {
@@ -255,8 +330,10 @@ $report = [ordered]@{
     Timestamp = (Get-Date).ToString('o')
     Mode = $Mode
     BaselinePath = $BaselinePath
+    BaselineHashPath = $BaselineHashPath
     BaselinePresent = $baselinePresent
     BaselineContractVersion = if ($null -ne $baseline) { [string](Get-WpcPropertyValue -InputObject $baseline -Name 'ContractVersion') } else { $null }
+    BaselineIntegrityStatus = if ($null -ne $baselineIntegrity) { [string]$baselineIntegrity.Status } else { $null }
     Clean = ($failures.Count -eq 0)
     Failures = @($failures)
     Topology = $topology
@@ -287,8 +364,9 @@ if ($Mode -eq 'Record') {
     }
     $baselineDir = Split-Path -Parent $BaselinePath
     New-Item -ItemType Directory -Force -Path $baselineDir | Out-Null
-    $baselineDocument | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $BaselinePath -Encoding utf8
+    $baselineHash = Write-WpcBaselineWithHash -Json ($baselineDocument | ConvertTo-Json -Depth 8) -BaselinePath $BaselinePath -HashPath $BaselineHashPath
     Write-Host "[FAIT] Baseline V25 enregistrée explicitement: $BaselinePath" -ForegroundColor Green
+    Write-Host "[FAIT] Sidecar SHA-256 V25 enregistré: $BaselineHashPath ($baselineHash)" -ForegroundColor Green
     Write-Host 'Relance immédiatement le mode Verify avant toute installation.' -ForegroundColor Yellow
     return
 }

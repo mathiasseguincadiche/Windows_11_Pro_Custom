@@ -23,17 +23,17 @@ $details.Windows = $os.Caption
 $details.WindowsEditionId = $editionId
 $details.WindowsHomeEdition = ($editionId -match '^Core')
 $cVolume = Get-Volume -DriveLetter C
-$dVolume = Get-Volume -DriveLetter D
+$eVolume = Get-Volume -DriveLetter E
 $checks.C_NTFS = ($cVolume.FileSystem -eq 'NTFS')
-$checks.D_NTFS = ($dVolume.FileSystem -eq 'NTFS')
+$checks.E_NTFS = ($eVolume.FileSystem -eq 'NTFS')
 $details.C_FileSystem = $cVolume.FileSystem
-$details.D_FileSystem = $dVolume.FileSystem
+$details.E_FileSystem = $eVolume.FileSystem
 
 $defender = Get-MpComputerStatus
 $checks.DefenderRealtime = [bool]$defender.RealTimeProtectionEnabled
 $checks.DefenderAntivirus = [bool]$defender.AntivirusEnabled
 $currentExclusions = @((Get-MpPreference).ExclusionPath)
-$dangerousRoots = @($currentExclusions | Where-Object { $_ -match '^[CcDd]:\\?$' })
+$dangerousRoots = @($currentExclusions | Where-Object { $_ -match '^[CcDdEe]:\\?$' })
 $checks.DefenderNoDriveRootExclusions = ($dangerousRoots.Count -eq 0)
 $details.DefenderExclusionPath = $currentExclusions
 
