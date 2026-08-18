@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+RUNTIME_CONTRACT="$REPO_ROOT/config/wsl/runtime-contract.json"
 required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind terraform-docs actionlint yq tflint)
 failed=0
 warnings=0
@@ -60,14 +61,41 @@ else
 fi
 
 printf '\nFilesystem de travail\n'
-case "$HOME" in
-  /mnt/c/*|/mnt/d/*)
-    ko "HOME est sur un filesystem Windows: $HOME"
-    ;;
-  *)
-    ok "HOME Linux: $HOME"
-    ;;
-esac
+if [[ ! -f "$RUNTIME_CONTRACT" ]]; then
+  ko "Contrat WSL introuvable: $RUNTIME_CONTRACT"
+elif ! command -v jq >/dev/null 2>&1; then
+  ko 'Impossible de vérifier forbiddenRoots: jq est absent.'
+else
+  forbidden_roots_raw=''
+  if forbidden_roots_raw="$(
+    jq -er '
+      .forbiddenRoots
+      | if type == "array"
+           and length > 0
+           and all(.[]; type == "string" and length > 0)
+        then .[]
+        else error("forbiddenRoots invalide")
+        end
+    ' "$RUNTIME_CONTRACT"
+  )"; then
+    mapfile -t forbidden_roots <<< "$forbidden_roots_raw"
+    home_forbidden=0
+
+    for root in "${forbidden_roots[@]}"; do
+      if [[ "$HOME" == "$root" || "$HOME" == "$root/"* ]]; then
+        ko "HOME est sous une racine interdite par le contrat WSL: $HOME"
+        home_forbidden=1
+        break
+      fi
+    done
+
+    if (( home_forbidden == 0 )); then
+      ok "HOME Linux: $HOME"
+    fi
+  else
+    ko 'Contrat WSL invalide: forbiddenRoots est absent ou mal formé.'
+  fi
+fi
 
 for dir in projects labs repositories workspace backups; do
   if [[ -d "$HOME/$dir" ]]; then

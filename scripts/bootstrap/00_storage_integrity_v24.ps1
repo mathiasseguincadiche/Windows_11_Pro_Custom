@@ -255,8 +255,9 @@ function Invoke-WpcNvmeSafetyCheck {
     }
 }
 
+$requiredVolumeLetters = @('C', 'E')
 $volumeStates = @()
-foreach ($letter in @('C', 'D')) {
+foreach ($letter in $requiredVolumeLetters) {
     try {
         $state = Invoke-WpcNtfsSafetyCheck -DriveLetter $letter
         $volumeStates += $state
@@ -293,7 +294,10 @@ $report = [ordered]@{
     Clean = ($failures.Count -eq 0)
     Failures = @($failures)
     Policy = [ordered]@{
-        RequiredVolumes = @('C:', 'E:')
+        RequiredVolumes = @(
+            $requiredVolumeLetters |
+                ForEach-Object { '{0}:' -f $_ }
+        )
         DirtyBitMustBeClear = $true
         RepairVolumeScanRequired = $true
         CorruptionCountMustBeZero = $true
