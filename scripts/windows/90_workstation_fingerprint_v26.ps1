@@ -96,9 +96,6 @@ function Write-WpcBaselineWithHash {
         if ($baselineMoved -and -not $hashMoved) {
             Remove-Item -LiteralPath $BaselinePath -Force -ErrorAction SilentlyContinue
         }
-        if ($hashMoved -and -not $baselineMoved) {
-            Remove-Item -LiteralPath $HashPath -Force -ErrorAction SilentlyContinue
-        }
         throw
     } finally {
         Remove-Item -LiteralPath $temporaryBaseline, $temporaryHash -Force -ErrorAction SilentlyContinue
