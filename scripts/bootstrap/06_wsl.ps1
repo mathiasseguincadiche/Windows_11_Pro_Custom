@@ -18,7 +18,7 @@ $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
 $storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity_v25.ps1'
-$swapDir = 'E:\WSL\swap'
+$swapDir = Join-Path (Split-Path -Parent $InstallLocation) 'swap'
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
     throw 'wsl.exe est introuvable. Vérifie que Windows 11 est à jour puis exécute « wsl --install --no-distribution » dans PowerShell administrateur et relance la même commande.'
