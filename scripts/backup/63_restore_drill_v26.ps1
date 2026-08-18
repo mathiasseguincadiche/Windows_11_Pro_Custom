@@ -184,14 +184,14 @@ finally {
         & wsl.exe --unregister $TemporaryDistribution 2>$null
         $UnregisterExitCode = $LASTEXITCODE
         if ($UnregisterExitCode -ne 0) {
-            $CleanupFailures.Add("wsl --unregister a échoué pour $TemporaryDistribution. code=$UnregisterExitCode")
+            $CleanupFailures.Add("Le désenregistrement WSL a échoué pour $TemporaryDistribution. code=$UnregisterExitCode")
         } else {
             $RemainingNames = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
             $ListExitCode = $LASTEXITCODE
             if ($ListExitCode -ne 0) {
                 $CleanupFailures.Add("Impossible de confirmer le désenregistrement de $TemporaryDistribution. code=$ListExitCode")
             } elseif ($RemainingNames -contains $TemporaryDistribution) {
-                $CleanupFailures.Add("La distribution temporaire reste enregistrée après wsl --unregister: $TemporaryDistribution")
+                $CleanupFailures.Add("La distribution temporaire reste enregistrée après désenregistrement: $TemporaryDistribution")
             } else {
                 $Imported = $false
             }

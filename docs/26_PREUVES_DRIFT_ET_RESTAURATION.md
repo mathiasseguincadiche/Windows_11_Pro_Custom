@@ -102,7 +102,7 @@ Mode lecture seule :
 
 ```powershell
 .\scripts\backup\63_restore_drill_v26.ps1 `
-  -BackupSessionPath 'E:\Windows_11_Pro_Custom_Backup\V7\20260817-120000' `
+  -BackupSessionPath 'F:\Windows_11_Pro_Custom_Backup\V7\20260817-120000' `
   -Mode Verify
 ```
 
@@ -128,9 +128,9 @@ Il exige une confirmation explicite :
 
 ```powershell
 .\scripts\backup\63_restore_drill_v26.ps1 `
-  -BackupSessionPath 'E:\Windows_11_Pro_Custom_Backup\V7\20260817-120000' `
+  -BackupSessionPath 'F:\Windows_11_Pro_Custom_Backup\V7\20260817-120000' `
   -Mode Sandbox `
-  -ScratchRoot 'D:\WSL-RestoreDrill' `
+  -ScratchRoot 'E:\WSL-RestoreDrill' `
   -ConfirmIsolatedRestoreDrill
 ```
 
@@ -138,7 +138,7 @@ Le script refuse d'utiliser `Ubuntu` comme nom temporaire et ne contient aucun c
 
 ## Limite volontaire : restauration Windows
 
-Une image `wbadmin` de `C:`/`D:` ne peut pas être restaurée de manière sûre sur la workstation active uniquement pour « tester ». V26 vérifie donc qu'une version est énumérable et conserve le test de restauration Windows complet comme exercice **WinRE/offline** planifié.
+Une image `wbadmin` de `C:`/`E:` ne peut pas être restaurée de manière sûre sur la workstation active uniquement pour « tester ». V26 vérifie donc qu'une version est énumérable et conserve le test de restauration Windows complet comme exercice **WinRE/offline** planifié.
 
 Une sauvegarde est considérée plus forte lorsqu'elle cumule :
 

@@ -14,6 +14,7 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
     $BaselinePath = Join-Path $env:ProgramData 'Windows11ProCustom\storage-v25\volume-identity.json'
 }
+$BaselineHashPath = "$BaselinePath" + ".sha256"
 $reportDir = Join-Path $repoRoot 'reports\storage-identity-v25'
 $reportPath = Join-Path $reportDir 'latest-topology.json'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
@@ -23,6 +24,10 @@ function Get-WpcPropertyValue {
         [Parameter(Mandatory)]$InputObject,
         [Parameter(Mandatory)][string]$Name
     )
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        if ($InputObject.Contains($Name)) { return $InputObject[$Name] }
+        return $null
+    }
     $property = $InputObject.PSObject.Properties[$Name]
     if ($null -eq $property) { return $null }
     return $property.Value
@@ -32,6 +37,74 @@ function ConvertTo-WpcIdentityText {
     param($Value)
     if ($null -eq $Value) { return '' }
     return ([string]$Value).Trim().ToLowerInvariant()
+}
+
+function ConvertTo-WpcGuidText {
+    param($Value)
+    if ($null -eq $Value) { return '' }
+    return (([string]$Value).Trim().Trim('{}')).ToUpperInvariant()
+}
+
+function Get-WpcBaselineIntegrity {
+    param(
+        [Parameter(Mandatory)][string]$BaselinePath,
+        [Parameter(Mandatory)][string]$HashPath
+    )
+
+    if (-not (Test-Path -LiteralPath $BaselinePath)) {
+        throw "Baseline V25 absente: $BaselinePath"
+    }
+    $actual = (Get-FileHash -LiteralPath $BaselinePath -Algorithm SHA256).Hash.ToUpperInvariant()
+    if (-not (Test-Path -LiteralPath $HashPath)) {
+        return [pscustomobject]@{ Status = 'MISSING_HASH'; Sha256 = $actual }
+    }
+
+    $text = (Get-Content -Raw -LiteralPath $HashPath).Trim()
+    if ($text -notmatch '^(?<hash>[A-Fa-f0-9]{64})\s{2}(?<file>[^\r\n]+)$') {
+        throw "Sidecar SHA-256 V25 invalide: $HashPath"
+    }
+    $expectedFileName = [IO.Path]::GetFileName($BaselinePath)
+    if ($Matches.file -ne $expectedFileName) {
+        throw "Le sidecar SHA-256 V25 référence un fichier inattendu: $($Matches.file)"
+    }
+    $expected = $Matches.hash.ToUpperInvariant()
+    if ($actual -ne $expected) {
+        throw "Intégrité baseline V25 invalide. attendu=$expected actuel=$actual"
+    }
+    return [pscustomobject]@{ Status = 'VERIFIED'; Sha256 = $actual }
+}
+
+function Write-WpcBaselineWithHash {
+    param(
+        [Parameter(Mandatory)][string]$Json,
+        [Parameter(Mandatory)][string]$BaselinePath,
+        [Parameter(Mandatory)][string]$HashPath
+    )
+
+    $parent = Split-Path -Parent $BaselinePath
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $token = [guid]::NewGuid().ToString('N')
+    $temporaryBaseline = "$BaselinePath.$token.tmp"
+    $temporaryHash = "$HashPath.$token.tmp"
+    $baselineMoved = $false
+    $hashMoved = $false
+    try {
+        $Json | Set-Content -LiteralPath $temporaryBaseline -Encoding UTF8
+        $hash = (Get-FileHash -LiteralPath $temporaryBaseline -Algorithm SHA256).Hash.ToUpperInvariant()
+        "$hash  $([IO.Path]::GetFileName($BaselinePath))" | Set-Content -LiteralPath $temporaryHash -Encoding ASCII
+        Move-Item -LiteralPath $temporaryBaseline -Destination $BaselinePath -Force
+        $baselineMoved = $true
+        Move-Item -LiteralPath $temporaryHash -Destination $HashPath -Force
+        $hashMoved = $true
+        return $hash
+    } catch {
+        if ($baselineMoved -and -not $hashMoved) {
+            Remove-Item -LiteralPath $BaselinePath -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    } finally {
+        Remove-Item -LiteralPath $temporaryBaseline, $temporaryHash -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Test-WpcAdministrator {
@@ -142,17 +215,17 @@ function Get-WpcStorageTopology {
 function Get-WpcRolePartition {
     param(
         [Parameter(Mandatory)]$Topology,
-        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$DriveLetter
+        [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$DriveLetter
     )
-    $matches = @($Topology.Partitions | Where-Object DriveLetter -EQ $DriveLetter)
-    if ($matches.Count -ne 1) { return $null }
-    return $matches[0]
+    $partitions = @($Topology.Partitions | Where-Object DriveLetter -EQ $DriveLetter)
+    if ($partitions.Count -ne 1) { return $null }
+    return $partitions[0]
 }
 
 function Get-WpcRoleFailures {
     param(
         [Parameter(Mandatory)][AllowNull()]$Partition,
-        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$Role
+        [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$Role
     )
     $failures = @()
     if ($null -eq $Partition) { return @("${Role}: partition introuvable ou ambiguë") }
@@ -168,10 +241,17 @@ function Get-WpcRoleFailures {
         $failures += "${Role}: aucune identité de partition stable disponible"
     }
     if ([string]::IsNullOrWhiteSpace($Partition.VolumeUniqueId)) { $failures += "${Role}: VolumeUniqueId indisponible" }
-    if ($Role -eq 'D') {
-        if ($Partition.IsBoot) { $failures += 'D: ne doit jamais être la partition de démarrage Windows' }
-        if ($Partition.IsSystem) { $failures += 'D: ne doit jamais être une partition système/EFI' }
-        if ($Partition.IsHidden) { $failures += 'D: ne doit jamais être une partition masquée' }
+    if ($Role -eq 'E') {
+        $basicDataGptType = 'EBD0A0A2-B9E5-4433-87C0-68B6B72699C7'
+        $gptType = ConvertTo-WpcGuidText $Partition.GptType
+        if ([string]::IsNullOrWhiteSpace($gptType)) {
+            $failures += 'E: GptType indisponible ; partition de données GPT requise'
+        } elseif ($gptType -ne $basicDataGptType) {
+            $failures += "E: gptType=$($Partition.GptType), attendu=Basic data ($basicDataGptType)"
+        }
+        if ($Partition.IsBoot) { $failures += 'E: ne doit jamais être la partition de démarrage Windows' }
+        if ($Partition.IsSystem) { $failures += 'E: ne doit jamais être une partition système/EFI' }
+        if ($Partition.IsHidden) { $failures += 'E: ne doit jamais être une partition masquée' }
     }
     return @($failures)
 }
@@ -179,7 +259,7 @@ function Get-WpcRoleFailures {
 function ConvertTo-WpcRoleIdentity {
     param(
         [Parameter(Mandatory)]$Partition,
-        [Parameter(Mandatory)][ValidatePattern('^[CD]$')][string]$Role
+        [Parameter(Mandatory)][ValidatePattern('^[CE]$')][string]$Role
     )
     return [ordered]@{
         Role = $Role
@@ -217,32 +297,40 @@ function Compare-WpcRoleIdentity {
 
 $topology = Get-WpcStorageTopology
 $cPartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'C'
-$dPartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'D'
+$ePartition = Get-WpcRolePartition -Topology $topology -DriveLetter 'E'
 $failures = @()
 $failures += @(Get-WpcRoleFailures -Partition $cPartition -Role 'C')
-$failures += @(Get-WpcRoleFailures -Partition $dPartition -Role 'D')
-if ($null -ne $cPartition -and $null -ne $dPartition -and $cPartition.DiskNumber -eq $dPartition.DiskNumber) {
-    $failures += 'C: et D: doivent résider sur deux disques physiques distincts.'
+$failures += @(Get-WpcRoleFailures -Partition $ePartition -Role 'E')
+if ($null -ne $cPartition -and $null -ne $ePartition -and $cPartition.DiskNumber -eq $ePartition.DiskNumber) {
+    $failures += 'C: et E: doivent résider sur deux disques physiques distincts.'
 }
 
 $baselinePresent = Test-Path -LiteralPath $BaselinePath
 $baseline = $null
+$baselineIntegrity = $null
 if ($baselinePresent) {
     try { $baseline = Get-Content -Raw -LiteralPath $BaselinePath | ConvertFrom-Json }
     catch { $failures += "Baseline V25 illisible: $($_.Exception.Message)" }
+    if ($Mode -in @('Audit', 'Verify')) {
+        try { $baselineIntegrity = Get-WpcBaselineIntegrity -BaselinePath $BaselinePath -HashPath $BaselineHashPath }
+        catch { $failures += $_.Exception.Message }
+        if ($null -ne $baselineIntegrity -and [string]$baselineIntegrity.Status -ne 'VERIFIED') {
+            $failures += "Intégrité baseline V25 insuffisante: statut=$($baselineIntegrity.Status). Ré-enrôle explicitement la topologie saine pour générer le SHA-256 local."
+        }
+    }
 }
 
-if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $dPartition) {
+if ($Mode -in @('Audit','Verify') -and $null -ne $baseline -and $null -ne $cPartition -and $null -ne $ePartition) {
     $contractVersion = Get-WpcPropertyValue -InputObject $baseline -Name 'ContractVersion'
     $roles = Get-WpcPropertyValue -InputObject $baseline -Name 'Roles'
     $expectedC = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'C' } else { $null }
-    $expectedD = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'D' } else { $null }
+    $expectedE = if ($null -ne $roles) { Get-WpcPropertyValue -InputObject $roles -Name 'E' } else { $null }
     if ([string]$contractVersion -ne 'V25') { $failures += "Version baseline=$contractVersion, attendue=V25" }
-    if ($null -eq $expectedC -or $null -eq $expectedD) {
-        $failures += 'Schéma baseline V25 invalide: Roles.C et Roles.D sont obligatoires.'
+    if ($null -eq $expectedC -or $null -eq $expectedE) {
+        $failures += 'Schéma baseline V25 invalide: Roles.C et Roles.E sont obligatoires.'
     } else {
         $failures += @(Compare-WpcRoleIdentity -Expected $expectedC -Actual (ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C') -Role 'C')
-        $failures += @(Compare-WpcRoleIdentity -Expected $expectedD -Actual (ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D') -Role 'D')
+        $failures += @(Compare-WpcRoleIdentity -Expected $expectedE -Actual (ConvertTo-WpcRoleIdentity -Partition $ePartition -Role 'E') -Role 'E')
     }
 }
 
@@ -251,8 +339,10 @@ $report = [ordered]@{
     Timestamp = (Get-Date).ToString('o')
     Mode = $Mode
     BaselinePath = $BaselinePath
+    BaselineHashPath = $BaselineHashPath
     BaselinePresent = $baselinePresent
     BaselineContractVersion = if ($null -ne $baseline) { [string](Get-WpcPropertyValue -InputObject $baseline -Name 'ContractVersion') } else { $null }
+    BaselineIntegrityStatus = if ($null -ne $baselineIntegrity) { [string]$baselineIntegrity.Status } else { $null }
     Clean = ($failures.Count -eq 0)
     Failures = @($failures)
     Topology = $topology
@@ -264,7 +354,7 @@ if ($Mode -eq 'Record') {
         throw 'Enrôlement refusé: PowerShell administrateur est requis pour écrire la baseline machine dans ProgramData.'
     }
     if (-not $ConfirmHealthyTopology) {
-        throw 'Enrôlement refusé: utilise explicitement -ConfirmHealthyTopology après vérification humaine de la topologie C:/D:.'
+        throw 'Enrôlement refusé: utilise explicitement -ConfirmHealthyTopology après vérification humaine de la topologie C:/E:.'
     }
     if ($baselinePresent -and -not $ReplaceBaseline) {
         throw "Baseline V25 déjà présente: $BaselinePath. Aucun remplacement silencieux. Utilise -ReplaceBaseline avec -ConfirmHealthyTopology uniquement après investigation."
@@ -278,19 +368,20 @@ if ($Mode -eq 'Record') {
         Policy = 'explicit-trust-enrollment; fail-closed; no-automatic-repair; distinct-physical-disks'
         Roles = [ordered]@{
             C = ConvertTo-WpcRoleIdentity -Partition $cPartition -Role 'C'
-            D = ConvertTo-WpcRoleIdentity -Partition $dPartition -Role 'D'
+            E = ConvertTo-WpcRoleIdentity -Partition $ePartition -Role 'E'
         }
     }
     $baselineDir = Split-Path -Parent $BaselinePath
     New-Item -ItemType Directory -Force -Path $baselineDir | Out-Null
-    $baselineDocument | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $BaselinePath -Encoding utf8
+    $baselineHash = Write-WpcBaselineWithHash -Json ($baselineDocument | ConvertTo-Json -Depth 8) -BaselinePath $BaselinePath -HashPath $BaselineHashPath
     Write-Host "[FAIT] Baseline V25 enregistrée explicitement: $BaselinePath" -ForegroundColor Green
+    Write-Host "[FAIT] Sidecar SHA-256 V25 enregistré: $BaselineHashPath ($baselineHash)" -ForegroundColor Green
     Write-Host 'Relance immédiatement le mode Verify avant toute installation.' -ForegroundColor Yellow
     return
 }
 
 if (-not $baselinePresent) {
-    $message = "Baseline V25 absente. Après contrôle humain de C:/D:, exécute: .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology"
+    $message = "Baseline V25 absente. Après contrôle humain de C:/E:, exécute: .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology"
     if ($Mode -eq 'Verify') { throw $message }
     Write-Host "[ACTION REQUISE] $message" -ForegroundColor Yellow
 }
@@ -301,7 +392,7 @@ if ($failures.Count -gt 0) {
     }
     Write-Host "[ALERTE] Topologie V25 non qualifiée: $($failures -join ' | ')" -ForegroundColor Yellow
 } elseif ($baselinePresent) {
-    Write-Host '[OK] V25: C: et D: correspondent exactement aux identités enrôlées.' -ForegroundColor Green
+    Write-Host '[OK] V25: C: et E: correspondent exactement aux identités enrôlées.' -ForegroundColor Green
     Write-Host 'VERDICT: STORAGE IDENTITY READY' -ForegroundColor Green
 }
 Write-Host "[INFO] Rapport topologique V25: $reportPath" -ForegroundColor DarkGray

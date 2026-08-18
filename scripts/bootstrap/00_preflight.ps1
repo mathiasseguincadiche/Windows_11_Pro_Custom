@@ -91,7 +91,7 @@ if ($pendingReboot.Pending) {
 # V25 capture toujours la topologie complète. En mode strict, la baseline explicite
 # doit correspondre avant le scan NTFS V24 et avant toute mutation de fondation/WSL.
 if ($StrictPhysicalReadiness) {
-    Write-Host '[ANALYSE] V25 — vérification des identités physiques C:/D:...' -ForegroundColor Cyan
+    Write-Host '[ANALYSE] V25 — vérification des identités physiques C:/E:...' -ForegroundColor Cyan
     & $storageIdentityScript -Mode Verify
     Write-Host '[ANALYSE] V24 — qualification NTFS/NVMe avant toute mutation...' -ForegroundColor Cyan
     & $storageSafetyScript -Mode Verify
@@ -101,13 +101,13 @@ if ($StrictPhysicalReadiness) {
 }
 
 $c = Get-Volume -DriveLetter C -ErrorAction Stop
-$d = Get-Volume -DriveLetter D -ErrorAction Stop
+$e = Get-Volume -DriveLetter E -ErrorAction Stop
 if ($c.FileSystem -ne 'NTFS') { throw 'C: doit être NTFS.' }
-if ($d.FileSystem -ne 'NTFS') { throw 'D: doit être NTFS. Aucun EXT4 physique n est attendu.' }
+if ($e.FileSystem -ne 'NTFS') { throw 'E: doit être NTFS. Aucun EXT4 physique n est attendu.' }
 
 $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module)
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
-Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / D: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
+Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / E: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
 
 Write-Host '[ANALYSE] Préqualification physique complète avant toute convergence...' -ForegroundColor Cyan
 & $physicalReadinessScript -Strict:$StrictPhysicalReadiness -RequireFoundation:$RequireFoundation

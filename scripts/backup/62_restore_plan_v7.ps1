@@ -8,7 +8,7 @@ param(
     [string]$Scenario = 'All',
 
     [string]$RestoreDistribution = 'Ubuntu-Restore-V7',
-    [string]$RestoreLocation = 'D:\WSL\Ubuntu-Restore-V7'
+    [string]$RestoreLocation = 'E:\WSL\Ubuntu-Restore-V7'
 )
 
 Set-StrictMode -Version Latest

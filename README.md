@@ -62,13 +62,13 @@ Référence : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md).
 
 ```text
 C: NTFS -> Windows 11 Pro et composants système
-D: NTFS -> données, WSL2, ISO et exports
+E: NTFS -> données, WSL2, ISO et exports
 ```
 
 Ubuntu utilise ext4 **dans son VHDX WSL2** stocké sous :
 
 ```text
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 ```
 
 Les projets Linux actifs restent sous :
@@ -79,14 +79,14 @@ Les projets Linux actifs restent sous :
 ~/repositories
 ```
 
-et non sous `/mnt/c` ou `/mnt/d` comme racines principales.
+et non sous `/mnt/c` ou `/mnt/e` comme racines principales.
 
 ### WSL2
 
 ```text
 Distribution : Ubuntu 26.04
 Nom          : Ubuntu
-Emplacement  : D:\WSL\Ubuntu-DevOps
+Emplacement  : E:\WSL\Ubuntu-DevOps
 RAM          : 20 Go
 CPU          : 8 threads
 Swap         : 8 Go
@@ -182,7 +182,7 @@ Cette étape est obligatoire une seule fois sur une topologie saine, avant tout
 ```
 
 Avant `Record`, vérifier humainement que `C:` est le volume Windows attendu et
-que `D:` est le second Crucial T705 NTFS destiné aux données et à WSL. Une
+que `E:` est le second Crucial T705 NTFS destiné aux données et à WSL. Une
 baseline existante se vérifie simplement avec `-Mode Verify` et ne doit jamais
 être remplacée pour masquer une alerte inexpliquée.
 
@@ -254,7 +254,7 @@ Le projet privilégie la convergence contrôlée plutôt que les transformations
 - les versions reproductibles viennent des contrats du dépôt, pas d'un `latest` pris arbitrairement ;
 - les preuves matérielles non observables automatiquement restent explicites ;
 - les changements sensibles ou destructifs ne sont pas assimilés à de la maintenance normale ;
-- l'identité physique de `C:` et `D:` est enrôlée explicitement puis vérifiée avant toute convergence orchestrée par `install.ps1` et avant toute mutation WSL gérée par le dépôt ;
+- l'identité physique de `C:` et `E:` est enrôlée explicitement puis vérifiée avant toute convergence orchestrée par `install.ps1` et avant toute mutation WSL gérée par le dépôt ;
 - la reconstruction après incident reste séparée du parcours quotidien.
 
 ## Documentation officielle

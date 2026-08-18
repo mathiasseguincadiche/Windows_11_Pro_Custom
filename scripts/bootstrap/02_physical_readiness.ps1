@@ -137,12 +137,12 @@ $pendingReboot = @(Get-PendingRebootReasons)
 Add-ReadinessCheck -Name 'Aucun redémarrage Windows en attente' -Passed ($pendingReboot.Count -eq 0) -Detail $(if ($pendingReboot.Count -eq 0) { 'Aucun marqueur de reboot détecté.' } else { $pendingReboot -join ', ' })
 
 $c = $null
-$d = $null
+$e = $null
 try { $c = Get-Volume -DriveLetter C -ErrorAction Stop } catch {}
-try { $d = Get-Volume -DriveLetter D -ErrorAction Stop } catch {}
+try { $e = Get-Volume -DriveLetter E -ErrorAction Stop } catch {}
 Add-ReadinessCheck -Name 'Volume C: NTFS sain' -Passed ($null -ne $c -and [string]$c.FileSystem -eq 'NTFS' -and [string]$c.HealthStatus -ne 'Unhealthy') -Detail $(if ($c) { "FS=$($c.FileSystem) Santé=$($c.HealthStatus) Libre=$([math]::Round($c.SizeRemaining / 1GB, 1)) Go" } else { 'C: absent ou illisible.' })
-Add-ReadinessCheck -Name 'Volume D: NTFS sain' -Passed ($null -ne $d -and [string]$d.FileSystem -eq 'NTFS' -and [string]$d.HealthStatus -ne 'Unhealthy') -Detail $(if ($d) { "FS=$($d.FileSystem) Santé=$($d.HealthStatus) Libre=$([math]::Round($d.SizeRemaining / 1GB, 1)) Go" } else { 'D: absent ou illisible.' })
-Add-ReadinessCheck -Name 'Espace WSL sur D:' -Passed ($null -ne $d -and $d.SizeRemaining -ge 50GB) -Detail $(if ($d) { "Libre=$([math]::Round($d.SizeRemaining / 1GB, 1)) Go ; minimum=50 Go" } else { 'D: indisponible.' })
+Add-ReadinessCheck -Name 'Volume E: NTFS sain' -Passed ($null -ne $e -and [string]$e.FileSystem -eq 'NTFS' -and [string]$e.HealthStatus -ne 'Unhealthy') -Detail $(if ($e) { "FS=$($e.FileSystem) Santé=$($e.HealthStatus) Libre=$([math]::Round($e.SizeRemaining / 1GB, 1)) Go" } else { 'E: absent ou illisible.' })
+Add-ReadinessCheck -Name 'Espace WSL sur E:' -Passed ($null -ne $e -and $e.SizeRemaining -ge 50GB) -Detail $(if ($e) { "Libre=$([math]::Round($e.SizeRemaining / 1GB, 1)) Go ; minimum=50 Go" } else { 'E: indisponible.' })
 
 $systemDiskGpt = $false
 try {

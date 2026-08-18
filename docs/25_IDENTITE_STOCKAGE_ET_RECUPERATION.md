@@ -3,7 +3,7 @@
 Ce document définit le garde-fou V25 imposé par les parcours stricts de `install.ps1` et par le bootstrap WSL avant leurs mutations.
 Il répond à deux risques différents :
 
-- une lettre `C:` ou `D:` peut désigner un autre volume après un redémarrage ;
+- une lettre `C:` ou `E:` peut désigner un autre volume après un redémarrage ;
 - un volume peut être présent physiquement mais ne plus être monté, être hors ligne,
   verrouillé ou absent de la table de partitions.
 
@@ -23,13 +23,14 @@ exécuter explicitement V25 puis V24, ou préférer le parcours orchestré.
 
 ## Identités contrôlées
 
-Pour les rôles `C:` et `D:`, le contrat enregistre puis vérifie :
+Pour les rôles `C:` et `E:`, le contrat enregistre puis vérifie :
 
 - le numéro de série et l'`UniqueId` du disque physique ;
 - le GUID et l'`UniqueId` de la partition ;
 - le `VolumeUniqueId` Windows ;
 - la lettre, le filesystem, la taille et les indicateurs boot/system ;
-- la présence de `C:` et `D:` sur deux disques physiques distincts.
+- la présence de `C:` et `E:` sur deux disques physiques distincts ;
+- pour `E:`, un type GPT de partition de données (`Basic data`) et jamais une partition EFI/MSR/Recovery déguisée.
 
 La baseline locale, indépendante du checkout Git et conservée sur le volume
 système, se trouve dans :
@@ -55,9 +56,10 @@ Contrôler dans la Gestion des disques et dans le rapport
 `reports\storage-identity-v25\latest-topology.json` que :
 
 - `C:` est bien le volume Windows attendu ;
-- `D:` est bien le second Crucial T705 destiné aux données et à WSL ;
+- `E:` est bien le second SSD destiné aux données et à WSL ;
 - les deux volumes sont NTFS, GPT, sains et situés sur deux SSD distincts ;
-- `D:` n'est ni boot, ni système, ni masqué.
+- `E:` est une partition GPT de données normale (`Basic data`) ;
+- `E:` n'est ni boot, ni système, ni masqué.
 
 Après cette vérification humaine seulement :
 
@@ -127,7 +129,20 @@ source et de la destination doit être validé avant toute commande de clonage.
 
 ## Relation avec WSL2
 
-L'option WSL `--location D:\WSL\Ubuntu-DevOps` désigne un dossier dans le volume
-NTFS `D:`. Elle ne crée pas de partition Linux physique. Le script WSL appelle
+L'option WSL `--location E:\WSL\Ubuntu-DevOps` désigne un dossier dans le volume
+NTFS `E:`. Elle ne crée pas de partition Linux physique. Le script WSL appelle
 désormais V25 en mode `Verify` avant toute création de dossier, mise à jour WSL
 ou installation de distribution.
+
+## Intégrité locale de la baseline
+
+La baseline locale V25 est désormais accompagnée d'un sidecar SHA-256 :
+
+```text
+%ProgramData%\Windows11ProCustom\storage-v25\volume-identity.json.sha256
+```
+
+En mode `Verify`, une baseline sans sidecar valide est refusée. Après migration
+d'une ancienne baseline ou après réinvestigation d'une topologie saine, relancer
+explicitement l'enrôlement `-Mode Record -ConfirmHealthyTopology` pour régénérer
+la paire JSON + SHA-256 locale.

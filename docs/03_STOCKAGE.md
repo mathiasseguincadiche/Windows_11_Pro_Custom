@@ -7,8 +7,8 @@ Les deux SSD internes Crucial T705 restent en **NTFS**.
 | Disque | Lettre | Filesystem | Rôle principal |
 | --- | --- | --- | --- |
 | Crucial T705 #1 | `C:` | NTFS | Windows 11 Pro, applications, profils |
-| Crucial T705 #2 | `D:` | NTFS | données, WSL2 VHDX, ISO, données lourdes |
-| Disque externe séparé | exemple `E:` | NTFS | sauvegarde de référence |
+| Crucial T705 #2 | `E:` | NTFS | données, WSL2 VHDX, ISO, données lourdes |
+| Disque externe séparé | exemple `F:` | NTFS | sauvegarde de référence |
 
 Aucune commande du dépôt ne doit formater automatiquement un disque.
 
@@ -19,8 +19,8 @@ Aucune commande du dépôt ne doit formater automatiquement un disque.
 WSL2 stocke le filesystem Linux dans un disque virtuel VHDX :
 
 ```text
-D: NTFS
-└── D:\WSL\Ubuntu-DevOps\...
+E: NTFS
+└── E:\WSL\Ubuntu-DevOps\...
     └── VHDX WSL
         └── filesystem ext4 Ubuntu
 ```
@@ -33,14 +33,14 @@ Cette architecture garde :
 - Ubuntu sur un vrai filesystem Linux ;
 - pas de dual boot ;
 - export/import WSL indépendant ;
-- une stratégie de sauvegarde cohérente de `C:` et `D:`.
+- une stratégie de sauvegarde cohérente de `C:` et `E:`.
 
 ---
 
-## Arborescence logique de `D:`
+## Arborescence logique de `E:`
 
 ```text
-D:\
+E:\
 ├── DATA\
 ├── WSL\
 │   ├── Ubuntu-DevOps\
@@ -52,27 +52,27 @@ D:\
 Les emplacements contractuels importants sont notamment :
 
 ```text
-D:\WSL\Ubuntu-DevOps
-D:\WSL\swap\wsl-swap.vhdx
+E:\WSL\Ubuntu-DevOps
+E:\WSL\swap\wsl-swap.vhdx
 ```
 
 Les emplacements appartenant à des projets externes ne font pas partie du contrat de stockage de `Windows_11_Pro_Custom`.
 
 ---
 
-## `D:\BACKUPS` n'est pas une sauvegarde externe suffisante
+## `E:\BACKUPS` n'est pas une sauvegarde externe suffisante
 
-Un export temporaire sur `D:` peut être utile, mais **il ne protège pas contre la panne du T705 #2**.
+Un export temporaire sur `E:` peut être utile, mais **il ne protège pas contre la panne du T705 #2**.
 
 La sauvegarde de référence doit vivre sur un autre disque physique, typiquement un support USB NTFS :
 
 ```text
-E:\
+F:\
 ├── WindowsImageBackup\
 └── sauvegarde WSL / manifest / hashes
 ```
 
-Puisque `C:` et `D:` font partie de ce qui doit être protégé, aucun de ces deux volumes ne peut constituer à lui seul la cible de reprise complète.
+Puisque `C:` et `E:` font partie de ce qui doit être protégé, aucun de ces deux volumes ne peut constituer à lui seul la cible de reprise complète.
 
 Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
@@ -84,7 +84,7 @@ La distribution cible actuelle est :
 
 ```text
 Ubuntu 26.04
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 ```
 
 Les projets Linux restent **dans le filesystem ext4 du VHDX** :
@@ -95,18 +95,18 @@ Les projets Linux restent **dans le filesystem ext4 du VHDX** :
 /home/<user>/repositories
 ```
 
-Ils ne doivent pas être déplacés sous `/mnt/c` ou `/mnt/d` comme emplacement de travail principal.
+Ils ne doivent pas être déplacés sous `/mnt/c` ou `/mnt/e` comme emplacement de travail principal.
 
 Guide : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-## Vérifier `C:` et `D:`
+## Vérifier `C:` et `E:`
 
 PowerShell :
 
 ```powershell
-Get-Volume -DriveLetter C,D |
+Get-Volume -DriveLetter C,E |
     Format-Table DriveLetter,FileSystem,FileSystemLabel,HealthStatus,Size,SizeRemaining
 ```
 
@@ -114,7 +114,7 @@ Attendu :
 
 ```text
 C: NTFS Healthy
-D: NTFS Healthy
+E: NTFS Healthy
 ```
 
 Vérifier la table de partitions et les modèles de disques :
@@ -165,7 +165,7 @@ Le projet préfère surveiller l'espace libre et nettoyer les données réelleme
 
 ## Installation Windows : éviter le mauvais T705
 
-Les deux SSD étant similaires, la méthode la plus sûre lors d'une réinstallation complète est de désactiver ou déconnecter temporairement le SSD destiné à `D:` si cela est simple et sans risque, puis de le reconnecter après le premier démarrage Windows.
+Les deux SSD étant similaires, la méthode la plus sûre lors d'une réinstallation complète est de désactiver ou déconnecter temporairement le SSD destiné à `E:` si cela est simple et sans risque, puis de le reconnecter après le premier démarrage Windows.
 
 Voir [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md).
 
@@ -189,7 +189,7 @@ Pour une reconstruction complète : [`13_RUNBOOK_REINSTALLATION.md`](13_RUNBOOK_
 
 ```text
 C: NTFS -> système Windows
-D: NTFS -> données + WSL2 + données lourdes
+E: NTFS -> données + WSL2 + données lourdes
 VHDX    -> ext4 Linux interne
 USB     -> sauvegarde de référence externe
 ```

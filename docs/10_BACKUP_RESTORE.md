@@ -20,7 +20,7 @@ Il ne protège pas automatiquement :
 
 - l'installation Windows réelle ;
 - `C:` ;
-- les données de `D:` ;
+- les données de `E:` ;
 - le profil utilisateur ;
 - le VHDX WSL réel ;
 - les données de projets externes ;
@@ -42,7 +42,7 @@ rollback Windows léger
 
 WindowsImageBackup
       ↓
-C: + D: + volumes critiques
+C: + E: + volumes critiques
 
 Export WSL VHDX + SHA-256
       ↓
@@ -65,7 +65,7 @@ Politique courante :
 
 ```text
 C: protégé                         OUI
-D: protégé                         OUI
+E: protégé                         OUI
 cible externe par défaut           OUI
 espace libre minimum               100 Go
 WSL export                         VHDX
@@ -73,16 +73,16 @@ intégrité WSL                      SHA-256
 restore destructif automatique     NON
 ```
 
-Un dossier `D:\BACKUPS` sur le SSD interne n'est pas une protection suffisante de ce même disque.
+Un dossier `E:\BACKUPS` sur le SSD interne n'est pas une protection suffisante de ce même disque.
 
 ---
 
 ## Créer une sauvegarde de référence
 
-Exemple avec un disque USB monté sur `E:` :
+Exemple avec un disque USB monté sur `F:` :
 
 ```powershell
-.\install.ps1 -BackupAction Create -BackupTargetDrive E:
+.\install.ps1 -BackupAction Create -BackupTargetDrive F:
 ```
 
 Le parcours vérifie notamment :
@@ -90,7 +90,7 @@ Le parcours vérifie notamment :
 1. présence de la cible ;
 2. filesystem NTFS ;
 3. espace libre ;
-4. séparation physique avec `C:` et `D:` ;
+4. séparation physique avec `C:` et `E:` ;
 5. disponibilité de WinRE ;
 6. création et confirmation d'un point de restauration, sauf contournement explicite `-SkipBackupRestorePoint` ;
 7. arrêt propre de WSL ;
@@ -109,7 +109,7 @@ Backup. Le contournement reste une décision opérateur explicite.
 ## Vérifier une sauvegarde
 
 ```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
+.\install.ps1 -BackupAction Verify -BackupTargetDrive F:
 ```
 
 La vérification contrôle notamment :
@@ -129,7 +129,7 @@ Une sauvegarde non vérifiée ne doit pas être considérée comme un plan de re
 ## Générer un plan de restauration
 
 ```powershell
-.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
+.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive F:
 ```
 
 Cette opération prépare les étapes de reprise **sans lancer la restauration destructive**.

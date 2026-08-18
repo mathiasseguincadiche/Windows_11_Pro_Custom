@@ -284,7 +284,7 @@ function Invoke-MainAction {
         '4.1' { [void](Invoke-WpcRepoScript -DisplayName 'Creer une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Create' } -RequiresAdmin) }
         '4.2' { [void](Invoke-WpcRepoScript -DisplayName 'Verifier une sauvegarde' -Path $InstallScript -Arguments @{ BackupAction='Verify' }) }
         '4.3' {
-            $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'E:\Windows_11_Pro_Custom_Backup\V7\SESSION'
+            $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'F:\Windows_11_Pro_Custom_Backup\V7\SESSION'
             [void](Invoke-WpcRepoScript -DisplayName 'Verifier la restaurabilite V26' -Path $RestoreDrillScript -Arguments @{ BackupSessionPath=$session; Mode='Verify' } -RequiresAdmin)
         }
         '5.1' {
@@ -297,8 +297,8 @@ function Invoke-MainAction {
             }
         }
         '5.3' {
-            $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'E:\Windows_11_Pro_Custom_Backup\V7\SESSION'
-            $scratch = Read-WpcMenuValue -Prompt 'Repertoire scratch local et isole' -DryRunValue 'D:\WSL-RestoreDrill'
+            $session = Read-WpcMenuValue -Prompt 'Chemin complet de la session Golden Backup' -DryRunValue 'F:\Windows_11_Pro_Custom_Backup\V7\SESSION'
+            $scratch = Read-WpcMenuValue -Prompt 'Repertoire scratch local et isole' -DryRunValue 'E:\WSL-RestoreDrill'
             if (Confirm-WpcAction -Message 'Lancer le drill WSL isole puis supprimer uniquement sa copie temporaire') {
                 [void](Invoke-WpcRepoScript -DisplayName 'Drill WSL isole V26' -Path $RestoreDrillScript -Arguments @{ BackupSessionPath=$session; Mode='Sandbox'; ScratchRoot=$scratch; ConfirmIsolatedRestoreDrill=[switch]::Present } -RequiresAdmin)
             }

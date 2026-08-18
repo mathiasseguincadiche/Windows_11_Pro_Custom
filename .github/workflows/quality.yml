@@ -141,13 +141,13 @@ jobs:
           grep -qx 'memory=20GB' "$standard"
           grep -qx 'processors=8' "$standard"
           grep -qx 'swap=8GB' "$standard"
-          grep -Fqx 'swapFile=D:\\WSL\\swap\\wsl-swap.vhdx' "$standard"
+          grep -Fqx 'swapFile=E:\\WSL\\swap\\wsl-swap.vhdx' "$standard"
           grep -qx 'networkingMode=mirrored' "$standard"
 
           grep -qx 'memory=28GB' "$heavy"
           grep -qx 'processors=12' "$heavy"
           grep -qx 'swap=12GB' "$heavy"
-          grep -Fqx 'swapFile=D:\\WSL\\swap\\wsl-swap.vhdx' "$heavy"
+          grep -Fqx 'swapFile=E:\\WSL\\swap\\wsl-swap.vhdx' "$heavy"
           grep -qx 'networkingMode=mirrored' "$heavy"
 
           grep -qx 'memory=20GB' "$nat"
@@ -175,7 +175,7 @@ jobs:
           policy='config/backup/v7-policy.json'
           jq -e '
             (.version == "V7") and
-            (.systemVolumes == ["C:", "D:"]) and
+            (.systemVolumes == ["C:", "E:"]) and
             (.minimumTargetFreeGB >= 100) and
             (.requireUsbTargetByDefault == true) and
             (.wslDistribution == "Ubuntu") and

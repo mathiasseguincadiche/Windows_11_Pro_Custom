@@ -41,14 +41,14 @@ VS Code -> interface Windows reliée aux projets WSL2
 C: NTFS
 └── Windows 11 Pro et applications système
 
-D: NTFS
+E: NTFS
 ├── données
-├── D:\WSL\Ubuntu-DevOps
+├── E:\WSL\Ubuntu-DevOps
 ├── ISO
 └── exports
 ```
 
-Ubuntu utilise ext4 dans son VHDX WSL2 stocké sous `D:\WSL\Ubuntu-DevOps`.
+Ubuntu utilise ext4 dans son VHDX WSL2 stocké sous `E:\WSL\Ubuntu-DevOps`.
 
 Les projets Linux actifs restent dans :
 
@@ -58,7 +58,7 @@ Les projets Linux actifs restent dans :
 ~/repositories
 ```
 
-`/mnt/c` et `/mnt/d` servent d'accès aux fichiers Windows, pas de racines quotidiennes aux projets Linux.
+`/mnt/c` et `/mnt/e` servent d'accès aux fichiers Windows, pas de racines quotidiennes aux projets Linux.
 
 Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 

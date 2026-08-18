@@ -4,7 +4,7 @@
   "notes": [
     "Ce fichier est vide par défaut.",
     "Une exclusion n'est ajoutée qu'après mesure avec Defender Performance Analyzer.",
-    "Les racines C:\\ et D:\\, les wildcards, les processus et les extensions globales sont refusés."
+    "Les racines C:\\ et E:\\, les wildcards, les processus et les extensions globales sont refusés."
   ],
   "paths": []
 }

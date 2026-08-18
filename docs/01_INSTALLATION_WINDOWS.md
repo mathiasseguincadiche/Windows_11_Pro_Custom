@@ -20,10 +20,10 @@ Crucial T705 #1
     └── Windows 11 Pro
 
 Crucial T705 #2
-└── D: NTFS
+└── E: NTFS
     ├── données
-    ├── D:\WSL\Ubuntu-DevOps
-    └── D:\WSL\swap
+    ├── E:\WSL\Ubuntu-DevOps
+    └── E:\WSL\swap
 
 UEFI
 ├── démarrage UEFI
@@ -35,7 +35,7 @@ UEFI
 └── Resizable BAR actif
 ```
 
-Le filesystem Linux de WSL2 sera contenu dans un **VHDX** sur `D:`. Ne crée pas de partition EXT4 physique pour Ubuntu.
+Le filesystem Linux de WSL2 sera contenu dans un **VHDX** sur `E:`. Ne crée pas de partition EXT4 physique pour Ubuntu.
 
 ---
 
@@ -195,7 +195,7 @@ Les deux SSD sont des Crucial T705 similaires. L'erreur la plus grave serait de 
 
 ### Méthode la plus sûre
 
-Si c'est simple matériellement, désactive temporairement dans l'UEFI ou déconnecte le SSD destiné à `D:` pendant l'installation de Windows.
+Si c'est simple matériellement, désactive temporairement dans l'UEFI ou déconnecte le SSD destiné à `E:` pendant l'installation de Windows.
 
 Cela garantit :
 
@@ -337,7 +337,7 @@ Objectif :
 
 ---
 
-## Préparer le second T705 comme `D:`
+## Préparer le second T705 comme `E:`
 
 Si le second SSD avait été déconnecté, éteins la machine puis reconnecte-le.
 
@@ -352,7 +352,7 @@ Pour un disque neuf :
 1. initialise-le en GPT ;
 2. crée un volume simple ;
 3. formate-le en NTFS ;
-4. attribue la lettre `D:` ;
+4. attribue la lettre `E:` ;
 5. donne-lui un libellé clair si souhaité.
 
 Ne crée pas de partition EXT4 physique.
@@ -360,7 +360,7 @@ Ne crée pas de partition EXT4 physique.
 Architecture attendue :
 
 ```text
-D:\
+E:\
 ├── DATA\
 ├── WSL\
 │   ├── Ubuntu-DevOps\
@@ -427,7 +427,7 @@ PowerShell en administrateur et qualifier l'identité physique des deux volumes 
 .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
 ```
 
-Contrôler humainement que `C:` est le volume Windows attendu, que `D:` est le
+Contrôler humainement que `C:` est le volume Windows attendu, que `E:` est le
 second Crucial T705 NTFS destiné aux données/WSL, et qu'ils résident sur deux SSD
 physiques distincts. Enregistrer ensuite la baseline une seule fois :
 
@@ -629,16 +629,16 @@ Guide de frontière : [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUT
 
 Ne considère pas la workstation terminée tant qu'elle n'est pas récupérable.
 
-Avec un disque USB NTFS séparé, par exemple `E:` :
+Avec un disque USB NTFS séparé, par exemple `F:` :
 
 ```powershell
-.\install.ps1 -BackupAction Create -BackupTargetDrive E:
+.\install.ps1 -BackupAction Create -BackupTargetDrive F:
 ```
 
 Puis :
 
 ```powershell
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
+.\install.ps1 -BackupAction Verify -BackupTargetDrive F:
 ```
 
 La cible externe doit être physiquement distincte des deux T705 internes.
@@ -684,7 +684,7 @@ Guide : [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 [ ] pilote Intel Arc installé
 [ ] aucun périphérique inconnu
 [ ] C: NTFS correct
-[ ] D: NTFS correct
+[ ] E: NTFS correct
 [ ] dépôt récupéré
 [ ] install.ps1 -Mode Audit exécuté
 [ ] installation / convergence exécutée

@@ -64,7 +64,7 @@ Aucune fonctionnalité métier importante ne doit exister uniquement dans le men
 
 Le choix d'installation complète correspond à l'orchestration globale de la workstation :
 
-- vérification stricte de la baseline d'identité physique V25 de `C:` et `D:` ;
+- vérification stricte de la baseline d'identité physique V25 de `C:` et `E:` ;
 - inspection de l'état réel ;
 - applications Windows ;
 - réglages gérés ;

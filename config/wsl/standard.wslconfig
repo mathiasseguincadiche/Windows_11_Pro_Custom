@@ -2,7 +2,7 @@
 memory=20GB
 processors=8
 swap=8GB
-swapFile=D:\\WSL\\swap\\wsl-swap.vhdx
+swapFile=E:\\WSL\\swap\\wsl-swap.vhdx
 networkingMode=mirrored
 dnsTunneling=true
 firewall=true

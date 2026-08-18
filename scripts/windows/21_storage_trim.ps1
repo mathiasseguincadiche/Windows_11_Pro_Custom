@@ -7,10 +7,18 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$letters = @('C', 'D')
+$letters = @('C', 'E')
 
 foreach ($letter in $letters) {
-    $volume = Get-Volume -DriveLetter $letter -ErrorAction Stop
+    try {
+        $volume = Get-Volume -DriveLetter $letter -ErrorAction Stop
+    } catch {
+        if ($Mode -eq 'Audit' -and $letter -eq 'E') {
+            Write-Warning "E: absent sur cet hôte d'audit ; contrôle ReTrim limité à C:."
+            continue
+        }
+        throw
+    }
     if ($volume.FileSystem -ne 'NTFS') {
         throw "$letter`: n'est pas NTFS. Aucun reglage de stockage n'est applique."
     }
@@ -36,4 +44,4 @@ foreach ($letter in $letters) {
     Optimize-Volume -DriveLetter $letter -ReTrim -Verbose
 }
 
-Write-Host '[OK] ReTrim demande pour C: et D:. La planification Windows reste active.' -ForegroundColor Green
+Write-Host '[OK] ReTrim demande pour C: et E:. La planification Windows reste active.' -ForegroundColor Green

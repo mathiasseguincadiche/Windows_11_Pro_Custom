@@ -34,11 +34,11 @@ Cette page transforme le résultat attendu de `Windows_11_Pro_Custom` en critèr
 ## 4. Stockage
 
 - [ ] `C:` contient Windows et correspond à l'identité physique V25 enrôlée ;
-- [ ] `D:` est le volume NTFS attendu et correspond à l'identité physique V25 enrôlée ;
-- [ ] `C:` et `D:` résident sur deux SSD physiques distincts ;
+- [ ] `E:` est le volume NTFS attendu et correspond à l'identité physique V25 enrôlée ;
+- [ ] `C:` et `E:` résident sur deux SSD physiques distincts ;
 - [ ] la baseline V25 a été enregistrée après contrôle humain puis vérifiée ;
 - [ ] le contrôle V24 confirme NTFS/NVMe sans corruption bloquante ;
-- [ ] WSL est sous `D:\WSL\Ubuntu-DevOps` ;
+- [ ] WSL est sous `E:\WSL\Ubuntu-DevOps` ;
 - [ ] le filesystem Linux est fourni par le VHDX WSL2 ;
 - [ ] le support de sauvegarde est distinct des SSD internes.
 
@@ -57,7 +57,7 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 - [ ] profil `.wslconfig` conforme ;
 - [ ] systemd fonctionne ;
 - [ ] les projets vivent sous `~/projects`, `~/labs` ou `~/repositories` ;
-- [ ] `/mnt/c` et `/mnt/d` ne sont pas les racines quotidiennes des projets Linux.
+- [ ] `/mnt/c` et `/mnt/e` ne sont pas les racines quotidiennes des projets Linux.
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateWsl
@@ -95,7 +95,7 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 - [ ] `menu.ps1` ne propose pas d'installation OpenClaw/OpenRouter ;
 - [ ] `scripts/bootstrap/15_openclaw_ai.ps1` est absent ;
 - [ ] `config/openclaw/control-plane.json` est absent ;
-- [ ] la conformité de la workstation ne dépend pas de `D:\AI\OpenClaw` ;
+- [ ] la conformité de la workstation ne dépend pas de `E:\AI\OpenClaw` ;
 - [ ] OpenClaw/OpenRouter est installé et configuré uniquement depuis `mathiasseguincadiche/openclaw_openrouter` lorsqu'il est utilisé.
 
 ## 9. Maintenance, preuves et idempotence

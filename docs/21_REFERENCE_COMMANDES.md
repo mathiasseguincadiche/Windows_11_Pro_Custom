@@ -168,7 +168,7 @@ Valeur par défaut : `Ubuntu`.
 Valeur par défaut :
 
 ```text
-D:\WSL\Ubuntu-DevOps
+E:\WSL\Ubuntu-DevOps
 ```
 
 ## `-WslUser`
@@ -284,12 +284,12 @@ Actions :
 Exemples :
 
 ```powershell
-.\install.ps1 -BackupAction Create -BackupTargetDrive E:
-.\install.ps1 -BackupAction Verify -BackupTargetDrive E:
-.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive E:
+.\install.ps1 -BackupAction Create -BackupTargetDrive F:
+.\install.ps1 -BackupAction Verify -BackupTargetDrive F:
+.\install.ps1 -BackupAction RestorePlan -BackupTargetDrive F:
 ```
 
-`E:` est un exemple ; utiliser la lettre réelle du support.
+`F:` est un exemple ; utiliser la lettre réelle du support.
 
 Paramètres associés :
 

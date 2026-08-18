@@ -81,13 +81,22 @@ function Write-WpcBaselineWithHash {
     $token = [guid]::NewGuid().ToString('N')
     $temporaryBaseline = "$BaselinePath.$token.tmp"
     $temporaryHash = "$HashPath.$token.tmp"
+    $baselineMoved = $false
+    $hashMoved = $false
     try {
         $Json | Set-Content -LiteralPath $temporaryBaseline -Encoding UTF8
         $hash = (Get-FileHash -LiteralPath $temporaryBaseline -Algorithm SHA256).Hash.ToUpperInvariant()
         "$hash  $([IO.Path]::GetFileName($BaselinePath))" | Set-Content -LiteralPath $temporaryHash -Encoding ASCII
         Move-Item -LiteralPath $temporaryBaseline -Destination $BaselinePath -Force
+        $baselineMoved = $true
         Move-Item -LiteralPath $temporaryHash -Destination $HashPath -Force
+        $hashMoved = $true
         return $hash
+    } catch {
+        if ($baselineMoved -and -not $hashMoved) {
+            Remove-Item -LiteralPath $BaselinePath -Force -ErrorAction SilentlyContinue
+        }
+        throw
     } finally {
         Remove-Item -LiteralPath $temporaryBaseline, $temporaryHash -Force -ErrorAction SilentlyContinue
     }

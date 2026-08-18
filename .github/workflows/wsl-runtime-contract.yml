@@ -45,10 +45,10 @@ jobs:
             (.sourceDistribution == "Ubuntu-26.04") and
             (.expectedVersionId == "26.04") and
             (.expectedCodename == "resolute") and
-            (.installLocation == "D:\\WSL\\Ubuntu-DevOps") and
+            (.installLocation == "E:\\WSL\\Ubuntu-DevOps") and
             (.homeFilesystem == "ext4") and
             (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
-            (.forbiddenRoots == ["/mnt/c", "/mnt/d"])
+            (.forbiddenRoots == ["/mnt/c", "/mnt/e"])
           ' "$contract" >/dev/null
 
       - name: Validate deterministic WSL source wiring

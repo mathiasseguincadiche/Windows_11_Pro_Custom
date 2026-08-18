@@ -10,7 +10,7 @@ param(
     [string[]]$OptimizationProfiles = @('standard'),
 
     [string]$Distribution = 'Ubuntu',
-    [string]$WslInstallLocation = 'D:\WSL\Ubuntu-DevOps',
+    [string]$WslInstallLocation = 'E:\WSL\Ubuntu-DevOps',
     [string]$WslUser = '',
 
     [switch]$InstallDevOps,
@@ -150,7 +150,7 @@ try {
     Write-Host "Mode non interactif   : $([bool]$NonInteractive)"
 
     if ($BackupAction -ne 'None') {
-        $BackupTargetDrive = Read-WpcRequiredValue -Context $context -Name 'BackupTargetDrive' -CurrentValue $BackupTargetDrive -Prompt 'Indique la lettre du disque de sauvegarde, avec deux-points' -Example 'E:' -Pattern '^[A-Za-z]:$'
+        $BackupTargetDrive = Read-WpcRequiredValue -Context $context -Name 'BackupTargetDrive' -CurrentValue $BackupTargetDrive -Prompt 'Indique la lettre du disque de sauvegarde, avec deux-points' -Example 'F:' -Pattern '^[A-Za-z]:$'
         $args = @{ BackupTargetDrive=$BackupTargetDrive }
         switch ($BackupAction) {
             'Create' {
