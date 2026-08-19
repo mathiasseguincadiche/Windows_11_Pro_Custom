@@ -11,6 +11,13 @@ $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
 Import-Module $runtimeModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 
+# Les installations WinGet peuvent modifier le PATH utilisateur/machine pendant
+# la même orchestration. On relit donc l'environnement persistant avant de
+# vérifier les composants workstation au lieu d'exiger une nouvelle console.
+$machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$env:Path = (@($machinePath, $userPath) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ';'
+
 $components = @(
     [pscustomobject]@{ Name='OneDrive absent'; Path=(Join-Path $repoRoot 'scripts\windows\33_onedrive.ps1') },
     [pscustomobject]@{ Name='VS Code'; Path=(Join-Path $repoRoot 'scripts\windows\30_vscode.ps1') },
