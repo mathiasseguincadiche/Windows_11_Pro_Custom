@@ -40,7 +40,7 @@ jobs:
           grep -Fq "V24 STORAGE SAFETY BLOCK" "$script"
           grep -Fq "VERDICT: STORAGE SAFETY READY" "$script"
 
-          if grep -Fq '[uint16]$msftVolume.HealthStatus' "$script"; then
+          if grep -Fq "[uint16]\$msftVolume.HealthStatus" "$script"; then
             echo 'V24 must not cast a CIM enum label such as Healthy directly to UInt16.' >&2
             exit 1
           fi
