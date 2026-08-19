@@ -21,7 +21,7 @@ Windows 11 Pro
 │
 ├── applications Windows
 │   ├── VS Code
-│   ├── WezTerm
+│   ├── Windows Terminal
 │   ├── navigateurs
 │   ├── bureautique
 │   └── gaming
@@ -1408,7 +1408,7 @@ Guide de validation : [`11_VALIDATION.md`](11_VALIDATION.md).
 
 # 47. Routine quotidienne recommandée
 
-Ouvrir WezTerm ou VS Code WSL.
+Ouvrir Windows Terminal avec le profil `Ubuntu - DevOps` ou VS Code WSL.
 
 Dans Ubuntu :
 
