@@ -14,7 +14,7 @@ $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $components = @(
     [pscustomobject]@{ Name='OneDrive absent'; Path=(Join-Path $repoRoot 'scripts\windows\33_onedrive.ps1') },
     [pscustomobject]@{ Name='VS Code'; Path=(Join-Path $repoRoot 'scripts\windows\30_vscode.ps1') },
-    [pscustomobject]@{ Name='WezTerm'; Path=(Join-Path $repoRoot 'scripts\windows\31_wezterm.ps1') },
+    [pscustomobject]@{ Name='Windows Terminal DevOps'; Path=(Join-Path $repoRoot 'scripts\windows\31_windows_terminal.ps1') },
     [pscustomobject]@{ Name='OpenSSH Client'; Path=(Join-Path $repoRoot 'scripts\windows\32_openssh_client.ps1') }
 )
 
