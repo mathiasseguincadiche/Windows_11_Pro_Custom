@@ -15,13 +15,15 @@ $wslContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
 $appsManifestPath = Join-Path $repoRoot 'manifests\winget\apps-core.json'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
 $nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
+$rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
 
-foreach ($path in @($hardwareTargetPath, $wslContractPath, $appsManifestPath, $windowsNativeModule, $nativeProcessModule)) {
+foreach ($path in @($hardwareTargetPath, $wslContractPath, $appsManifestPath, $windowsNativeModule, $nativeProcessModule, $rebootStateModule)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" }
 }
 
 Import-Module $windowsNativeModule
 Import-Module $nativeProcessModule
+Import-Module $rebootStateModule -Force
 [void]@(Initialize-WpcWindowsNativeModules -Profile Full)
 
 $hardwareTarget = Get-Content -Raw $hardwareTargetPath | ConvertFrom-Json
@@ -53,14 +55,8 @@ function Test-Administrator {
 }
 
 function Get-PendingRebootReasons {
-    $reasons = [System.Collections.Generic.List[string]]::new()
-    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $reasons.Add('CBS') }
-    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $reasons.Add('WindowsUpdate') }
-    try {
-        $pendingRename = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop
-        if ($null -ne $pendingRename) { $reasons.Add('PendingFileRenameOperations') }
-    } catch {}
-    return $reasons.ToArray()
+    $state = Get-WpcPendingRebootState
+    return @($state.Reasons)
 }
 
 function Get-OptionalFeatureStateSafe {
@@ -188,7 +184,13 @@ Add-ReadinessCheck -Name 'Édition Windows non-Home' -Passed ($editionId -notmat
 # 0 raison devient $null et 1 raison devient un scalaire ; sous StrictMode,
 # l'accès direct à .Count n'est alors pas fiable. Matérialiser explicitement.
 $pendingReboot = @(Get-PendingRebootReasons)
-Add-ReadinessCheck -Name 'Aucun redémarrage Windows en attente' -Passed ($pendingReboot.Count -eq 0) -Detail $(if ($pendingReboot.Count -eq 0) { 'Aucun marqueur de reboot détecté.' } else { $pendingReboot -join ', ' })
+$pendingRebootState = Get-WpcPendingRebootState
+Add-ReadinessCheck -Name 'Aucun redémarrage Windows en attente' -Passed ($pendingReboot.Count -eq 0) -Detail $(if ($pendingReboot.Count -eq 0) { 'Aucun marqueur CBS/Windows Update bloquant détecté.' } else { $pendingReboot -join ', ' })
+Add-ReadinessCheck `
+    -Name 'PendingFileRenameOperations non bloquant' `
+    -Passed (-not $pendingRebootState.Advisory) `
+    -Detail $(if ($pendingRebootState.Advisory) { "Signal observé: $($pendingRebootState.PendingFileRenameOperationsCount) entrée(s). À lui seul, ce marqueur ne force plus un reboot et ne bloque pas la convergence." } else { 'Aucune opération de renommage différée observée.' }) `
+    -Blocking $false
 
 $c = $null
 $e = $null

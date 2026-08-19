@@ -11,6 +11,7 @@ on:
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/core/windows-native.psm1'
       - 'scripts/core/native-process.psm1'
+      - 'scripts/core/reboot-state.psm1'
       - 'config/hardware/**'
       - 'config/wsl/**'
       - 'manifests/winget/apps-core.json'
@@ -25,6 +26,7 @@ on:
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/core/windows-native.psm1'
       - 'scripts/core/native-process.psm1'
+      - 'scripts/core/reboot-state.psm1'
       - 'config/hardware/**'
       - 'config/wsl/**'
       - 'manifests/winget/apps-core.json'
@@ -45,9 +47,11 @@ jobs:
           preflight='scripts/bootstrap/00_preflight.ps1'
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
           native='scripts/core/native-process.psm1'
+          reboot='scripts/core/reboot-state.psm1'
 
           test -f "$readiness"
           test -f "$native"
+          test -f "$reboot"
           grep -Fq "02_physical_readiness.ps1" "$preflight"
           grep -Fq "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight"
           grep -Fq "StrictPhysicalReadiness" "$install"
@@ -77,6 +81,9 @@ jobs:
           grep -Fq "VERDICT: PHYSICAL INSTALL READY" "$readiness"
           grep -Fq "aucune convergence ne doit commencer avant un verdict READY" "$readiness"
           grep -Fq "\$pendingReboot = @(Get-PendingRebootReasons)" "$readiness"
+          grep -Fq "scripts\\core\\reboot-state.psm1" "$readiness"
+          grep -Fq "Get-WpcPendingRebootState" "$readiness"
+          grep -Fq "PendingFileRenameOperations non bloquant" "$readiness"
           grep -Fq 'CantActivateDocumentInPipeline' "$native"
 
           if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$readiness"; then
@@ -121,7 +128,8 @@ jobs:
             '.\scripts\bootstrap\06_wsl.ps1',
             '.\scripts\bootstrap\08_devops.ps1',
             '.\scripts\core\windows-native.psm1',
-            '.\scripts\core\native-process.psm1'
+            '.\scripts\core\native-process.psm1',
+            '.\scripts\core\reboot-state.psm1'
           )) {
             $tokens = $null
             $errors = $null
@@ -165,7 +173,7 @@ jobs:
           $cases = @(
             @{ Items = @(); Expected = 0 },
             @{ Items = @('CBS'); Expected = 1 },
-            @{ Items = @('CBS','WindowsUpdate','PendingFileRenameOperations'); Expected = 3 }
+            @{ Items = @('CBS','WindowsUpdate'); Expected = 2 }
           )
           foreach ($case in $cases) {
             $actual = @(Get-RebootReasonFixture -Items $case.Items)
@@ -177,8 +185,12 @@ jobs:
           $readiness = Get-Content -Raw .\scripts\bootstrap\02_physical_readiness.ps1
           $required = '$pendingReboot = @(Get-PendingRebootReasons)'
           if (-not $readiness.Contains($required)) {
-            throw 'Physical readiness must materialize pending reboot reasons before using .Count.'
+            throw 'Physical readiness must materialize blocking pending reboot reasons before using .Count.'
           }
+
+          Import-Module .\scripts\core\reboot-state.psm1 -Force
+          $liveState = Get-WpcPendingRebootState
+          if ($liveState.Pending -isnot [bool]) { throw 'Shared reboot detector returned an invalid Pending type.' }
 
       - name: Validate Windows optional-feature inspection API
         shell: pwsh

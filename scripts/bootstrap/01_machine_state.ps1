@@ -13,9 +13,11 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
 $wslDetectionModule = Join-Path $repoRoot 'scripts\core\wsl-detection.psm1'
 $nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
+$rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
 Import-Module $runtimeModule
 Import-Module $wslDetectionModule
 Import-Module $nativeProcessModule
+Import-Module $rebootStateModule -Force
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $reportDir = Join-Path $repoRoot 'reports\orchestration'
 $reportPath = Join-Path $reportDir 'machine-state.json'
@@ -30,14 +32,7 @@ function Test-Administrator {
 }
 
 function Test-PendingReboot {
-    $reasons = [System.Collections.Generic.List[string]]::new()
-    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $reasons.Add('CBS') }
-    if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $reasons.Add('WindowsUpdate') }
-    try {
-        $pending = Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop
-        if ($null -ne $pending) { $reasons.Add('PendingFileRenameOperations') }
-    } catch {}
-    return [pscustomobject]@{ Pending = ($reasons.Count -gt 0); Reasons = $reasons.ToArray() }
+    return Get-WpcPendingRebootState
 }
 
 function Get-VolumeFact {
@@ -300,5 +295,7 @@ Write-WpcStatus -Status $(if ($wslFacts.DistributionPresent -and $wslFacts.Versi
 Write-WpcStatus -Status $(if (-not $oneDrive.Installed) { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'OneDrive' -Detail "Installé=$($oneDrive.Installed) Actif=$($oneDrive.Running)" -Context $context
 if ($pendingReboot.Pending) {
     Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Redémarrage Windows en attente' -Detail ($pendingReboot.Reasons -join ', ') -Context $context
+} elseif ($pendingReboot.Advisory) {
+    Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Signal de renommage de fichiers observé' -Detail "PendingFileRenameOperations=$($pendingReboot.PendingFileRenameOperationsCount) entrée(s), non bloquant sans marqueur CBS/Windows Update." -Context $context
 }
 Write-Host "Rapport factuel: $reportPath" -ForegroundColor DarkGray
