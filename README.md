@@ -91,6 +91,8 @@ C'est le cœur de l'idempotence du projet.
 | sauvegarde, vérification et plans de reprise | projets applicatifs externes |
 | maintenance structurée | OpenClaw/OpenRouter |
 
+### OpenClaw/OpenRouter : hors périmètre
+
 `Windows_11_Pro_Custom` **n'installe pas, ne configure pas, ne met pas à jour et ne valide pas OpenClaw/OpenRouter**. La plateforme IA appartient au dépôt autonome `mathiasseguincadiche/openclaw_openrouter`.
 
 ## Contrats essentiels
