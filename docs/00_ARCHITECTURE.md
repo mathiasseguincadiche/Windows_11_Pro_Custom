@@ -58,7 +58,7 @@ Les projets Linux actifs restent dans :
 ~/repositories
 ```
 
-`/mnt/c` et `/mnt/e` servent d'accès aux fichiers Windows, pas de racines quotidiennes aux projets Linux.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**. Le VHDX WSL2 peut être physiquement stocké sur `E:` sans que `/mnt/e` devienne pour autant un filesystem de travail Linux.
 
 Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
