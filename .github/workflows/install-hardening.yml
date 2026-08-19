@@ -1,9 +1,9 @@
-name: Install hardening V14
+name: Install hardening
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/install-hardening-v14.yml'
+      - '.github/workflows/install-hardening.yml'
       - 'scripts/core/wsl-detection.psm1'
       - 'scripts/bootstrap/01_machine_state.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
@@ -16,7 +16,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/install-hardening-v14.yml'
+      - '.github/workflows/install-hardening.yml'
       - 'scripts/core/wsl-detection.psm1'
       - 'scripts/bootstrap/01_machine_state.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
