@@ -74,8 +74,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo 'ShellCheck is not available on the GitHub-hosted Ubuntu runner.' >&2
+            exit 1
+          fi
+          shellcheck --version
           mapfile -d '' files < <(find . -type f -name '*.sh' -not -path './.git/*' -print0)
           if (( ${#files[@]} > 0 )); then
             shellcheck "${files[@]}"
@@ -83,6 +86,7 @@ jobs:
 
   structured-config:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Validate JSON
@@ -200,13 +204,35 @@ jobs:
           grep -q 'RestorePointExitCode = $LASTEXITCODE' scripts/backup/60_create_backup_v7.ps1
           # shellcheck disable=SC2016
           grep -q 'restorePointExitCode = $RestorePointExitCode' scripts/backup/60_create_backup_v7.ps1
-      - name: Validate WezTerm Lua syntax
+      - name: Validate Windows Terminal configuration contract
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y lua5.4
-          luac -p config/wezterm/wezterm.lua
+          profiles='config/windows-terminal/profiles.fragment.json'
+          actions='config/windows-terminal/actions.json'
+          starship='config/windows-terminal/starship.windows.toml'
+
+          test -f "$profiles"
+          test -f "$actions"
+          test -s "$starship"
+          test ! -e config/wezterm/wezterm.lua
+          test ! -e scripts/windows/31_wezterm.ps1
+
+          jq -e '.profiles | length == 2' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps") | (.guid == "{a3cc45a8-6e2f-4f3d-bca6-7d6df942da41}" and .commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font")' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "Ubuntu - DevOps") | (.guid == "{dd62b4eb-e12e-4e52-8f67-71415727545c}" and .commandline == "wsl.exe -d \"__WPC_DISTRIBUTION__\"" and .font.face == "JetBrainsMono Nerd Font")' "$profiles" >/dev/null
+
+          jq -e '.actions | length == 3' "$actions" >/dev/null
+          jq -e '.actions[] | select(.id == "User.WpcPowerShellDevOps") | (.keys == "ctrl+shift+1" and .command.action == "newTab" and .command.profile == "PowerShell 7 - DevOps")' "$actions" >/dev/null
+          jq -e '.actions[] | select(.id == "User.WpcUbuntuDevOps") | (.keys == "ctrl+shift+2" and .command.action == "newTab" and .command.profile == "Ubuntu - DevOps")' "$actions" >/dev/null
+          jq -e '.actions[] | select(.id == "User.WpcSplitDevOps") | (.keys == "ctrl+shift+o" and .command.action == "wt" and (.command.commandline | contains("PowerShell 7 - DevOps")) and (.command.commandline | contains("Ubuntu - DevOps")))' "$actions" >/dev/null
+
+          grep -qx 'add_newline = true' "$starship"
+          grep -qx 'command_timeout = 1000' "$starship"
+          grep -q '^\[kubernetes\]$' "$starship"
+          grep -q '^\[terraform\]$' "$starship"
+          grep -q '^\[azure\]$' "$starship"
+          grep -q '^\[aws\]$' "$starship"
 
   actionlint:
     runs-on: ubuntu-latest
