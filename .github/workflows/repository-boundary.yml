@@ -33,8 +33,8 @@ jobs:
             exit 1
           fi
 
-          if grep -Ei 'OpenClaw|openclaw|clawops|OPENCLAW_' config/wezterm/wezterm.lua; then
-            echo 'Workstation WezTerm config still contains OpenClaw-specific hooks.' >&2
+          if grep -REi 'OpenClaw|openclaw|clawops|OPENCLAW_' config/windows-terminal scripts/windows/31_windows_terminal.ps1; then
+            echo 'Workstation Windows Terminal config contains project-specific OpenClaw hooks.' >&2
             exit 1
           fi
 
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE '\\\.\\install\.ps1[^\n]*(InstallOpenClawAI|ValidateOpenClawAI)' README.md docs/*.md; then
+          if grep -RInE '\\.\\install\.ps1[^\n]*(InstallOpenClawAI|ValidateOpenClawAI)' README.md docs/*.md; then
             echo 'Active documentation still exposes OpenClaw through the workstation orchestrator.' >&2
             exit 1
           fi
@@ -55,5 +55,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "n'installe pas, ne configure pas, ne met à jour et ne valide pas OpenClaw/OpenRouter" README.md
+          grep -Fq 'OpenClaw/OpenRouter : hors périmètre' README.md
           grep -Fq 'projet externe, hors périmètre de la workstation' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
+          grep -Fq 'mathiasseguincadiche/openclaw_openrouter' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
