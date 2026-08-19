@@ -59,10 +59,16 @@ $vscodeSource = Join-Path $repoRoot 'config\vscode\settings.json'
 $vscodeTarget = Join-Path $env:APPDATA 'Code\User\settings.json'
 $checks.VSCodeSettings = $false
 if ((Test-Path $vscodeSource) -and (Test-Path $vscodeTarget)) { $checks.VSCodeSettings = ((Get-FileHash $vscodeSource -Algorithm SHA256).Hash -eq (Get-FileHash $vscodeTarget -Algorithm SHA256).Hash) }
-$weztermSource = Join-Path $repoRoot 'config\wezterm\wezterm.lua'
-$weztermTarget = Join-Path $env:USERPROFILE '.wezterm.lua'
-$checks.WezTermConfig = $false
-if ((Test-Path $weztermSource) -and (Test-Path $weztermTarget)) { $checks.WezTermConfig = ((Get-FileHash $weztermSource -Algorithm SHA256).Hash -eq (Get-FileHash $weztermTarget -Algorithm SHA256).Hash) }
+
+$terminalScript = Join-Path $repoRoot 'scripts\windows\31_windows_terminal.ps1'
+$checks.WindowsTerminalDevOps = $false
+try {
+    & $terminalScript -Mode Verify -Distribution $Distribution | Out-Host
+    $checks.WindowsTerminalDevOps = $true
+    $details.WindowsTerminal = 'Contrat Windows Terminal DevOps validé par le composant propriétaire.'
+} catch {
+    $details.WindowsTerminal = $_.Exception.Message
+}
 
 $failed = @($checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object { $_.Key })
 $report = [ordered]@{ Timestamp=(Get-Date).ToString('o'); Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$InstallLocation; Checks=$checks; FailedChecks=$failed; Details=$details }
