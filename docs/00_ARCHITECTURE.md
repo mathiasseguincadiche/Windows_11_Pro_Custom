@@ -9,30 +9,30 @@ Pour une vue courte : [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md). Pour le parcou
 ```text
                          Windows 11 Pro
                               │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
- desktop / pilotes       VS Code Windows          WezTerm
- PowerShell / WinGet            │                ┌──┴─────┐
- Windows Update                 │                │        │
-                               ▼                ▼        ▼
-                              WSL2           Ubuntu    PowerShell 7
-                               │             DevOps
-                               └───────────────┤
-                                               ▼
-                                         Linux DevOps
-                                         Docker / K8s
-                                         Terraform
-                                         Ansible / AWS
+        ┌─────────────────────┼─────────────────────────┐
+        │                     │                         │
+        ▼                     ▼                         ▼
+ desktop / pilotes       VS Code Windows        Windows Terminal
+ PowerShell / WinGet            │                ┌──────┴──────┐
+ Windows Update                 │                │             │
+                               ▼                ▼             ▼
+                              WSL2       PowerShell 7       Ubuntu
+                               │           DevOps            WSL2
+                               └───────────────────────────────┤
+                                                               ▼
+                                                         Linux DevOps
+                                                         Docker / K8s
+                                                         Terraform
+                                                         Ansible / AWS
 ```
 
 La séparation de responsabilités est :
 
 ```text
-Windows -> hôte, applications, pilotes, administration et runtime WSL
-Ubuntu  -> backend Linux DevOps et workspaces Linux
-WezTerm -> point d'entrée vers Ubuntu DevOps et PowerShell 7
-VS Code -> interface Windows reliée aux projets WSL2
+Windows          -> hôte, applications, pilotes, administration et runtime WSL
+Ubuntu           -> backend Linux DevOps et workspaces Linux
+Windows Terminal -> point d'entrée vers PowerShell 7 DevOps et Ubuntu DevOps
+VS Code          -> interface Windows reliée aux projets WSL2
 ```
 
 ## Stockage
@@ -64,7 +64,7 @@ Guide : [`03_STOCKAGE.md`](03_STOCKAGE.md).
 
 ## Windows et Ubuntu
 
-Windows reste l'hôte pour l'expérience desktop, PowerShell 7, VS Code, WezTerm, les applications Windows et le runtime WSL.
+Windows reste l'hôte pour l'expérience desktop, PowerShell 7, VS Code, Windows Terminal, les applications Windows et le runtime WSL.
 
 Ubuntu 26.04 reste le backend Linux DevOps pour :
 
@@ -79,19 +79,35 @@ outils qualité
 
 Guide : [`06_WSL2.md`](06_WSL2.md).
 
-## WezTerm : un point d'entrée, deux contextes
+## Windows Terminal : un point d'entrée, deux contextes
 
-La source versionnée est `config/wezterm/wezterm.lua`.
+Les sources versionnées sont :
 
 ```text
-WezTerm
-├── Ubuntu DevOps (WSL2) <- profil par défaut
-└── PowerShell 7         <- administration Windows
+config/windows-terminal/profiles.fragment.json
+config/windows-terminal/actions.json
+config/windows-terminal/starship.windows.toml
 ```
 
-Le profil Ubuntu exécute les outils Linux dans WSL2. Le profil PowerShell reste le contexte Windows général.
+Le contrat courant expose deux profils gérés :
 
-`scripts/windows/31_wezterm.ps1` vérifie ce contrat et la conformité de la configuration utilisateur.
+```text
+Windows Terminal
+├── PowerShell 7 - DevOps <- profil par défaut
+└── Ubuntu - DevOps       <- distribution Ubuntu WSL2
+```
+
+Raccourcis :
+
+```text
+Ctrl+Shift+1 -> PowerShell 7 - DevOps
+Ctrl+Shift+2 -> Ubuntu - DevOps
+Ctrl+Shift+O -> PowerShell + Ubuntu en panneaux
+```
+
+Le profil Ubuntu exécute les outils Linux dans la distribution `Ubuntu`. Il ne remplace pas le gestionnaire Bash du dépôt : `scripts/wsl/manage-devops-terminal.sh` et `scripts/wsl/manage-shell-profile.sh` restent propriétaires de Bash, Starship Linux et des outils ergonomiques WSL.
+
+`scripts/windows/31_windows_terminal.ps1` vérifie et fait converger le contrat Windows Terminal avec les modes `Audit`, `Apply`, `Verify` et `Rollback`. Il sauvegarde l'état initial des fichiers qu'il possède avant la première mutation et ne réinstalle pas lui-même les applications.
 
 Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
@@ -137,6 +153,8 @@ logs / rapports / verdict
 
 `install.ps1` est le point d'entrée technique principal. `menu.ps1` est le point d'entrée humain.
 
+La phase applicative installe Windows Terminal, PowerShell 7, Starship et la Nerd Font via le manifeste WinGet ; WSL2 et son utilisateur sont ensuite provisionnés ; enfin la phase « Poste de travail » applique la configuration Windows Terminal. Cette séquence évite qu'un script de configuration duplique l'installation des dépendances.
+
 Guides : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) et [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
 
 ## Sources de vérité
@@ -146,8 +164,9 @@ Guides : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) et [`17_CONTROL_CENTER.md`
 | WSL version/emplacement | `config/wsl/runtime-contract.json` |
 | Ressources WSL | `config/wsl/*.wslconfig` |
 | Versions DevOps | `config/devops/tool-versions.env` |
-| Terminal WezTerm | `config/wezterm/wezterm.lua` |
-| Déploiement WezTerm | `scripts/windows/31_wezterm.ps1` |
+| Windows Terminal | `config/windows-terminal/` |
+| Déploiement Windows Terminal | `scripts/windows/31_windows_terminal.ps1` |
+| Shell terminal Ubuntu | `config/wsl/bashrc.d/devops.sh` + `config/wsl/starship.toml` |
 | Applications Windows | `manifests/winget/apps-core.json` |
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
 | Interface humaine | `menu.ps1` |
