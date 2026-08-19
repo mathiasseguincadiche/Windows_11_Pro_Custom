@@ -54,7 +54,7 @@ $result = [ordered]@{
     EditionID = $editionId
     IsWindows11 = $isWindows11
     IsHomeEdition = $isHomeEdition
-    Version = $os.Version
+    WindowsVersion = $os.Version
     BuildNumber = $os.BuildNumber
     TotalMemoryGB = [math]::Round($computer.TotalPhysicalMemory / 1GB, 2)
     PendingReboot = $pendingReboot
@@ -68,7 +68,7 @@ $result = [ordered]@{
 $result | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 (Join-Path $reportDir 'preflight.json')
 
 if (-not $isAdmin) {
-    throw 'PowerShell doit être lancé en administrateur.'
+    throw "PowerShell doit être lancé en administrateur."
 }
 
 if (-not $isWindows11) {
@@ -108,23 +108,23 @@ function Invoke-WpcStorageIdentityVerify {
 
 # Ordre fail-closed : identité physique, intégrité NTFS/NVMe, puis qualification physique.
 if ($StrictPhysicalReadiness) {
-    Write-Host '[ANALYSE] Vérification des identités physiques C:/E:...' -ForegroundColor Cyan
+    Write-Host "[ANALYSE] Vérification des identités physiques C:/E:..." -ForegroundColor Cyan
     Invoke-WpcStorageIdentityVerify
-    Write-Host '[ANALYSE] Qualification NTFS/NVMe avant toute mutation...' -ForegroundColor Cyan
+    Write-Host "[ANALYSE] Qualification NTFS/NVMe avant toute mutation..." -ForegroundColor Cyan
     & $storageSafetyScript -Mode Verify
 } else {
     & $storageIdentityScript -Mode Audit
-    Write-Host '[INFO] Contrôle approfondi d’intégrité stockage non exécuté dans ce préflight diagnostic non strict.' -ForegroundColor DarkGray
+    Write-Host "[INFO] Contrôle approfondi d'intégrité stockage non exécuté dans ce préflight diagnostic non strict." -ForegroundColor DarkGray
 }
 
 $c = Get-Volume -DriveLetter C -ErrorAction Stop
 $e = Get-Volume -DriveLetter E -ErrorAction Stop
-if ($c.FileSystem -ne 'NTFS') { throw 'C: doit être NTFS.' }
-if ($e.FileSystem -ne 'NTFS') { throw 'E: doit être NTFS. Aucun EXT4 physique n est attendu.' }
+if ($c.FileSystem -ne 'NTFS') { throw "C: doit être NTFS." }
+if ($e.FileSystem -ne 'NTFS') { throw "E: doit être NTFS. Aucun EXT4 physique n'est attendu." }
 
 $loadedNames = @($nativeModules | Where-Object Available | ForEach-Object Module)
 Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -ForegroundColor Green
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / E: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
 
-Write-Host '[ANALYSE] Préqualification physique complète avant toute convergence...' -ForegroundColor Cyan
+Write-Host "[ANALYSE] Préqualification physique complète avant toute convergence..." -ForegroundColor Cyan
 & $physicalReadinessScript -Strict:$StrictPhysicalReadiness -RequireFoundation:$RequireFoundation
