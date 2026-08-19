@@ -3,7 +3,7 @@ name: Hardware qualification
 on:
   pull_request:
     paths:
-      - '.github/workflows/hardware-symbiosis-v5.yml'
+      - '.github/workflows/hardware-symbiosis.yml'
       - 'install.ps1'
       - 'config/hardware/target-v5.json'
       - 'config/hardware/symbiosis-v5.json'
@@ -15,7 +15,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/hardware-symbiosis-v5.yml'
+      - '.github/workflows/hardware-symbiosis.yml'
       - 'install.ps1'
       - 'config/hardware/target-v5.json'
       - 'config/hardware/symbiosis-v5.json'
