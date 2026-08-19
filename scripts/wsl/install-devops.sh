@@ -121,8 +121,7 @@ log "GitHub CLI depuis le dépôt officiel"
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
 sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=${ARCH} signed-by=${ARCH:+/etc/apt/keyrings/githubcli-archive-keyring.gpg}] https://cli.github.com/packages stable main" \
-  | sed "s#signed-by=${ARCH:+/etc/apt/keyrings/githubcli-archive-keyring.gpg}#signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg#" \
+echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
   | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
 
 log "Trivy depuis le dépôt officiel Aqua Security"
