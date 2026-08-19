@@ -62,7 +62,7 @@ Les projets Linux actifs restent dans le filesystem Linux :
 ~/repositories
 ```
 
-`/mnt/c` et `/mnt/e` restent utiles pour des échanges ponctuels avec Windows, mais ne sont pas les racines de travail quotidiennes recommandées pour des projets principalement exécutés sous Linux.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**. Le stockage physique du VHDX sous `E:\WSL\Ubuntu-DevOps` ne change pas cette règle : les projets restent dans le filesystem Linux de la distribution.
 
 ## Principes fondamentaux
 
