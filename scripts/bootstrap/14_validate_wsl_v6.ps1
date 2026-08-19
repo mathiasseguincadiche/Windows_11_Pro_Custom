@@ -30,6 +30,18 @@ if ($Distribution -ne [string]$runtimeContract.distribution) {
     throw "Distribution WSL différente du contrat. Demandée=$Distribution Attendue=$($runtimeContract.distribution)"
 }
 
+$workingRoots = @($runtimeContract.workingRoots)
+$utilityRoots = @($runtimeContract.utilityRoots)
+$forbiddenRoots = @($runtimeContract.forbiddenRoots)
+if ($workingRoots.Count -eq 0) { throw 'Contrat WSL invalide: workingRoots est vide.' }
+if ($forbiddenRoots.Count -eq 0) { throw 'Contrat WSL invalide: forbiddenRoots est vide.' }
+foreach ($root in @($workingRoots + $utilityRoots)) {
+    if ([string]$root -notmatch '^~/[A-Za-z0-9._/-]+$') { throw "Racine Linux gérée invalide dans le contrat: $root" }
+}
+foreach ($root in $forbiddenRoots) {
+    if ([string]$root -notmatch '^/[A-Za-z0-9._/-]+$') { throw "Racine interdite invalide dans le contrat: $root" }
+}
+
 $sourceHash = (Get-FileHash $configSource -Algorithm SHA256).Hash
 $targetHash = (Get-FileHash $configTarget -Algorithm SHA256).Hash
 if ($sourceHash -ne $targetHash) { throw ".wslconfig actif différent du profil $WslProfile versionné." }
@@ -51,6 +63,12 @@ function Invoke-LinuxValue {
     return $value
 }
 
+function Resolve-ManagedLinuxRoot {
+    param([Parameter(Mandatory)][string]$DeclaredRoot)
+    $relative = $DeclaredRoot.Substring(2)
+    return Invoke-LinuxValue "printf '%s' \"`$HOME/$relative\""
+}
+
 $versionId = Invoke-LinuxValue ". /etc/os-release; printf '%s' \"`$VERSION_ID\""
 $codename = Invoke-LinuxValue ". /etc/os-release; printf '%s' \"`$VERSION_CODENAME\""
 if ($versionId -ne [string]$runtimeContract.expectedVersionId) {
@@ -67,12 +85,6 @@ $swapBytes = [int64](Invoke-LinuxValue "free -b | sed -n '3p' | tr -s ' ' | cut 
 $swapGB = [math]::Round($swapBytes / 1GB, 2)
 $pid1 = Invoke-LinuxValue 'ps -p 1 -o comm='
 $homeFs = Invoke-LinuxValue 'findmnt -T "$HOME" -n -o FSTYPE'
-$projectsPath = Invoke-LinuxValue 'printf "%s" "$HOME/projects"'
-$labsPath = Invoke-LinuxValue 'printf "%s" "$HOME/labs"'
-$repositoriesPath = Invoke-LinuxValue 'printf "%s" "$HOME/repositories"'
-$projectsExists = (Invoke-LinuxValue 'test -d "$HOME/projects" && echo true || echo false') -eq 'true'
-$labsExists = (Invoke-LinuxValue 'test -d "$HOME/labs" && echo true || echo false') -eq 'true'
-$repositoriesExists = (Invoke-LinuxValue 'test -d "$HOME/repositories" && echo true || echo false') -eq 'true'
 
 if ($processors -ne $expected.Processors) {
     throw "CPU WSL inattendu: $processors threads vus, attendu $($expected.Processors). Exécuter wsl --shutdown puis relancer."
@@ -85,15 +97,29 @@ if ($swapGB -lt ($expected.SwapGB - 1) -or $swapGB -gt ($expected.SwapGB + 1)) {
 }
 if ($pid1 -ne 'systemd') { throw "PID 1 Linux inattendu: $pid1 ; systemd attendu." }
 if ($homeFs -notmatch '^ext4') { throw "HOME WSL n'est pas sur ext4: $homeFs" }
-if (-not $projectsExists) { throw "Répertoire projets WSL absent: $projectsPath" }
-if (-not $labsExists) { throw "Répertoire labs WSL absent: $labsPath" }
-if (-not $repositoriesExists) { throw "Répertoire repositories WSL absent: $repositoriesPath" }
-foreach ($path in @($projectsPath, $labsPath, $repositoriesPath)) {
-    if ($path -match '^/mnt/[cd](?:/|$)') {
-        throw "Racine de travail WSL interdite sur montage Windows: $path"
+
+$managedRootMeasurements = @()
+foreach ($declaredRoot in @($workingRoots + $utilityRoots)) {
+    $path = Resolve-ManagedLinuxRoot -DeclaredRoot ([string]$declaredRoot)
+    $exists = (Invoke-LinuxValue "test -d '$path' && echo true || echo false") -eq 'true'
+    if (-not $exists) { throw "Répertoire Linux géré absent: $path" }
+
+    foreach ($forbiddenRoot in $forbiddenRoots) {
+        $forbidden = [string]$forbiddenRoot
+        if ($path -eq $forbidden -or $path.StartsWith("$forbidden/", [System.StringComparison]::Ordinal)) {
+            throw "Racine Linux gérée sur montage Windows interdit: $path"
+        }
     }
+
     $pathFs = Invoke-LinuxValue "findmnt -T '$path' -n -o FSTYPE"
-    if ($pathFs -notmatch '^ext4') { throw "Racine WSL hors ext4: $path ($pathFs)" }
+    if ($pathFs -notmatch '^ext4') { throw "Racine Linux gérée hors ext4: $path ($pathFs)" }
+    $managedRootMeasurements += [ordered]@{
+        Declared = [string]$declaredRoot
+        Path = $path
+        Exists = $exists
+        Filesystem = $pathFs
+        Kind = if ($workingRoots -contains [string]$declaredRoot) { 'working' } else { 'utility' }
+    }
 }
 
 $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
@@ -118,12 +144,7 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
         SwapGB = $swapGB
         Pid1 = $pid1
         HomeFilesystem = $homeFs
-        ProjectsPath = $projectsPath
-        ProjectsExists = $projectsExists
-        LabsPath = $labsPath
-        LabsExists = $labsExists
-        RepositoriesPath = $repositoriesPath
-        RepositoriesExists = $repositoriesExists
+        ManagedRoots = $managedRootMeasurements
         PowerShell = $pwshVersion.ToString()
     }
     ConfigHash = $targetHash
