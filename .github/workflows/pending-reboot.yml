@@ -1,9 +1,9 @@
-name: Pending reboot control V23
+name: Pending reboot control
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/pending-reboot-v23.yml'
+      - '.github/workflows/pending-reboot.yml'
       - 'menu.ps1'
       - 'install.ps1'
       - 'update.ps1'
@@ -15,7 +15,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/pending-reboot-v23.yml'
+      - '.github/workflows/pending-reboot.yml'
       - 'menu.ps1'
       - 'install.ps1'
       - 'update.ps1'
@@ -112,7 +112,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
-      - name: Parse V23 PowerShell
+      - name: Parse reboot control PowerShell
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
