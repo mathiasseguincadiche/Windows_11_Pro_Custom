@@ -43,6 +43,21 @@ function Get-PowerShellExecutable {
     try { return (Get-Process -Id $PID).Path } catch { throw 'Aucun executable PowerShell utilisable.' }
 }
 
+function Assert-WpcRebootStateCommands {
+    $requiredCommands = @('Get-WpcPendingRebootState', 'Test-WpcRebootRequiredMessage')
+    $missing = @($requiredCommands | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+    if ($missing.Count -gt 0) {
+        # Défense en profondeur : un script enfant ne doit plus pouvoir contaminer le scope
+        # du menu, mais on sait également reconstruire le contrat si un futur changement
+        # retire malgré tout les commandes importées.
+        Import-Module $RebootStateModule -Force
+        $missing = @($requiredCommands | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+    }
+    if ($missing.Count -gt 0) {
+        throw "Contrat reboot-state incomplet dans le centre de contrôle: $($missing -join ', ')."
+    }
+}
+
 function Clear-WpcScreen {
     if (-not $NoClear -and -not $DryRun) { Clear-Host }
 }
@@ -122,6 +137,7 @@ function Invoke-WpcPendingRebootGate {
 
     if ($DryRun) { return $false }
 
+    Assert-WpcRebootStateCommands
     $state = Get-WpcPendingRebootState
     if (-not $state.Pending -and -not $ForceRequired) { return $false }
 
@@ -210,32 +226,44 @@ function Invoke-WpcRepoScript {
     }
 
     try {
+        # Les scripts du dépôt sont volontairement lancés dans un processus PowerShell
+        # enfant. Ils peuvent ainsi importer/recharger leurs modules, activer StrictMode
+        # ou modifier leur environnement de session sans jamais altérer le scope du menu.
+        $exe = Get-PowerShellExecutable
+        $argList = New-Object System.Collections.Generic.List[string]
+        $argList.Add('-NoProfile')
+        $argList.Add('-ExecutionPolicy')
+        $argList.Add('Bypass')
+        $argList.Add('-File')
+        $argList.Add($Path)
+        foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) { $argList.Add($arg) }
+        $childArgs = $argList.ToArray()
+        $exitCode = 0
+
         if ($RequiresAdmin -and -not (Test-IsAdministrator)) {
             Write-Line '[ADMIN] Elevation UAC requise. Une fenetre PowerShell admin va etre ouverte.' Yellow
-            $exe = Get-PowerShellExecutable
-            $argList = New-Object System.Collections.Generic.List[string]
-            $argList.Add('-NoProfile')
-            $argList.Add('-ExecutionPolicy')
-            $argList.Add('Bypass')
-            $argList.Add('-File')
-            $argList.Add($Path)
-            foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) { $argList.Add($arg) }
-            $process = Start-Process -FilePath $exe -Verb RunAs -ArgumentList $argList.ToArray() -Wait -PassThru
-            if ($process.ExitCode -ne 0) {
-                $state = Get-WpcPendingRebootState
-                if ($state.Pending) {
-                    $script:LastActionRequiresReboot = $true
-                    throw "REDÉMARRAGE REQUIS: le processus eleve s est arrete avec un redemarrage Windows en attente ($($state.Reasons -join ', '))."
-                }
-                throw "Le processus eleve a retourne le code $($process.ExitCode)."
-            }
+            $process = Start-Process -FilePath $exe -Verb RunAs -ArgumentList $childArgs -Wait -PassThru
+            $exitCode = $process.ExitCode
         } else {
-            & $Path @Arguments
+            & $exe @childArgs
+            $exitCode = $LASTEXITCODE
         }
+
+        if ($exitCode -ne 0) {
+            Assert-WpcRebootStateCommands
+            $state = Get-WpcPendingRebootState
+            if ($state.Pending) {
+                $script:LastActionRequiresReboot = $true
+                throw "REDÉMARRAGE REQUIS: le processus PowerShell isolé s'est arrêté avec un redémarrage Windows en attente ($($state.Reasons -join ', '))."
+            }
+            throw "Le processus PowerShell isolé '$DisplayName' a retourné le code $exitCode. Consulte la sortie ci-dessus et les journaux du dépôt pour la cause détaillée."
+        }
+
         Write-Line '[TERMINE] Action terminee.' Green
         return $true
     } catch {
         $message = $_.Exception.Message
+        Assert-WpcRebootStateCommands
         if (Test-WpcRebootRequiredMessage -Message $message) {
             $script:LastActionRequiresReboot = $true
             Write-Line ("[ACTION REQUISE] {0}" -f $message) Yellow

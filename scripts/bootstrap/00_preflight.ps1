@@ -88,11 +88,30 @@ if ($pendingReboot.Pending) {
     Write-Warning "Redémarrage Windows en attente: $($pendingReboot.Reasons -join ', '). Le préflight non strict a été explicitement autorisé en mode diagnostic."
 }
 
+function Invoke-WpcStorageIdentityV25Verify {
+    try {
+        & $storageIdentityScript -Mode Verify
+    } catch {
+        $message = $_.Exception.Message
+        $legacyBaseline = (
+            $message -match 'MISSING_HASH' -or
+            $message -match 'Schéma baseline V25 invalide:\s*Roles\.C et Roles\.E sont obligatoires'
+        )
+
+        if ($legacyBaseline) {
+            $reenrollCommand = '.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology -ReplaceBaseline'
+            throw "V25 LEGACY BASELINE ACTION REQUIRED: une baseline locale héritée ou incomplète a été détectée. Aucune convergence n'a été autorisée et aucune baseline n'a été remplacée automatiquement. Vérifie humainement que C: est bien le disque système et E: le disque de données attendu, puis ré-enrôle explicitement la topologie saine avec: $reenrollCommand. Relance ensuite: .\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify. Cause originale: $message"
+        }
+
+        throw
+    }
+}
+
 # V25 capture toujours la topologie complète. En mode strict, la baseline explicite
 # doit correspondre avant le scan NTFS V24 et avant toute mutation de fondation/WSL.
 if ($StrictPhysicalReadiness) {
     Write-Host '[ANALYSE] V25 — vérification des identités physiques C:/E:...' -ForegroundColor Cyan
-    & $storageIdentityScript -Mode Verify
+    Invoke-WpcStorageIdentityV25Verify
     Write-Host '[ANALYSE] V24 — qualification NTFS/NVMe avant toute mutation...' -ForegroundColor Cyan
     & $storageSafetyScript -Mode Verify
 } else {
