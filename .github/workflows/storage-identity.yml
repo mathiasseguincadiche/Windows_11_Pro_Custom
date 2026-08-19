@@ -1,4 +1,4 @@
-name: Storage identity V25
+name: Storage identity
 
 on:
   pull_request:
@@ -13,16 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Validate V25 identity contract
+      - name: Validate storage identity contract
         shell: bash
         run: |
           set -euo pipefail
-          script='scripts/bootstrap/00_storage_identity_v25.ps1'
+          script='scripts/bootstrap/00_storage_identity.ps1'
           preflight='scripts/bootstrap/00_preflight.ps1'
           wsl='scripts/bootstrap/06_wsl.ps1'
-          backup_create='scripts/backup/60_create_backup_v7.ps1'
-          backup_validate='scripts/backup/61_validate_backup_v7.ps1'
-          restore_plan='scripts/backup/62_restore_plan_v7.ps1'
 
           test -f "$script"
           grep -Fq "ValidateSet('Audit', 'Record', 'Verify')" "$script"
@@ -36,27 +33,25 @@ jobs:
           grep -Fq 'BaselineHashPath' "$script"
           grep -Fq 'Write-WpcBaselineWithHash' "$script"
           grep -Fq 'Get-WpcBaselineIntegrity' "$script"
+          grep -Fq 'Get-WpcBaselineSchemaVersion' "$script"
+          grep -Fq 'SchemaVersion = 1' "$script"
+          grep -Fq 'Release = $release' "$script"
           grep -Fq 'Basic data' "$script"
+          grep -Fq 'Windows11ProCustom\storage-identity\volume-identity.json' "$script"
           grep -Fq 'Windows11ProCustom\storage-v25\volume-identity.json' "$script"
-          grep -Fq '".sha256"' "$script"
-          grep -Fq 'Schéma baseline V25 invalide' "$script"
+          grep -Fq 'Schéma baseline stockage invalide' "$script"
           grep -Fq 'deux disques physiques distincts' "$script"
           grep -Fq 'Aucun remplacement silencieux' "$script"
-          grep -Fq 'V25 STORAGE IDENTITY BLOCK' "$script"
+          grep -Fq 'STORAGE_IDENTITY_BLOCK' "$script"
           grep -Fq 'VERDICT: STORAGE IDENTITY READY' "$script"
 
-          grep -Fq '00_storage_identity_v25.ps1' "$preflight"
+          grep -Fq '00_storage_identity.ps1' "$preflight"
           grep -Fq "& \$storageIdentityScript -Mode Verify" "$preflight"
-          grep -Fq '00_storage_identity_v25.ps1' "$wsl"
+          grep -Fq '00_storage_identity.ps1' "$wsl"
           grep -Fq "& \$storageIdentityScript -Mode Verify" "$wsl"
-          grep -Fq 'storage-identity-v25.json' "$backup_create"
-          grep -Fq 'storageIdentity' "$backup_create"
-          grep -Fq 'storage-identity-v25.json' "$backup_validate"
-          grep -Fq 'storageIdentitySha256Valid' "$backup_validate"
-          grep -Fq 'référence forensique' "$restore_plan"
 
           pending_line=$(grep -n "if (\$pendingReboot.Pending -and (\$StrictPhysicalReadiness -or -not \$AllowPendingReboot))" "$preflight" | head -1 | cut -d: -f1)
-          identity_line=$(grep -n "& \$storageIdentityScript -Mode Verify" "$preflight" | head -1 | cut -d: -f1)
+          identity_line=$(grep -n "Invoke-WpcStorageIdentityVerify" "$preflight" | tail -1 | cut -d: -f1)
           integrity_line=$(grep -n "& \$storageSafetyScript -Mode Verify" "$preflight" | head -1 | cut -d: -f1)
           physical_line=$(grep -n "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight" | head -1 | cut -d: -f1)
           test "$pending_line" -lt "$identity_line"
@@ -68,16 +63,16 @@ jobs:
         run: |
           set -euo pipefail
           files=(
-            'scripts/bootstrap/00_storage_identity_v25.ps1'
+            'scripts/bootstrap/00_storage_identity.ps1'
             'scripts/bootstrap/06_wsl.ps1'
           )
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|Resize-Partition|Set-Partition|Remove-PartitionAccessPath|Add-PartitionAccessPath|Set-Disk|diskpart|mountvol[[:space:]]+[^#]|Repair-Volume|chkdsk|ntfsfix'
           if grep -InE "$forbidden" "${files[@]}"; then
-            echo 'V25 identity and WSL paths must never mutate disks, partitions, letters or filesystems.' >&2
+            echo 'Storage identity and WSL paths must never mutate disks, partitions, letters or filesystems.' >&2
             exit 1
           fi
           if grep -InE 'SkipIdentity|AllowIdentityMismatch|IgnoreIdentity|ForceIdentity' "${files[@]}"; then
-            echo 'V25 identity verification must not expose a convergence bypass.' >&2
+            echo 'Storage identity verification must not expose a convergence bypass.' >&2
             exit 1
           fi
 
@@ -85,17 +80,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Parse V25, preflight and WSL PowerShell
+      - name: Parse identity, preflight and WSL PowerShell
         shell: pwsh
         run: |
           $failed = $false
           foreach ($path in @(
+            '.\scripts\bootstrap\00_storage_identity.ps1',
             '.\scripts\bootstrap\00_storage_identity_v25.ps1',
             '.\scripts\bootstrap\00_preflight.ps1',
-            '.\scripts\bootstrap\06_wsl.ps1',
-            '.\scripts\backup\60_create_backup_v7.ps1',
-            '.\scripts\backup\61_validate_backup_v7.ps1',
-            '.\scripts\backup\62_restore_plan_v7.ps1'
+            '.\scripts\bootstrap\06_wsl.ps1'
           )) {
             $tokens = $null
             $errors = $null

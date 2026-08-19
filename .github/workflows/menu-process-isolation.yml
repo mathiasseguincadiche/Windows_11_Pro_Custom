@@ -1,32 +1,34 @@
-name: Menu process isolation V27
+name: Menu process isolation
 
 on:
   pull_request:
     paths:
       - 'menu.ps1'
+      - 'VERSION'
       - 'scripts/bootstrap/00_preflight.ps1'
-      - 'scripts/bootstrap/00_storage_identity_v25.ps1'
+      - 'scripts/bootstrap/00_storage_identity.ps1'
       - 'scripts/core/reboot-state.psm1'
-      - 'tests/regression/menu_process_isolation_v27.ps1'
-      - '.github/workflows/menu-process-isolation-v27.yml'
+      - 'tests/regression/menu_process_isolation.tests.ps1'
+      - '.github/workflows/menu-process-isolation.yml'
   push:
     branches:
       - main
     paths:
       - 'menu.ps1'
+      - 'VERSION'
       - 'scripts/bootstrap/00_preflight.ps1'
-      - 'scripts/bootstrap/00_storage_identity_v25.ps1'
+      - 'scripts/bootstrap/00_storage_identity.ps1'
       - 'scripts/core/reboot-state.psm1'
-      - 'tests/regression/menu_process_isolation_v27.ps1'
-      - '.github/workflows/menu-process-isolation-v27.yml'
+      - 'tests/regression/menu_process_isolation.tests.ps1'
+      - '.github/workflows/menu-process-isolation.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  no-regression-v27:
-    name: Scope isolation and V25 fail-closed
+  no-regression:
+    name: Scope isolation and storage fail-closed
     runs-on: windows-latest
     timeout-minutes: 10
 
@@ -34,11 +36,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
-      - name: Run V27 regression contract
+      - name: Run regression contract
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          .\tests\regression\menu_process_isolation_v27.ps1
+          .\tests\regression\menu_process_isolation.tests.ps1
 
       - name: Exercise control center dry-run entries
         shell: pwsh

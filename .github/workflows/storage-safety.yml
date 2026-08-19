@@ -1,4 +1,4 @@
-name: Storage safety V24
+name: Storage safety
 
 on:
   pull_request:
@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Validate V24 storage safety contract
+      - name: Validate storage safety contract
         shell: bash
         run: |
           set -euo pipefail
-          script='scripts/bootstrap/00_storage_integrity_v24.ps1'
+          script='scripts/bootstrap/00_storage_integrity.ps1'
           preflight='scripts/bootstrap/00_preflight.ps1'
 
           test -f "$script"
@@ -37,15 +37,17 @@ jobs:
           grep -Fq "UnavailableErrorCountersAreAdvisory" "$script"
           grep -Fq "UncorrectedErrorsMustBeZeroWhenReported" "$script"
           grep -Fq "LifetimeErrorTotalsAreAdvisory" "$script"
-          grep -Fq "V24 STORAGE SAFETY BLOCK" "$script"
+          grep -Fq "STORAGE_SAFETY_BLOCK" "$script"
           grep -Fq "VERDICT: STORAGE SAFETY READY" "$script"
+          grep -Fq "Release = \$release" "$script"
+          grep -Fq "SchemaVersion = 1" "$script"
 
           if grep -Fq "[uint16]\$msftVolume.HealthStatus" "$script"; then
-            echo 'V24 must not cast a CIM enum label such as Healthy directly to UInt16.' >&2
+            echo 'Storage safety must not cast a CIM enum label such as Healthy directly to UInt16.' >&2
             exit 1
           fi
 
-          grep -Fq "00_storage_integrity_v24.ps1" "$preflight"
+          grep -Fq "00_storage_integrity.ps1" "$preflight"
           grep -Fq "& \$storageSafetyScript -Mode Verify" "$preflight"
           grep -Fq "StrictPhysicalReadiness -or -not \$AllowPendingReboot" "$preflight"
           grep -Fq 'ne contourne jamais StrictPhysicalReadiness' "$preflight"
@@ -60,14 +62,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          script='scripts/bootstrap/00_storage_integrity_v24.ps1'
+          script='scripts/bootstrap/00_storage_integrity.ps1'
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|Resize-Partition|Set-Partition|Repair-Volume.*-SpotFix|Repair-Volume.*-OfflineScanAndFix|fsutil\.exe[[:space:]]+dirty[[:space:]]+set|fsutil\.exe[[:space:]]+repair[[:space:]]+(set|initiate)|chkdsk(\.exe)?[[:space:]].*/[FfRrXx]'
           if grep -InE "$forbidden" "$script"; then
-            echo 'V24 must remain detection-only: a destructive or repair operation was detected.' >&2
+            echo 'Storage safety must remain detection-only: a destructive or repair operation was detected.' >&2
             exit 1
           fi
           if grep -InE 'AllowDirty|SkipNtfs|SkipStorage|AllowStorage|IgnoreStorage|ForceStorage' "$script"; then
-            echo 'V24 storage gate must not expose a convergence bypass.' >&2
+            echo 'Storage safety must not expose a convergence bypass.' >&2
             exit 1
           fi
 
@@ -75,11 +77,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Parse V24 and preflight PowerShell
+      - name: Parse storage and preflight PowerShell
         shell: pwsh
         run: |
           $failed = $false
-          foreach ($path in @('.\scripts\bootstrap\00_storage_integrity_v24.ps1', '.\scripts\bootstrap\00_preflight.ps1')) {
+          foreach ($path in @('.\scripts\bootstrap\00_storage_integrity.ps1', '.\scripts\bootstrap\00_preflight.ps1')) {
             $tokens = $null
             $errors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
@@ -90,11 +92,11 @@ jobs:
           }
           if ($failed) { exit 1 }
 
-      - name: Exercise V24 C/E and telemetry capability contract self-test
+      - name: Exercise C/E and telemetry capability contract self-test
         shell: pwsh
-        run: .\tests\powershell\storage_v24_contract.tests.ps1
+        run: .\tests\powershell\storage_contract.tests.ps1
 
-      - name: Verify Windows APIs required by V24 exist
+      - name: Verify Windows APIs required by storage safety exist
         shell: pwsh
         run: |
           $commands = @('Repair-Volume', 'Get-PhysicalDisk', 'Get-StorageReliabilityCounter', 'Get-CimInstance', 'Invoke-CimMethod')

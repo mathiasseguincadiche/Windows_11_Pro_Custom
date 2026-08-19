@@ -35,7 +35,7 @@ $menu = Get-Content -Raw -LiteralPath $menuPath
 $preflight = Get-Content -Raw -LiteralPath $preflightPath
 
 if ($menu.Contains('& $Path @Arguments')) {
-    throw 'Régression V27: le menu ne doit jamais réutiliser son propre scope pour exécuter un script du dépôt.'
+    throw 'Régression: le menu ne doit jamais réutiliser son propre scope pour exécuter un script du dépôt.'
 }
 foreach ($required in @(
     '$childArgs = $argList.ToArray()',
@@ -44,25 +44,26 @@ foreach ($required in @(
     'Le processus PowerShell isolé'
 )) {
     if (-not $menu.Contains($required)) {
-        throw "Contrat V27 absent de menu.ps1: $required"
+        throw "Contrat d’isolation absent de menu.ps1: $required"
     }
 }
 
 foreach ($required in @(
-    'V25 LEGACY BASELINE ACTION REQUIRED',
-    '.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology -ReplaceBaseline',
+    'STORAGE_IDENTITY_BASELINE_ACTION_REQUIRED',
+    '.\scripts\bootstrap\00_storage_identity.ps1 -Mode Record -ConfirmHealthyTopology -ReplaceBaseline',
     'Aucune convergence n''a été autorisée et aucune baseline n''a été remplacée automatiquement'
 )) {
     if (-not $preflight.Contains($required)) {
-        throw "Contrat de migration V25 absent du préflight: $required"
+        throw "Contrat de migration de baseline absent du préflight: $required"
     }
 }
 if ($preflight.Contains('& $storageIdentityScript -Mode Record')) {
-    throw 'Régression de sécurité: le préflight ne doit jamais ré-enrôler automatiquement une baseline V25.'
+    throw 'Régression de sécurité: le préflight ne doit jamais ré-enrôler automatiquement une baseline stockage.'
+}
+if ($preflight -match '(?m)^.*\[ANALYSE\].*\bV\d+\b') {
+    throw 'Le préflight utilisateur ne doit plus exposer de numéro de jalon interne Vxx.'
 }
 
-# Reproduit la classe de régression observée: un enfant recharge le module avec -Force
-# puis échoue. Avec une vraie frontière de processus, le parent doit conserver ses commandes.
 Import-Module $rebootModulePath -Force
 foreach ($command in @('Get-WpcPendingRebootState', 'Test-WpcRebootRequiredMessage')) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
@@ -74,7 +75,7 @@ $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
 if (-not $pwsh) { $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue }
 if (-not $pwsh) { throw 'pwsh est requis pour le test de frontière de processus.' }
 
-$tempScript = Join-Path ([IO.Path]::GetTempPath()) ("wpc-v27-child-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
+$tempScript = Join-Path ([IO.Path]::GetTempPath()) ("wpc-isolation-child-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
 try {
     @"
 Set-StrictMode -Version Latest
@@ -99,11 +100,9 @@ foreach ($command in @('Get-WpcPendingRebootState', 'Test-WpcRebootRequiredMessa
     }
 }
 
-# Le code 17 est attendu et validé ci-dessus. Il ne doit pas polluer le code de sortie
-# du script de test lui-même dans GitHub Actions.
 $global:LASTEXITCODE = 0
 
-Write-Host '[OK] V27: syntaxe PowerShell valide.' -ForegroundColor Green
-Write-Host '[OK] V27: scripts du dépôt isolés du scope du menu.' -ForegroundColor Green
-Write-Host '[OK] V27: contrat reboot-state intact après rechargement -Force dans un enfant.' -ForegroundColor Green
-Write-Host '[OK] V27: baseline V25 héritée reste fail-closed avec ré-enrôlement explicitement guidé.' -ForegroundColor Green
+Write-Host '[OK] Syntaxe PowerShell valide.' -ForegroundColor Green
+Write-Host '[OK] Scripts du dépôt isolés du scope du menu.' -ForegroundColor Green
+Write-Host '[OK] Contrat reboot-state intact après rechargement -Force dans un enfant.' -ForegroundColor Green
+Write-Host '[OK] Baseline héritée reste fail-closed avec ré-enrôlement explicitement guidé.' -ForegroundColor Green
