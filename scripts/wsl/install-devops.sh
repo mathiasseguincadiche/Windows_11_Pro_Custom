@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 DOCKER_DAEMON_CONFIG="$REPO_ROOT/config/wsl/docker-daemon.json"
 VERSIONS_FILE="$REPO_ROOT/config/devops/tool-versions.env"
+RUNTIME_CONTRACT="$REPO_ROOT/config/wsl/runtime-contract.json"
 
 # shellcheck disable=SC1091
 source /etc/os-release
@@ -30,6 +31,11 @@ fi
 
 if [[ ! -r "$VERSIONS_FILE" ]]; then
   echo "[ERREUR] Matrice de versions DevOps absente: $VERSIONS_FILE" >&2
+  exit 1
+fi
+
+if [[ ! -r "$RUNTIME_CONTRACT" ]]; then
+  echo "[ERREUR] Contrat runtime WSL absent: $RUNTIME_CONTRACT" >&2
   exit 1
 fi
 
@@ -115,7 +121,8 @@ log "GitHub CLI depuis le dépôt officiel"
 curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
 sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+echo "deb [arch=${ARCH} signed-by=${ARCH:+/etc/apt/keyrings/githubcli-archive-keyring.gpg}] https://cli.github.com/packages stable main" \
+  | sed "s#signed-by=${ARCH:+/etc/apt/keyrings/githubcli-archive-keyring.gpg}#signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg#" \
   | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
 
 log "Trivy depuis le dépôt officiel Aqua Security"
@@ -173,8 +180,25 @@ bash "$SCRIPT_DIR/install-quality-tools.sh"
 log "Profil shell DevOps"
 bash "$SCRIPT_DIR/manage-shell-profile.sh" apply
 
-log "Répertoires de travail"
-mkdir -p "$HOME"/{projects,labs,repositories,scripts,workspace,backups}
+log "Répertoires Linux gérés"
+managed_roots_raw="$(jq -er '
+  [(.workingRoots // []), (.utilityRoots // [])]
+  | add
+  | if type == "array"
+       and length > 0
+       and all(.[]; type == "string" and startswith("~/") and length > 2)
+    then .[]
+    else error("managed roots invalides")
+    end
+' "$RUNTIME_CONTRACT")" || {
+  echo '[ERREUR] Contrat WSL invalide: workingRoots/utilityRoots.' >&2
+  exit 1
+}
+mapfile -t managed_roots <<< "$managed_roots_raw"
+for root in "${managed_roots[@]}"; do
+  target="$HOME/${root#~/}"
+  mkdir -p "$target"
+done
 
 log "Contrat runtime des versions épinglées"
 kubectl version --client --output=json | jq -e --arg expected "$KUBECTL_VERSION" '.clientVersion.gitVersion == $expected' >/dev/null
@@ -186,14 +210,14 @@ kind version | grep -F "$KIND_VERSION" >/dev/null
 
 cat <<'EOF'
 
-[OK] Stack DevOps V3 installée avec versions cœur épinglées et artefacts sensibles vérifiés.
+[OK] Stack DevOps installée avec versions cœur épinglées et artefacts sensibles vérifiés.
 
 Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
 Les versions kubectl, Helm, Terraform, AWS CLI, Minikube et kind sont pilotées par config/devops/tool-versions.env.
 AWS CLI est vérifié par signature PGP et kind par checksum SHA-256 upstream avant installation.
-Les outils IaC et le profil shell DevOps sont installés.
+Les outils IaC, le profil shell DevOps et les répertoires Linux définis par le contrat runtime sont installés.
 Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL.
 Exécute ensuite :
   wsl.exe --shutdown   # depuis Windows
-puis relance Ubuntu et valide la V3.
+puis relance Ubuntu et exécute la validation DevOps.
 EOF
