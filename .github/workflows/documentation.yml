@@ -229,20 +229,35 @@ jobs:
             docs/24_CRITERES_ACCEPTATION.md
           )
           for file in "${terminal_contract_docs[@]}"; do
-            grep -Fq 'Ubuntu DevOps (WSL2)' "$file" || { echo "$file: profil Ubuntu absent" >&2; exit 1; }
-            grep -Fq 'PowerShell 7' "$file" || { echo "$file: profil PowerShell absent" >&2; exit 1; }
+            grep -Fq 'Windows Terminal' "$file" || { echo "$file: Windows Terminal absent" >&2; exit 1; }
+            grep -Fq 'PowerShell 7 - DevOps' "$file" || { echo "$file: profil PowerShell DevOps absent" >&2; exit 1; }
+            grep -Fq 'Ubuntu - DevOps' "$file" || { echo "$file: profil Ubuntu DevOps absent" >&2; exit 1; }
           done
 
-          grep -Fq 'config/wezterm/wezterm.lua' docs/00_ARCHITECTURE.md
-          grep -Fq 'config/wezterm/wezterm.lua' docs/07_DEVOPS_STACK.md
-          grep -Fq 'config/wezterm/wezterm.lua' docs/23_SOURCES_DE_VERITE.md
-          grep -Fq 'scripts/windows/31_wezterm.ps1' docs/00_ARCHITECTURE.md
-          grep -Fq 'scripts/windows/31_wezterm.ps1' docs/07_DEVOPS_STACK.md
+          test -s config/windows-terminal/profiles.fragment.json
+          test -s config/windows-terminal/actions.json
+          test -s config/windows-terminal/starship.windows.toml
+          test -s scripts/windows/31_windows_terminal.ps1
+          test ! -e config/wezterm/wezterm.lua
+          test ! -e scripts/windows/31_wezterm.ps1
+
+          grep -Fq 'config/windows-terminal/' docs/00_ARCHITECTURE.md
+          grep -Fq 'config/windows-terminal/' docs/07_DEVOPS_STACK.md
+          grep -Fq 'config/windows-terminal/' docs/23_SOURCES_DE_VERITE.md
+          grep -Fq 'scripts/windows/31_windows_terminal.ps1' docs/00_ARCHITECTURE.md
+          grep -Fq 'scripts/windows/31_windows_terminal.ps1' docs/07_DEVOPS_STACK.md
           grep -Fq '07_DEVOPS_STACK.md' docs/README.md
           grep -Fq '19_OPENCLAW_OPENROUTER_WINDOWS.md' docs/README.md
 
-          if grep -Ei 'OpenClaw|openclaw|clawops|OPENCLAW_' config/wezterm/wezterm.lua; then
-            echo 'La configuration WezTerm de la workstation contient encore une intégration OpenClaw externe.' >&2
+          grep -Fq 'Microsoft.WindowsTerminal' manifests/winget/apps-core.json
+          grep -Fq 'Starship.Starship' manifests/winget/apps-core.json
+          if grep -Fq 'wez.wezterm' manifests/winget/apps-core.json; then
+            echo 'WezTerm est encore déclaré dans le manifeste applicatif.' >&2
+            exit 1
+          fi
+
+          if grep -REi 'OpenClaw|openclaw|clawops|OPENCLAW_' config/windows-terminal scripts/windows/31_windows_terminal.ps1; then
+            echo 'La configuration Windows Terminal de la workstation contient une intégration projet externe.' >&2
             exit 1
           fi
 
@@ -260,7 +275,7 @@ jobs:
             fi
           done
 
-          grep -Fq "n'installe pas, ne configure pas, ne met à jour et ne valide pas OpenClaw/OpenRouter" README.md
+          grep -Fq "n'installe pas, ne configure pas, ne met pas à jour et ne valide pas OpenClaw/OpenRouter" README.md
           grep -Fq 'projet externe, hors périmètre de la workstation' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
           grep -Fq 'Aucune installation ou configuration OpenClaw/OpenRouter' docs/19_OPENCLAW_OPENROUTER_WINDOWS.md
           grep -Fq 'OpenClaw/OpenRouter ne fait pas partie de ce périmètre' docs/20_RUNBOOK_OPERATIONNEL.md
