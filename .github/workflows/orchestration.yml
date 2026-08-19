@@ -81,7 +81,7 @@ jobs:
           grep -Fq 'FullInstall' install.ps1
           grep -Fq 'WslUser' install.ps1
           grep -Fq 'Get-WpcProjectRelease' scripts/core/runtime.psm1
-          grep -Fq 'Release=$Context.Release' scripts/core/runtime.psm1
+          grep -Fq "Release=\$Context.Release" scripts/core/runtime.psm1
           grep -Fq 'SchemaVersion=1' scripts/core/runtime.psm1
           grep -Fq 'DÉJÀ OK' scripts/core/runtime.psm1
           grep -Fq '<REDACTED>' scripts/core/runtime.psm1
