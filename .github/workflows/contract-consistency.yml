@@ -7,7 +7,6 @@ on:
       - 'config/wsl/runtime-contract.json'
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
       - 'scripts/wsl/**'
-      - 'manifests/windows-apps.json'
       - 'manifests/winget/apps-core.json'
       - 'README.md'
       - 'docs/**'
@@ -17,7 +16,6 @@ on:
       - 'config/wsl/runtime-contract.json'
       - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
       - 'scripts/wsl/**'
-      - 'manifests/windows-apps.json'
       - 'manifests/winget/apps-core.json'
       - 'README.md'
       - 'docs/**'
@@ -65,6 +63,28 @@ jobs:
             exit 1
           fi
 
+      - name: Enforce WSL documentation boundary
+        shell: python
+        run: |
+          from pathlib import Path
+
+          files = [Path('README.md'), *sorted(Path('docs').glob('*.md'))]
+          errors = []
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              if '/mnt/c' not in text and '/mnt/e' not in text:
+                  continue
+              if '/mnt/c' not in text or '/mnt/e' not in text:
+                  errors.append(f'{path}: /mnt/c et /mnt/e doivent être documentés ensemble')
+                  continue
+              if 'interdits comme racines' not in text:
+                  errors.append(
+                      f'{path}: les montages Windows doivent être explicitement décrits comme '
+                      'interdits comme racines de projets/workspaces DevOps'
+                  )
+          if errors:
+              raise SystemExit('\n'.join(errors))
+
       - name: Reject superseded WSL entrypoints
         shell: bash
         run: |
@@ -90,17 +110,18 @@ jobs:
             exit 1
           fi
 
-      - name: Keep application catalogs synchronized
-        shell: python
+      - name: Enforce single Windows application manifest
+        shell: bash
         run: |
-          import json
-          from pathlib import Path
+          set -euo pipefail
+          test -f manifests/winget/apps-core.json
+          test ! -e manifests/windows-apps.json
+          python3 -m json.tool manifests/winget/apps-core.json >/dev/null
 
-          core = json.loads(Path('manifests/windows-apps.json').read_text(encoding='utf-8'))['core']
-          apps = json.loads(Path('manifests/winget/apps-core.json').read_text(encoding='utf-8'))['apps']
-          canonical = [item['name'] for item in apps]
-          if core != canonical:
-              raise SystemExit('manifests/windows-apps.json diverges from manifests/winget/apps-core.json')
+          if git grep -n 'manifests/windows-apps[.]json' -- ':!CHANGELOG.md' ':!.github/workflows/contract-consistency.yml'; then
+            echo 'A live reference to the superseded Windows application manifest was reintroduced.' >&2
+            exit 1
+          fi
 
       - name: Parse changed contract scripts
         shell: bash
