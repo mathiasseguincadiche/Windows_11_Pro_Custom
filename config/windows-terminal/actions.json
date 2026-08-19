@@ -1,0 +1,31 @@
+{
+  "actions": [
+    {
+      "id": "User.WpcPowerShellDevOps",
+      "name": "PowerShell 7 - DevOps",
+      "command": {
+        "action": "newTab",
+        "profile": "PowerShell 7 - DevOps"
+      },
+      "keys": "ctrl+shift+1"
+    },
+    {
+      "id": "User.WpcUbuntuDevOps",
+      "name": "Ubuntu - DevOps",
+      "command": {
+        "action": "newTab",
+        "profile": "Ubuntu - DevOps"
+      },
+      "keys": "ctrl+shift+2"
+    },
+    {
+      "id": "User.WpcSplitDevOps",
+      "name": "PowerShell + Ubuntu DevOps",
+      "command": {
+        "action": "wt",
+        "commandline": "new-tab -p \"PowerShell 7 - DevOps\" ; split-pane -p \"Ubuntu - DevOps\" -H"
+      },
+      "keys": "ctrl+shift+o"
+    }
+  ]
+}
