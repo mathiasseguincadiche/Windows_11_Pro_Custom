@@ -44,14 +44,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
 
-          $installOutput = & .\menu.ps1 -Choice 1 -DryRun -NoClear -NoPause 2>&1 | Out-String
-          if ($LASTEXITCODE -ne 0) { throw "menu choice 1 dry-run failed: $installOutput" }
+          $installOutput = & $pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\menu.ps1 -Choice 1 -DryRun -NoClear -NoPause 2>&1 | Out-String
+          $installExitCode = $LASTEXITCODE
+          if ($installExitCode -ne 0) { throw "menu choice 1 dry-run failed with exit=$installExitCode : $installOutput" }
           if ($installOutput -notmatch 'Installation complete') { throw 'Choice 1 dry-run did not expose Installation complete.' }
           if ($installOutput -notmatch '\[DRY-RUN\]') { throw 'Choice 1 dry-run did not remain non-mutating.' }
 
-          $updateOutput = & .\menu.ps1 -Choice 3 -DryRun -NoClear -NoPause 2>&1 | Out-String
-          if ($LASTEXITCODE -ne 0) { throw "menu choice 3 dry-run failed: $updateOutput" }
+          $updateOutput = & $pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\menu.ps1 -Choice 3 -DryRun -NoClear -NoPause 2>&1 | Out-String
+          $updateExitCode = $LASTEXITCODE
+          if ($updateExitCode -ne 0) { throw "menu choice 3 dry-run failed with exit=$updateExitCode : $updateOutput" }
           if ($updateOutput -notmatch 'Gestionnaire de mises a jour') { throw 'Choice 3 dry-run did not expose the update manager.' }
           if ($updateOutput -notmatch '\[DRY-RUN\]') { throw 'Choice 3 dry-run did not remain non-mutating.' }
 
