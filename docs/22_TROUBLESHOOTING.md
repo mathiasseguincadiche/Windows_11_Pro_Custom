@@ -194,44 +194,99 @@ cette version reste la cible jusqu'à décision explicite de mise à jour du con
 
 ---
 
-# 4. WezTerm / expérience terminal
+# 4. Windows Terminal / expérience terminal
 
-## Symptôme : WezTerm ouvre PowerShell au lieu d'Ubuntu
+## Symptôme : Windows Terminal n'ouvre pas PowerShell 7 - DevOps par défaut
 
 La source de vérité est :
 
 ```text
-config/wezterm/wezterm.lua
+config/windows-terminal/
 ```
 
 Le profil par défaut attendu est :
 
 ```text
-Ubuntu DevOps (WSL2)
+PowerShell 7 - DevOps
+```
+
+Diagnostic ciblé :
+
+```powershell
+.\scripts\windows\31_windows_terminal.ps1 -Mode Audit
 ```
 
 Validation :
 
 ```powershell
-.\install.ps1 -Mode Verify
+.\scripts\windows\31_windows_terminal.ps1 -Mode Verify
 ```
 
-Si `%USERPROFILE%\.wezterm.lua` est différent, le script de workstation doit signaler l'écart.
+Si le fragment, le fichier d'actions importé, le bloc PowerShell ou `settings.json` ne respectent pas le contrat, le composant signale précisément l'écart.
+
+### Correction
+
+```powershell
+.\scripts\windows\31_windows_terminal.ps1 -Mode Apply
+```
+
+Le composant sauvegarde l'état initial qu'il possède avant la première mutation afin de permettre un rollback contrôlé.
 
 ---
 
-## Symptôme : le menu WezTerm ne contient pas les profils attendus
+## Symptôme : les profils sont absents ou dupliqués
 
-Contrat courant :
+Contrat géré :
 
 ```text
-Ubuntu DevOps (WSL2)
-PowerShell 7
+PowerShell 7 - DevOps
+Ubuntu - DevOps
 ```
 
-Vérifie la source versionnée puis la copie utilisateur.
+Les profils dynamiques `Windows.Terminal.PowershellCore` et `Windows.Terminal.Wsl` sont volontairement désactivés par le contrat afin d'éviter les doublons avec les profils versionnés.
 
-Un profil spécifique à OpenClaw/`clawops` n'appartient pas à la configuration WezTerm de ce dépôt.
+Vérifier également que Windows Terminal a bien chargé le fragment :
+
+```text
+%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\Windows11ProCustom\terminal-devops.profiles.json
+```
+
+---
+
+## Symptôme : `Ubuntu - DevOps` ne démarre pas
+
+Le profil Windows Terminal ne provisionne pas WSL. Vérifier d'abord :
+
+```powershell
+wsl --list --verbose
+```
+
+La distribution attendue doit s'appeler :
+
+```text
+Ubuntu
+```
+
+Puis vérifier la couche WSL avec :
+
+```powershell
+.\install.ps1 -Mode Verify -ValidateWsl
+```
+
+Le shell Bash/Starship d'Ubuntu reste géré par les scripts WSL existants ; ne le duplique pas dans le composant Windows Terminal.
+
+---
+
+## Symptôme : Starship ou les icônes sont absents sous PowerShell
+
+Vérifier :
+
+```powershell
+Get-Command starship
+.\scripts\windows\31_windows_terminal.ps1 -Mode Verify
+```
+
+Le contrat attend également `JetBrainsMono Nerd Font`. Windows Terminal et Starship sont installés par le bootstrap applicatif, pas téléchargés par le script de configuration terminal.
 
 ---
 
@@ -319,7 +374,7 @@ Le projet préfère `ACTION REQUISE` à une preuve inventée.
 Vérifier :
 
 ```powershell
-Get-Volume -DriveLetter D
+Get-Volume -DriveLetter E
 ```
 
 Puis :
@@ -469,7 +524,7 @@ Le Runbook opérationnel quotidien reste :
 | orchestration | `install.ps1` + logs |
 | WSL2 | `06_WSL2.md` |
 | DevOps | `07_DEVOPS_STACK.md` |
-| terminal | `config/wezterm/wezterm.lua` |
+| terminal | `config/windows-terminal/` + `scripts/windows/31_windows_terminal.ps1` |
 | projet IA externe | dépôt `openclaw_openrouter` |
 | matériel | `12_HARDWARE_QUALIFICATION.md` |
 | maintenance | `15_MISES_A_JOUR.md` |
