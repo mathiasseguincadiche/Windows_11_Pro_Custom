@@ -1,0 +1,58 @@
+name: Menu process isolation V27
+
+on:
+  pull_request:
+    paths:
+      - 'menu.ps1'
+      - 'scripts/bootstrap/00_preflight.ps1'
+      - 'scripts/bootstrap/00_storage_identity_v25.ps1'
+      - 'scripts/core/reboot-state.psm1'
+      - 'tests/regression/menu_process_isolation_v27.ps1'
+      - '.github/workflows/menu-process-isolation-v27.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'menu.ps1'
+      - 'scripts/bootstrap/00_preflight.ps1'
+      - 'scripts/bootstrap/00_storage_identity_v25.ps1'
+      - 'scripts/core/reboot-state.psm1'
+      - 'tests/regression/menu_process_isolation_v27.ps1'
+      - '.github/workflows/menu-process-isolation-v27.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-regression-v27:
+    name: Scope isolation and V25 fail-closed
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run V27 regression contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\tests\regression\menu_process_isolation_v27.ps1
+
+      - name: Exercise control center dry-run entries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $installOutput = & .\menu.ps1 -Choice 1 -DryRun -NoClear -NoPause 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "menu choice 1 dry-run failed: $installOutput" }
+          if ($installOutput -notmatch 'Installation complete') { throw 'Choice 1 dry-run did not expose Installation complete.' }
+          if ($installOutput -notmatch '\[DRY-RUN\]') { throw 'Choice 1 dry-run did not remain non-mutating.' }
+
+          $updateOutput = & .\menu.ps1 -Choice 3 -DryRun -NoClear -NoPause 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) { throw "menu choice 3 dry-run failed: $updateOutput" }
+          if ($updateOutput -notmatch 'Gestionnaire de mises a jour') { throw 'Choice 3 dry-run did not expose the update manager.' }
+          if ($updateOutput -notmatch '\[DRY-RUN\]') { throw 'Choice 3 dry-run did not remain non-mutating.' }
+
+          Write-Host '[OK] Centre de contrôle: dry-run installation + updates.' -ForegroundColor Green
