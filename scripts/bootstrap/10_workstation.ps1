@@ -12,11 +12,17 @@ Import-Module $runtimeModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 
 # Les installations WinGet peuvent modifier le PATH utilisateur/machine pendant
-# la même orchestration. On relit donc l'environnement persistant avant de
-# vérifier les composants workstation au lieu d'exiger une nouvelle console.
+# la même orchestration. On fusionne l'environnement persistant avec le PATH du
+# processus afin de rendre les nouveaux outils visibles sans perdre d'entrée
+# temporaire créée par une étape précédente.
 $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$env:Path = (@($machinePath, $userPath) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ';'
+$pathEntries = @(
+    @($env:Path -split ';')
+    @($machinePath -split ';')
+    @($userPath -split ';')
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+$env:Path = $pathEntries -join ';'
 
 $components = @(
     [pscustomobject]@{ Name='OneDrive absent'; Path=(Join-Path $repoRoot 'scripts\windows\33_onedrive.ps1') },
