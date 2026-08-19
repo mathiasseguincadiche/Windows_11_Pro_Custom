@@ -1,5 +1,5 @@
 {
-  "version": "V8",
+  "schemaVersion": 1,
   "reviewedAt": "2026-08-14",
   "memory": {
     "memoryCompression": true,

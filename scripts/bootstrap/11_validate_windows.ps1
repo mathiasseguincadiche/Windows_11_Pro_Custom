@@ -10,6 +10,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+$release = (Get-Content -Raw (Join-Path $repoRoot 'VERSION')).Trim()
+if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION invalide: $release" }
 $reportDir = Join-Path $repoRoot 'reports'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $checks = [ordered]@{}
@@ -66,18 +68,13 @@ try {
     & $terminalScript -Mode Verify -Distribution $Distribution | Out-Host
     $checks.WindowsTerminalDevOps = $true
     $details.WindowsTerminal = 'Contrat Windows Terminal DevOps validé par le composant propriétaire.'
-} catch {
-    $details.WindowsTerminal = $_.Exception.Message
-}
+} catch { $details.WindowsTerminal = $_.Exception.Message }
 
 $failed = @($checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object { $_.Key })
-$report = [ordered]@{ Timestamp=(Get-Date).ToString('o'); Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$InstallLocation; Checks=$checks; FailedChecks=$failed; Details=$details }
-$reportPath = Join-Path $reportDir 'validation-v3.json'
+$report = [ordered]@{ Release=$release; SchemaVersion=1; Timestamp=(Get-Date).ToString('o'); Profile=$WslProfile; Distribution=$Distribution; InstallLocation=$InstallLocation; Checks=$checks; FailedChecks=$failed; Details=$details }
+$reportPath = Join-Path $reportDir 'validation-windows.json'
 $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
 foreach ($check in $checks.GetEnumerator()) { Write-Host ("[{0}] {1}" -f $(if ($check.Value) { 'OK' } else { 'KO' }), $check.Key) }
-if ($failed.Count -gt 0) {
-    Write-Host "VERDICT: WINDOWS KO ($($failed.Count) contrôle(s))" -ForegroundColor Red
-    throw "Windows non conforme: $($failed -join ', '). Rapport: $reportPath"
-}
+if ($failed.Count -gt 0) { Write-Host "VERDICT: WINDOWS KO ($($failed.Count) contrôle(s))" -ForegroundColor Red; throw "Windows non conforme: $($failed -join ', '). Rapport: $reportPath" }
 Write-Host "VERDICT: WINDOWS 11 NON-HOME READY ($editionId)" -ForegroundColor Green
 Write-Host "Rapport: $reportPath"

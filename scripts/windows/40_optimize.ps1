@@ -10,9 +10,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
-$profilePath = Join-Path $repoRoot "config\windows\v4\$Profile.json"
-$stateDir = Join-Path $repoRoot 'state\windows-v4'
+$profilePath = Join-Path $repoRoot "config\windows\optimization\$Profile.json"
+$stateDir = Join-Path $repoRoot 'state\windows-optimization'
 $statePath = Join-Path $stateDir "$Profile.before.json"
+$legacyStatePath = Join-Path $repoRoot "state\windows-v4\$Profile.before.json"
 if (-not (Test-Path $profilePath)) { throw "Profil d'optimisation introuvable: $profilePath" }
 $config = Get-Content -Raw $profilePath | ConvertFrom-Json
 
@@ -43,18 +44,12 @@ function Set-ManagedRegistryValue {
     )
 
     if (-not (Test-Path -LiteralPath $Path)) {
-        try {
-            New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
-        } catch {
-            throw "Création de clé registre impossible pour '$Name' [$Path]: $($_.Exception.Message)"
-        }
+        try { New-Item -Path $Path -Force -ErrorAction Stop | Out-Null }
+        catch { throw "Création de clé registre impossible pour '$Name' [$Path]: $($_.Exception.Message)" }
     }
 
-    try {
-        New-ItemProperty -LiteralPath $Path -Name $Property -PropertyType $Type -Value $Value -Force -ErrorAction Stop | Out-Null
-    } catch {
-        throw "Écriture registre impossible pour '$Name' [$Path\$Property]: $($_.Exception.Message)"
-    }
+    try { New-ItemProperty -LiteralPath $Path -Name $Property -PropertyType $Type -Value $Value -Force -ErrorAction Stop | Out-Null }
+    catch { throw "Écriture registre impossible pour '$Name' [$Path\$Property]: $($_.Exception.Message)" }
 }
 
 function Test-RegistryMatch {
@@ -107,6 +102,15 @@ function Show-ProfileStatus {
     }
 }
 
+function Get-InitialStatePath {
+    if (Test-Path -LiteralPath $statePath) { return $statePath }
+    if (Test-Path -LiteralPath $legacyStatePath) {
+        Write-Host "[COMPAT] État initial historique conservé et utilisé pour le rollback: $legacyStatePath" -ForegroundColor DarkGray
+        return $legacyStatePath
+    }
+    return $statePath
+}
+
 switch ($Mode) {
     'Audit' { Show-ProfileStatus }
     'Apply' {
@@ -117,7 +121,8 @@ switch ($Mode) {
         }
         Assert-Administrator
         New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-        if (-not (Test-Path $statePath)) {
+        $initialStatePath = Get-InitialStatePath
+        if (-not (Test-Path -LiteralPath $initialStatePath)) {
             $registryBackup = @(
                 foreach ($entry in @($config.registry)) {
                     $state = Get-RegistryState -Entry $entry
@@ -130,10 +135,10 @@ switch ($Mode) {
                     [pscustomobject]@{ Name=$entry.name; Exists=$state.Exists; StartMode=$state.StartMode }
                 }
             )
-            [ordered]@{ Profile=$Profile; CapturedAt=(Get-Date).ToString('o'); Registry=$registryBackup; Services=$serviceBackup } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $statePath
+            [ordered]@{ SchemaVersion=1; Profile=$Profile; CapturedAt=(Get-Date).ToString('o'); Registry=$registryBackup; Services=$serviceBackup } | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $statePath
             Write-Host "[OK] État initial du profil sauvegardé: $statePath" -ForegroundColor Green
         } else {
-            Write-Host "[DÉJÀ OK] Sauvegarde initiale du profil préservée: $statePath" -ForegroundColor Green
+            Write-Host "[DÉJÀ OK] Sauvegarde initiale du profil préservée: $initialStatePath" -ForegroundColor Green
         }
 
         foreach ($entry in @($pending.Registry)) {
@@ -145,25 +150,17 @@ switch ($Mode) {
         }
         foreach ($entry in @($pending.Services)) {
             $current = Get-ServiceState -Entry $entry
-            if (-not $current.Exists) {
-                Write-Warning "Service non présent: $($entry.name). Impossible de déclarer conforme."
-                continue
-            }
+            if (-not $current.Exists) { Write-Warning "Service non présent: $($entry.name). Impossible de déclarer conforme."; continue }
             Write-Host "[EN COURS] SVC $($entry.name) -> $($entry.startupType)" -ForegroundColor Cyan
-            try {
-                Set-Service -Name $entry.name -StartupType $entry.startupType -ErrorAction Stop
-            } catch {
-                throw "Modification du service '$($entry.name)' impossible: $($_.Exception.Message)"
-            }
+            try { Set-Service -Name $entry.name -StartupType $entry.startupType -ErrorAction Stop }
+            catch { throw "Modification du service '$($entry.name)' impossible: $($_.Exception.Message)" }
             $after = Get-ServiceState -Entry $entry
             $target = Convert-StartupTypeToCimMode -StartupType $entry.startupType
             if ($after.StartMode -ne $target) { throw "Revalidation service échouée: $($entry.name)" }
             Write-Host "[FAIT] SVC $($entry.name)" -ForegroundColor Green
         }
         $afterPending = Get-PendingChanges
-        if ($afterPending.Registry.Count -gt 0 -or $afterPending.Services.Count -gt 0) {
-            throw "Profil '$Profile' encore incomplet après Apply."
-        }
+        if ($afterPending.Registry.Count -gt 0 -or $afterPending.Services.Count -gt 0) { throw "Profil '$Profile' encore incomplet après Apply." }
         Write-Host "[FAIT] Profil '$Profile': $($pending.Registry.Count) registre(s), $($pending.Services.Count) service(s) corrigé(s)." -ForegroundColor Green
         if ($config.rebootRecommended) { Write-Host '[ACTION REQUISE] Redémarrage recommandé pour stabiliser ce profil.' -ForegroundColor Magenta }
     }
@@ -177,11 +174,12 @@ switch ($Mode) {
     }
     'Rollback' {
         Assert-Administrator
-        if (-not (Test-Path $statePath)) {
+        $initialStatePath = Get-InitialStatePath
+        if (-not (Test-Path -LiteralPath $initialStatePath)) {
             Write-Host "[DÉJÀ OK] Aucun état initial '$Profile' enregistré; rollback inutile." -ForegroundColor Green
             return
         }
-        $backup = Get-Content -Raw $statePath | ConvertFrom-Json
+        $backup = Get-Content -Raw $initialStatePath | ConvertFrom-Json
         foreach ($entry in @($backup.Registry)) {
             if ($entry.Exists) {
                 $kind = if ($entry.Kind) { [string]$entry.Kind } else { 'DWord' }
@@ -194,13 +192,10 @@ switch ($Mode) {
             if (-not $entry.Exists) { continue }
             $startupType = switch ([string]$entry.StartMode) { 'Auto' { 'Automatic' } 'Manual' { 'Manual' } 'Disabled' { 'Disabled' } default { $null } }
             if ($startupType) {
-                try {
-                    Set-Service -Name $entry.Name -StartupType $startupType -ErrorAction Stop
-                } catch {
-                    throw "Rollback du service '$($entry.Name)' impossible: $($_.Exception.Message)"
-                }
+                try { Set-Service -Name $entry.Name -StartupType $startupType -ErrorAction Stop }
+                catch { throw "Rollback du service '$($entry.Name)' impossible: $($_.Exception.Message)" }
             }
         }
-        Write-Host "[FAIT] Profil '$Profile' restauré depuis lʼétat initial." -ForegroundColor Green
+        Write-Host "[FAIT] Profil '$Profile' restauré depuis lʼétat initial: $initialStatePath" -ForegroundColor Green
     }
 }

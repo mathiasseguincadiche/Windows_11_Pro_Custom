@@ -1,5 +1,5 @@
 {
-  "version": "V5",
+  "schemaVersion": 1,
   "reviewedAt": "2026-08-12",
   "policy": "observe-verify-no-automatic-overclocking",
   "drivers": {
