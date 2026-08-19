@@ -72,7 +72,7 @@ jobs:
                               $name = $match.Groups['name'].Value
                               if (-not $allowedInstall.Contains($name)) {
                                   $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $path.FullName)
-                                  $errorsFound.Add("$relative: paramètre install.ps1 inconnu -$name")
+                                  $errorsFound.Add("${relative}: paramètre install.ps1 inconnu -$name")
                               }
                           }
                       }
@@ -81,7 +81,7 @@ jobs:
                               $name = $match.Groups['name'].Value
                               if (-not $allowedUpdate.Contains($name)) {
                                   $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $path.FullName)
-                                  $errorsFound.Add("$relative: paramètre update.ps1 inconnu -$name")
+                                  $errorsFound.Add("${relative}: paramètre update.ps1 inconnu -$name")
                               }
                           }
                       }
