@@ -2,6 +2,8 @@
   "core": [
     "Visual Studio Code",
     "PowerShell 7",
+    "Windows Terminal",
+    "Starship",
     "JetBrainsMono Nerd Font",
     "MarkText",
     "VLC",
@@ -9,7 +11,6 @@
     "Firefox",
     "Brave",
     "FileZilla",
-    "WezTerm",
     "Microsoft Office",
     "LibreOffice",
     "Steam",
@@ -22,7 +23,7 @@
   "notes": [
     "WSL2 fait partie du socle de la machine mais est provisionné par le bootstrap Windows, pas par le catalogue applicatif WinGet.",
     "PowerShell 7 stable est installé via Microsoft.PowerShell ; Windows PowerShell 5.1 reste présent pour compatibilité système.",
-    "JetBrainsMono Nerd Font est installé via WinGet pour garantir les glyphes Starship dans WezTerm et VS Code.",
+    "Windows Terminal est le terminal natif géré de la workstation ; Starship fournit le prompt PowerShell et JetBrainsMono Nerd Font les glyphes nécessaires dans Windows Terminal et VS Code.",
     "Les identifiants WinGet sont vérifiés avant automatisation de l'installation.",
     "Office peut nécessiter le compte/licence Microsoft et ne doit pas être supposé installable silencieusement.",
     "Aucune application non demandée n'est ajoutée au socle core sans décision explicite."

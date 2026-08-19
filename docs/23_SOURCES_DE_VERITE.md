@@ -21,8 +21,9 @@ Cette page définit la hiérarchie utilisée pour résoudre les divergences entr
 | --- | --- |
 | WSL2 | `config/wsl/runtime-contract.json` et `config/wsl/*.wslconfig` |
 | Versions DevOps | `config/devops/tool-versions.env` |
-| WezTerm | `config/wezterm/wezterm.lua` |
-| Déploiement WezTerm | `scripts/windows/31_wezterm.ps1` |
+| Windows Terminal | `config/windows-terminal/` |
+| Déploiement Windows Terminal | `scripts/windows/31_windows_terminal.ps1` |
+| Shell Bash / Starship Ubuntu | `config/wsl/bashrc.d/devops.sh`, `config/wsl/starship.toml` et `scripts/wsl/manage-devops-terminal.sh` |
 | Matériel | `config/hardware/` |
 | Windows | `config/windows/` |
 | Defender | `config/defender/` |
@@ -31,12 +32,17 @@ Cette page définit la hiérarchie utilisée pour résoudre les divergences entr
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
 | Interface humaine | `menu.ps1` |
 
-Le contrat terminal est :
+Le contrat Windows Terminal est :
 
 ```text
-Ubuntu DevOps (WSL2) -> profil par défaut
-PowerShell 7         -> administration Windows
+PowerShell 7 - DevOps -> profil par défaut
+Ubuntu - DevOps       -> accès explicite à la distribution Ubuntu WSL2
+Ctrl+Shift+1          -> PowerShell 7 - DevOps
+Ctrl+Shift+2          -> Ubuntu - DevOps
+Ctrl+Shift+O          -> PowerShell + Ubuntu en panneaux
 ```
+
+La configuration Windows Terminal ne possède pas le shell Bash d'Ubuntu : le profil Ubuntu ouvre simplement la distribution WSL2, dont le shell et Starship restent gérés par le contrat Linux existant.
 
 ## Projets externes
 

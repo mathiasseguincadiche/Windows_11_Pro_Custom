@@ -446,16 +446,23 @@ Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
 ---
 
-# Phase 16 — VS Code, WezTerm et accès distants
+# Phase 16 — VS Code, Windows Terminal et accès distants
 
 Vérifie que :
 
 - PowerShell 7 fonctionne ;
-- WezTerm ouvre Ubuntu/Bash comme environnement Linux principal ;
-- PowerShell reste accessible ;
+- Windows Terminal expose `PowerShell 7 - DevOps` comme profil par défaut ;
+- `Ubuntu - DevOps` ouvre correctement la distribution `Ubuntu` ;
+- Starship PowerShell et JetBrainsMono Nerd Font sont conformes ;
 - VS Code WSL ouvre les projets sous `/home/<user>/...` ;
 - Remote - SSH fonctionne si nécessaire ;
 - les configurations SFTP/FTP personnelles ne publient aucun secret.
+
+Validation ciblée :
+
+```powershell
+.\scripts\windows\31_windows_terminal.ps1 -Mode Verify
+```
 
 Le terminal et la stack sont documentés dans [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
@@ -616,7 +623,9 @@ Checklist :
 [ ] Docker fonctionnel
 [ ] Terraform / Ansible / kubectl / Helm disponibles
 [ ] VS Code WSL fonctionnel
-[ ] WezTerm / PowerShell 7 fonctionnels
+[ ] Windows Terminal / PowerShell 7 / Starship fonctionnels
+[ ] PowerShell 7 - DevOps est le profil Windows Terminal par défaut
+[ ] Ubuntu - DevOps ouvre Ubuntu WSL2
 [ ] validations matérielles traitées
 [ ] mises à jour vérifiées
 [ ] données restaurées
@@ -694,6 +703,8 @@ le matériel est qualifié
 WSL2 est conforme
 +
 la stack DevOps fonctionne
++
+Windows Terminal est conforme
 +
 les données utiles sont restaurées
 +

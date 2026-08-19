@@ -209,7 +209,7 @@ $wslFacts = Get-WslFacts
 Write-Host '[INFO] Découverte outils Windows, OneDrive et Defender...' -ForegroundColor DarkGray
 $code = Get-Command code.cmd -ErrorAction SilentlyContinue
 if (-not $code) { $code = Get-Command code -ErrorAction SilentlyContinue }
-$wezterm = Get-Command wezterm.exe -ErrorAction SilentlyContinue
+$terminal = Get-Command wt.exe -ErrorAction SilentlyContinue
 $ssh = Get-Command ssh.exe -ErrorAction SilentlyContinue
 $oneDrive = Get-OneDriveFact
 $defender = $null
@@ -220,7 +220,7 @@ $signalsTotal = 6
 if ($missingApps -eq 0 -and $unknownApps -eq 0) { $signalsReady++ }
 if ($wslFacts.DistributionPresent -and $wslFacts.Version -eq 2 -and $wslFacts.ConfigMatches) { $signalsReady++ }
 if ($code) { $signalsReady++ }
-if ($wezterm) { $signalsReady++ }
+if ($terminal) { $signalsReady++ }
 if ($ssh) { $signalsReady++ }
 if (-not $oneDrive.Installed) { $signalsReady++ }
 
@@ -266,7 +266,7 @@ $report = [ordered]@{
     WSL = $wslFacts
     Workstation = [ordered]@{
         VSCodeCli = if ($code) { $code.Source } else { $null }
-        WezTermCli = if ($wezterm) { $wezterm.Source } else { $null }
+        WindowsTerminalCli = if ($terminal) { $terminal.Source } else { $null }
         SshCli = if ($ssh) { $ssh.Source } else { $null }
     }
     OneDrive = $oneDrive

@@ -8,7 +8,7 @@ OpenClaw/OpenRouter est un projet externe indépendant. Ce dépôt ne documente 
 
 ```text
 Windows 11 Pro
-├── WezTerm
+├── Windows Terminal
 ├── PowerShell 7
 └── VS Code Windows
 
@@ -109,29 +109,55 @@ Référence WSL2 : [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-# WezTerm — point d'entrée terminal de la workstation
+# Windows Terminal — point d'entrée terminal de la workstation
 
-WezTerm ne constitue pas un troisième runtime. Il sert de **routeur explicite vers les environnements possédés par la workstation**.
+Windows Terminal ne constitue pas un troisième runtime. Il sert de **routeur explicite vers les environnements possédés par la workstation**.
 
-La configuration de référence est :
-
-```text
-config/wezterm/wezterm.lua
-```
-
-Le contrat courant expose exactement deux contextes :
+Les configurations de référence sont :
 
 ```text
-WezTerm
-├── Ubuntu DevOps (WSL2) <- défaut
-└── PowerShell 7         <- Windows
+config/windows-terminal/profiles.fragment.json
+config/windows-terminal/actions.json
+config/windows-terminal/starship.windows.toml
 ```
 
-## Profil `Ubuntu DevOps (WSL2)`
+Le contrat courant expose exactement deux profils gérés :
 
-C'est le profil par défaut.
+```text
+Windows Terminal
+├── PowerShell 7 - DevOps <- défaut
+└── Ubuntu - DevOps       <- WSL2
+```
 
-Il ouvre Bash dans la distribution `Ubuntu` et doit être utilisé pour :
+## Profil `PowerShell 7 - DevOps`
+
+C'est le profil Windows Terminal par défaut.
+
+Il ouvre PowerShell 7 sur l'hôte Windows et sert notamment à :
+
+- `install.ps1` ;
+- `update.ps1` ;
+- l'administration Windows ;
+- les commandes et outils réellement Windows-native ;
+- les accès ponctuels à WSL via les helpers du profil PowerShell.
+
+Starship est initialisé depuis :
+
+```text
+~/.config/windows11-pro-custom/starship.windows.toml
+```
+
+Le dépôt ne remplace pas l'intégralité du profil PowerShell utilisateur : il possède uniquement un bloc borné et idempotent.
+
+## Profil `Ubuntu - DevOps`
+
+Ce profil exécute :
+
+```text
+wsl.exe -d Ubuntu
+```
+
+Il doit être utilisé pour :
 
 - les projets sous `~/projects`, `~/labs`, `~/repositories` ;
 - Docker et Kubernetes ;
@@ -139,43 +165,48 @@ Il ouvre Bash dans la distribution `Ubuntu` et doit être utilisé pour :
 - AWS CLI et GitHub CLI côté Linux ;
 - les scripts Bash et outils qualité Linux.
 
-Ce profil matérialise la règle : **les workloads Linux restent dans Linux**.
+Il matérialise la règle : **les workloads Linux restent dans Linux**.
 
-## Profil `PowerShell 7`
+Le profil Windows Terminal ne configure pas lui-même Bash. Il ouvre la distribution, puis le shell géré par `scripts/wsl/manage-devops-terminal.sh` et `scripts/wsl/manage-shell-profile.sh` prend le relais.
 
-Ce profil ouvre PowerShell 7 sur l'hôte Windows.
+## Raccourcis gérés
 
-Il sert notamment à :
+```text
+Ctrl+Shift+1 -> PowerShell 7 - DevOps
+Ctrl+Shift+2 -> Ubuntu - DevOps
+Ctrl+Shift+O -> PowerShell + Ubuntu en panneaux
+```
 
-- `install.ps1` ;
-- `update.ps1` ;
-- l'administration Windows ;
-- les commandes et outils réellement Windows-native.
+Les profils dynamiques PowerShell Core et WSL générés automatiquement par Windows Terminal sont désactivés dans le contrat géré afin d'éviter les doublons avec les deux profils explicitement versionnés.
 
 ---
 
-## Contrat WezTerm et convergence
+## Contrat Windows Terminal et convergence
 
-`scripts/windows/31_wezterm.ps1` vérifie que la configuration source conserve :
-
-```text
-Ubuntu DevOps (WSL2) comme défaut
-PowerShell 7         comme contexte Windows
-```
-
-Il compare ensuite la configuration versionnée à `%USERPROFILE%\.wezterm.lua`.
-
-Le validateur refuse également qu'une intégration spécifique à OpenClaw/`clawops` soit ajoutée à la configuration WezTerm de la workstation : une telle expérience terminal, si elle est souhaitée, appartient au dépôt `openclaw_openrouter`.
-
-Le composant est géré avec les mêmes intentions que le reste de la workstation :
+`scripts/windows/31_windows_terminal.ps1` fonctionne comme les autres composants workstation :
 
 ```text
-Audit -> observer
-Apply -> converger
-Verify -> confirmer
+Audit    -> observer sans modifier
+Apply    -> sauvegarder l'état initial puis converger uniquement les écarts
+Verify   -> prouver le contrat attendu
+Rollback -> restaurer uniquement les fichiers possédés dont l'état initial a été enregistré
 ```
 
-La validation générale de la workstation couvre la configuration WezTerm.
+Le composant vérifie notamment :
+
+- Windows Terminal ;
+- PowerShell 7 ;
+- Starship Windows ;
+- JetBrainsMono Nerd Font ;
+- la distribution WSL `Ubuntu` ;
+- les deux profils gérés ;
+- le profil par défaut ;
+- les raccourcis importés ;
+- le bloc PowerShell géré.
+
+Il **n'installe aucune de ces dépendances lui-même** : Windows Terminal, PowerShell 7, Starship et la Nerd Font appartiennent au manifeste WinGet, tandis que WSL appartient au bootstrap WSL2.
+
+Le validateur refuse également qu'une intégration spécifique à OpenClaw/`clawops` soit ajoutée à cette expérience terminal de la workstation : une telle intégration, si elle est souhaitée, appartient au dépôt `openclaw_openrouter`.
 
 ---
 
@@ -238,7 +269,7 @@ projet sous /home/<user>/...
 outils Linux du projet
 ```
 
-Le terminal intégré et les extensions liées au projet utilisent ainsi le même environnement Linux que les commandes exécutées dans WezTerm `Ubuntu DevOps (WSL2)`.
+Le terminal intégré et les extensions liées au projet utilisent ainsi le même environnement Linux que les commandes exécutées depuis Windows Terminal avec `Ubuntu - DevOps`.
 
 Le poste prend en charge les extensions nécessaires aux usages DevOps, Kubernetes, Terraform, YAML, GitHub Actions et aux connexions distantes prévues par le projet.
 
@@ -282,7 +313,13 @@ Elle peut couvrir :
 - actionlint ;
 - smoke tests IaC.
 
-Validation du terminal WezTerm :
+Validation de Windows Terminal :
+
+```powershell
+.\scripts\windows\31_windows_terminal.ps1 -Mode Verify
+```
+
+ou dans la validation globale :
 
 ```powershell
 .\install.ps1 -Mode Verify
@@ -297,10 +334,10 @@ Voir [`11_VALIDATION.md`](11_VALIDATION.md).
 ## Règle à retenir
 
 ```text
-Windows = hôte et outils Windows-native de la workstation
-Ubuntu  = backend et projets Linux DevOps
-WezTerm = routeur terminal Ubuntu / PowerShell 7
-VS Code = UI Windows reliée aux projets WSL2
+Windows          = hôte et outils Windows-native de la workstation
+Ubuntu           = backend et projets Linux DevOps
+Windows Terminal = routeur terminal PowerShell 7 / Ubuntu
+VS Code          = UI Windows reliée aux projets WSL2
 ```
 
 L'ergonomie de la workstation reste cohérente ; les projets externes restent autonomes.

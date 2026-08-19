@@ -34,6 +34,18 @@ Pour l'état actuel du projet, utiliser :
 
 ## Historique des évolutions
 
+### 2026-08-19 — Windows Terminal natif
+
+- remplacement de WezTerm par **Windows Terminal** comme terminal Windows géré de la workstation ;
+- ajout de `Microsoft.WindowsTerminal` et `Starship.Starship` au manifeste WinGet, avec réutilisation de `JetBrainsMono Nerd Font` déjà possédée par le socle ;
+- ajout des profils versionnés `PowerShell 7 - DevOps` et `Ubuntu - DevOps`, PowerShell étant le profil par défaut ;
+- ajout des raccourcis `Ctrl+Shift+1`, `Ctrl+Shift+2` et `Ctrl+Shift+O` pour basculer ou ouvrir les deux contextes en panneaux ;
+- ajout de `scripts/windows/31_windows_terminal.ps1` avec contrats `Audit`, `Apply`, `Verify` et `Rollback`, sauvegarde exacte de l'état initial et revalidation après convergence ;
+- conservation de la propriété Bash/Starship Ubuntu dans les scripts WSL existants : le composant Windows Terminal ne télécharge rien, ne réinstalle pas les dépendances et ne réécrit pas le shell Linux ;
+- rafraîchissement du `PATH` persistant avant la phase workstation afin de détecter immédiatement les applications installées par WinGet dans la même orchestration ;
+- migration de l'état machine, de la validation Windows, des contrats CI et de la documentation active vers Windows Terminal ;
+- suppression de `config/wezterm/wezterm.lua`, `scripts/windows/31_wezterm.ps1` et de `wez.wezterm` dans le manifeste applicatif.
+
 ### V26 — Preuves, dérive et restaurabilité renforcées
 
 - distinction exécutable entre preuves `SIMULATED` et `PHYSICAL` : un runner CI ne peut plus produire une preuve physique ;

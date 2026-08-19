@@ -18,7 +18,7 @@ Windows 11 Pro stable et qualifié
 + WSL2 Ubuntu 26.04 sous E:\WSL\Ubuntu-DevOps
 + projets Linux sur ext4
 + stack DevOps qualifiée
-+ terminal / VS Code cohérents
++ Windows Terminal / VS Code cohérents
 + logs et rapports exploitables
 + idempotence démontrée
 + sauvegarde de référence vérifiée
@@ -129,6 +129,8 @@ Une machine déjà partiellement conforme doit produire un plan partiel, pas une
 
 Le moteur vérifie chaque composant, applique uniquement le delta puis re-vérifie les éléments demandés.
 
+L'ordre utile au terminal est volontaire : le bootstrap applicatif fournit Windows Terminal, PowerShell 7, Starship et la Nerd Font ; WSL2 et l'utilisateur Ubuntu sont ensuite convergés ; la phase « Poste de travail » applique enfin `scripts/windows/31_windows_terminal.ps1`.
+
 Lorsqu'une action humaine est demandée, la traiter puis relancer la même intention : les composants déjà conformes doivent rester idempotents.
 
 Voir [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md).
@@ -159,7 +161,7 @@ Voir [`06_WSL2.md`](06_WSL2.md).
 
 ---
 
-# Étape 7 — vérifier la stack DevOps et le terminal
+# Étape 7 — vérifier la stack DevOps et Windows Terminal
 
 Installation/réparation DevOps ciblée :
 
@@ -173,7 +175,13 @@ Validation DevOps :
 .\install.ps1 -Mode Verify -ValidateWsl -ValidateDevOps
 ```
 
-La configuration WezTerm appartient à la workstation elle-même et est vérifiée par :
+La configuration Windows Terminal appartient à la workstation elle-même et est vérifiée par :
+
+```powershell
+.\scripts\windows\31_windows_terminal.ps1 -Mode Verify
+```
+
+Elle est également incluse dans :
 
 ```powershell
 .\install.ps1 -Mode Verify
@@ -182,9 +190,19 @@ La configuration WezTerm appartient à la workstation elle-même et est vérifi�
 Le résultat attendu conserve deux contextes :
 
 ```text
-Ubuntu DevOps (WSL2) -> profil par défaut
-PowerShell 7         -> administration Windows
+PowerShell 7 - DevOps -> profil Windows Terminal par défaut
+Ubuntu - DevOps       -> accès explicite à Ubuntu WSL2
 ```
+
+Raccourcis :
+
+```text
+Ctrl+Shift+1 -> PowerShell 7 - DevOps
+Ctrl+Shift+2 -> Ubuntu - DevOps
+Ctrl+Shift+O -> PowerShell + Ubuntu en panneaux
+```
+
+Le composant Windows Terminal ne modifie pas Bash ni Starship Linux : ceux-ci restent gérés par les scripts WSL existants.
 
 Les versions reproductibles DevOps sont définies dans `config/devops/tool-versions.env`.
 
@@ -213,7 +231,7 @@ Vérifier notamment que :
 - `install.ps1` n'expose pas de paramètre OpenClaw ;
 - le menu ne propose pas d'installation OpenClaw/OpenRouter ;
 - aucun bootstrap ne clone ou n'exécute `openclaw_openrouter` ;
-- WezTerm ne contient pas de profil OpenClaw spécifique ;
+- Windows Terminal ne contient pas de profil ou hook OpenClaw spécifique ;
 - la conformité de la workstation ne dépend pas de `E:\AI\OpenClaw`.
 
 Voir [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md).
@@ -301,12 +319,12 @@ Le projet peut être déclaré prêt lorsque :
 - Windows et le matériel sont qualifiés ;
 - WSL2 respecte son contrat ;
 - la stack DevOps est qualifiée ;
-- WezTerm respecte le contrat Ubuntu DevOps + PowerShell 7 ;
+- Windows Terminal respecte le contrat `PowerShell 7 - DevOps` + `Ubuntu - DevOps` ;
 - les frontières Windows/Linux sont respectées ;
 - les projets externes restent hors du périmètre de l'orchestrateur ;
 - les logs et rapports expliquent le verdict ;
 - le second plan démontre l'idempotence ;
-- la sauvegarde de référence est vérifiée.
+- la sauvegarde de référence est vérifiée ;
 - l'empreinte physique ne contient aucune dérive inexpliquée et le drill WSL isolé a réussi.
 
 Checklist complète : [`24_CRITERES_ACCEPTATION.md`](24_CRITERES_ACCEPTATION.md).

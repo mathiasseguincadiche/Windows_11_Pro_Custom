@@ -2,6 +2,8 @@
   "apps": [
     { "name": "Visual Studio Code", "wingetId": "Microsoft.VisualStudioCode", "autoInstall": true },
     { "name": "PowerShell 7", "wingetId": "Microsoft.PowerShell", "autoInstall": true },
+    { "name": "Windows Terminal", "wingetId": "Microsoft.WindowsTerminal", "autoInstall": true },
+    { "name": "Starship", "wingetId": "Starship.Starship", "autoInstall": true },
     { "name": "JetBrainsMono Nerd Font", "wingetId": "DEVCOM.JetBrainsMonoNerdFont", "autoInstall": true },
     { "name": "MarkText", "wingetId": null, "autoInstall": false },
     { "name": "VLC", "wingetId": "VideoLAN.VLC", "autoInstall": true },
@@ -9,7 +11,6 @@
     { "name": "Firefox", "wingetId": "Mozilla.Firefox", "autoInstall": true },
     { "name": "Brave", "wingetId": "Brave.Brave", "autoInstall": true },
     { "name": "FileZilla", "wingetId": null, "autoInstall": false },
-    { "name": "WezTerm", "wingetId": "wez.wezterm", "autoInstall": true },
     { "name": "Microsoft Office", "wingetId": null, "autoInstall": false },
     { "name": "LibreOffice", "wingetId": "TheDocumentFoundation.LibreOffice", "autoInstall": true },
     { "name": "Steam", "wingetId": "Valve.Steam", "autoInstall": true },

@@ -16,12 +16,13 @@ Le bootstrap ne cherche jamais une application « au nom approximatif ». Pour l
 | --- | --- |
 | Visual Studio Code | `Microsoft.VisualStudioCode` |
 | PowerShell 7 | `Microsoft.PowerShell` |
+| Windows Terminal | `Microsoft.WindowsTerminal` |
+| Starship | `Starship.Starship` |
 | JetBrainsMono Nerd Font | `DEVCOM.JetBrainsMonoNerdFont` |
 | VLC | `VideoLAN.VLC` |
 | Notion | `Notion.Notion` |
 | Firefox | `Mozilla.Firefox` |
 | Brave | `Brave.Brave` |
-| WezTerm | `wez.wezterm` |
 | LibreOffice | `TheDocumentFoundation.LibreOffice` |
 | Steam | `Valve.Steam` |
 | Notepad++ | `Notepad++.Notepad++` |
@@ -121,11 +122,24 @@ Une relance ne doit pas réinstaller les logiciels déjà conformes.
 
 ---
 
-## PowerShell 7
+## Windows Terminal, PowerShell 7 et Starship
 
-Windows PowerShell 5.1 reste disponible pour les composants système qui en dépendent, mais **PowerShell 7** est le shell moderne recommandé pour l'utilisation quotidienne et l'administration du dépôt.
+**Windows Terminal** est le terminal natif géré de la workstation. Sa configuration DevOps est appliquée séparément par :
 
-Il est accessible depuis WezTerm et VS Code.
+```text
+scripts/windows/31_windows_terminal.ps1
+```
+
+Le composant expose deux profils explicites :
+
+```text
+PowerShell 7 - DevOps -> profil par défaut Windows Terminal
+Ubuntu - DevOps       -> distribution WSL2 Ubuntu
+```
+
+PowerShell 7 reste le shell moderne recommandé pour l'administration Windows et du dépôt. Windows PowerShell 5.1 reste disponible pour les composants système qui en dépendent.
+
+Starship fournit le prompt PowerShell géré par le dépôt ; le shell Bash/Starship d'Ubuntu reste géré par les scripts WSL existants et n'est pas dupliqué par le composant Windows Terminal.
 
 ---
 
@@ -133,7 +147,7 @@ Il est accessible depuis WezTerm et VS Code.
 
 La Nerd Font fournit les glyphes utilisés par Starship et l'environnement terminal :
 
-- WezTerm ;
+- Windows Terminal ;
 - terminal intégré VS Code.
 
 Elle est donc un composant fonctionnel de l'expérience CLI, pas seulement un choix esthétique.

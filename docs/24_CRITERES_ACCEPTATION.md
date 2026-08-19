@@ -76,12 +76,18 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 .\install.ps1 -Mode Verify -ValidateDevOps
 ```
 
-## 7. WezTerm et VS Code
+## 7. Windows Terminal et VS Code
 
-- [ ] WezTerm est disponible ;
-- [ ] `%USERPROFILE%\.wezterm.lua` correspond à la configuration versionnée ;
-- [ ] `Ubuntu DevOps (WSL2)` est le profil par défaut ;
-- [ ] `PowerShell 7` reste disponible ;
+- [ ] Windows Terminal est disponible via `Microsoft.WindowsTerminal` ;
+- [ ] Starship Windows et `JetBrainsMono Nerd Font` sont disponibles ;
+- [ ] le fragment géré expose exactement `PowerShell 7 - DevOps` et `Ubuntu - DevOps` ;
+- [ ] `PowerShell 7 - DevOps` est le profil Windows Terminal par défaut ;
+- [ ] `Ctrl+Shift+1` ouvre PowerShell 7 - DevOps ;
+- [ ] `Ctrl+Shift+2` ouvre Ubuntu - DevOps ;
+- [ ] `Ctrl+Shift+O` ouvre PowerShell et Ubuntu en panneaux ;
+- [ ] le bloc PowerShell/Starship géré est présent une seule fois ;
+- [ ] le composant Windows Terminal passe `Audit / Apply / Verify / Rollback` et restaure l'état initial enregistré ;
+- [ ] le shell Bash/Starship Ubuntu reste possédé par les scripts WSL et n'est pas réécrit par le composant Windows Terminal ;
 - [ ] aucun profil ou hook OpenClaw/`clawops` n'est possédé par la workstation ;
 - [ ] VS Code ouvre les projets WSL sous `/home/<user>/...`.
 

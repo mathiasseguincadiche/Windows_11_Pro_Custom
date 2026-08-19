@@ -12,7 +12,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 | Réaliser le projet de A à Z | [`20_RUNBOOK_OPERATIONNEL.md`](20_RUNBOOK_OPERATIONNEL.md) |
 | Installer Windows depuis zéro | [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) |
 | Comprendre WSL2 | [`06_WSL2.md`](06_WSL2.md) ; guide pédagogique : [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md) |
-| Utiliser la stack DevOps et WezTerm | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
+| Utiliser la stack DevOps et Windows Terminal | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
 | Comprendre la frontière OpenClaw/OpenRouter | [`19_OPENCLAW_OPENROUTER_WINDOWS.md`](19_OPENCLAW_OPENROUTER_WINDOWS.md) |
 | Comprendre l'orchestration | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |
 | Trouver une commande | [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md) |
@@ -26,7 +26,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 
 ### Architecture et construction
 
-- [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) — Windows / WSL2 / WezTerm / VS Code et frontières ;
+- [`00_ARCHITECTURE.md`](00_ARCHITECTURE.md) — Windows / WSL2 / Windows Terminal / VS Code et frontières ;
 - [`01_INSTALLATION_WINDOWS.md`](01_INSTALLATION_WINDOWS.md) — base Windows 11 Pro ;
 - [`03_STOCKAGE.md`](03_STOCKAGE.md) — `C:`, `E:`, VHDX WSL2 et ext4 ;
 - [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md) — vue consolidée ;
@@ -35,7 +35,7 @@ Ce dossier contient la documentation technique officielle de `Windows_11_Pro_Cus
 ### Linux, DevOps et terminal
 
 - [`06_WSL2.md`](06_WSL2.md) — contrat WSL2 ;
-- [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) — stack DevOps, Ubuntu DevOps (WSL2), PowerShell 7, shell et VS Code ;
+- [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) — stack DevOps, `PowerShell 7 - DevOps`, `Ubuntu - DevOps`, shell Bash/Starship et VS Code ;
 - [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md) — guide pédagogique.
 
 ### Projet externe OpenClaw/OpenRouter

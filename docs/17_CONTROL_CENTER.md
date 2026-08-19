@@ -12,7 +12,7 @@ Depuis l'Explorateur Windows :
 START_MENU.cmd
 ```
 
-Depuis PowerShell ou WezTerm :
+Depuis PowerShell ou Windows Terminal :
 
 ```powershell
 .\menu.ps1
@@ -70,7 +70,7 @@ Le choix d'installation complète correspond à l'orchestration globale de la wo
 - réglages gérés ;
 - WSL2 ;
 - environnement DevOps ;
-- workstation VS Code / WezTerm ;
+- workstation VS Code / Windows Terminal ;
 - validations pertinentes.
 
 Lors d'une première configuration, le menu bloque volontairement si la baseline
@@ -117,6 +117,7 @@ La vérification utilise les contrats actuels du dépôt :
 - stockage ;
 - WSL2 ;
 - DevOps ;
+- Windows Terminal ;
 - matériel lorsque demandé.
 
 Les projets externes ne font pas partie du verdict de conformité de la workstation.
@@ -133,6 +134,8 @@ Cette partie permet d'agir sur une brique sans exécuter l'ensemble du parcours.
 ```
 
 Elle est utile pour le dépannage et la maintenance ciblée.
+
+Windows Terminal reste intégré à la phase workstation normale et peut aussi être diagnostiqué directement avec `scripts/windows/31_windows_terminal.ps1`.
 
 OpenClaw/OpenRouter n'est pas un composant du centre de contrôle `Windows_11_Pro_Custom` ; ce projet possède son propre dépôt et ses propres points d'entrée.
 

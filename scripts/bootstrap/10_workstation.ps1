@@ -11,10 +11,23 @@ $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
 Import-Module $runtimeModule
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 
+# Les installations WinGet peuvent modifier le PATH utilisateur/machine pendant
+# la même orchestration. On fusionne l'environnement persistant avec le PATH du
+# processus afin de rendre les nouveaux outils visibles sans perdre d'entrée
+# temporaire créée par une étape précédente.
+$machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$pathEntries = @(
+    @($env:Path -split ';')
+    @($machinePath -split ';')
+    @($userPath -split ';')
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+$env:Path = $pathEntries -join ';'
+
 $components = @(
     [pscustomobject]@{ Name='OneDrive absent'; Path=(Join-Path $repoRoot 'scripts\windows\33_onedrive.ps1') },
     [pscustomobject]@{ Name='VS Code'; Path=(Join-Path $repoRoot 'scripts\windows\30_vscode.ps1') },
-    [pscustomobject]@{ Name='WezTerm'; Path=(Join-Path $repoRoot 'scripts\windows\31_wezterm.ps1') },
+    [pscustomobject]@{ Name='Windows Terminal DevOps'; Path=(Join-Path $repoRoot 'scripts\windows\31_windows_terminal.ps1') },
     [pscustomobject]@{ Name='OpenSSH Client'; Path=(Join-Path $repoRoot 'scripts\windows\32_openssh_client.ps1') }
 )
 

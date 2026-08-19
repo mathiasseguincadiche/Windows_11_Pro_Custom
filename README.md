@@ -15,44 +15,50 @@ Le dépôt applique une approche **workstation-as-code** : l'état réel de la m
 ```text
                          Windows 11 Pro
                               │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
- desktop / sécurité      VS Code Windows          WezTerm
- pilotes / gaming               │                    │
- PowerShell / WinGet            │              ┌─────┴─────┐
- Windows Update                 │              │           │
-                               │              ▼           ▼
-                               │           Ubuntu     PowerShell 7
-                               │            WSL2
-                               │              │
-                               └── WSL ───────┤
-                                              ▼
-                                        Linux DevOps
-                                        Docker / K8s
-                                        Terraform
-                                        Ansible / AWS
+        ┌─────────────────────┼─────────────────────────┐
+        │                     │                         │
+        ▼                     ▼                         ▼
+ desktop / sécurité      VS Code Windows        Windows Terminal
+ pilotes / gaming               │                 ┌──────┴──────┐
+ PowerShell / WinGet            │                 │             │
+ Windows Update                 │                 ▼             ▼
+                               │          PowerShell 7       Ubuntu WSL2
+                               │            DevOps              │
+                               └── WSL ─────────────────────────┤
+                                                               ▼
+                                                         Linux DevOps
+                                                         Docker / K8s
+                                                         Terraform
+                                                         Ansible / AWS
 ```
 
 La séparation fonctionnelle est volontaire :
 
 ```text
-Windows = hôte, desktop, sécurité, pilotes et administration
-Ubuntu  = backend Linux DevOps et workspaces Linux
-WezTerm = point d'entrée terminal vers Ubuntu DevOps et PowerShell 7
-VS Code = interface Windows reliée aux projets WSL2
+Windows          = hôte, desktop, sécurité, pilotes et administration
+Ubuntu           = backend Linux DevOps et workspaces Linux
+Windows Terminal = point d'entrée terminal vers PowerShell 7 et Ubuntu DevOps
+VS Code          = interface Windows reliée aux projets WSL2
 ```
 
-### WezTerm comme routeur de contextes
+### Windows Terminal comme routeur de contextes
 
-WezTerm expose deux profils explicites :
+Windows Terminal expose deux profils gérés :
 
 ```text
-Ubuntu DevOps (WSL2) -> profil par défaut, Bash et outils Linux
-PowerShell 7         -> administration Windows
+PowerShell 7 - DevOps -> profil par défaut, administration Windows
+Ubuntu - DevOps       -> Bash et outils Linux dans WSL2
 ```
 
-Cette règle évite d'utiliser les projets Linux depuis un filesystem Windows comme racine quotidienne et maintient une frontière claire entre administration Windows et charges DevOps Linux.
+Raccourcis gérés :
+
+```text
+Ctrl+Shift+1 -> PowerShell 7 - DevOps
+Ctrl+Shift+2 -> Ubuntu - DevOps
+Ctrl+Shift+O -> PowerShell + Ubuntu en panneaux
+```
+
+Le profil Ubuntu ne redéfinit pas Bash : il ouvre la distribution `Ubuntu`, dont le shell DevOps et Starship restent gérés par le contrat WSL versionné. Cette règle évite d'utiliser les projets Linux depuis un filesystem Windows comme racine quotidienne et maintient une frontière claire entre administration Windows et charges DevOps Linux.
 
 Référence : [`docs/07_DEVOPS_STACK.md`](docs/07_DEVOPS_STACK.md).
 
@@ -99,7 +105,7 @@ Ubuntu fournit la chaîne Linux de référence : Docker Engine, Compose/Buildx, 
 
 ### OpenClaw/OpenRouter : hors périmètre
 
-`Windows_11_Pro_Custom` **n'installe pas, ne configure pas, ne met à jour et ne valide pas OpenClaw/OpenRouter**.
+`Windows_11_Pro_Custom` **n'installe pas, ne configure pas, ne met pas à jour et ne valide pas OpenClaw/OpenRouter**.
 
 La plateforme IA est un projet autonome, maintenu dans :
 
@@ -235,7 +241,7 @@ WSL2 conforme
 +
 stack DevOps conforme
 +
-terminal WezTerm conforme
+Windows Terminal conforme
 +
 idempotence démontrée
 +

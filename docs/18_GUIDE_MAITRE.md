@@ -11,9 +11,9 @@ Windows 11 Pro
    ↓
 configuration versionnée
    ↓
-WezTerm / VS Code
-   ├── Ubuntu DevOps (WSL2) -> Linux DevOps
-   └── PowerShell 7         -> Windows
+Windows Terminal / VS Code
+   ├── PowerShell 7 - DevOps -> Windows
+   └── Ubuntu - DevOps       -> Linux DevOps WSL2
    ↓
 audit → plan → convergence → validation
    ↓
@@ -26,14 +26,14 @@ Le principe central est **workstation-as-code** : l'état réel est observé, co
 
 ```text
 Windows
-└── desktop / pilotes / sécurité / PowerShell / VS Code / WezTerm / runtime WSL
+└── desktop / pilotes / sécurité / PowerShell / VS Code / Windows Terminal / runtime WSL
 
 WSL2 Ubuntu
 └── Bash / Git / Docker / Kubernetes / Terraform / Ansible / AWS
 
-WezTerm
-├── Ubuntu DevOps (WSL2) <- défaut
-└── PowerShell 7         <- Windows
+Windows Terminal
+├── PowerShell 7 - DevOps <- défaut
+└── Ubuntu - DevOps       <- WSL2
 
 Orchestration
 └── install.ps1 / update.ps1 / menu.ps1
@@ -43,6 +43,8 @@ Preuves
 ```
 
 Les projets Linux actifs restent sur le filesystem ext4 de WSL2 sous `~/projects`, `~/labs` ou `~/repositories`.
+
+Le composant Windows Terminal ne remplace pas le gestionnaire Bash Linux : il ouvre simplement la distribution `Ubuntu`. Bash, Starship Linux et les outils CLI restent gérés par les scripts WSL dédiés.
 
 ## Cycle opérationnel
 
@@ -80,7 +82,7 @@ Une exécution réussie d'`Apply` ne suffit pas : la conformité vient de l'éta
 | Stockage | [`03_STOCKAGE.md`](03_STOCKAGE.md) |
 | Identité physique C:/E: et reprise | [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
 | WSL2 | [`06_WSL2.md`](06_WSL2.md) |
-| Stack DevOps et WezTerm | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
+| Stack DevOps et Windows Terminal | [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md) |
 | Backup / restore | [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md) |
 | Validation | [`11_VALIDATION.md`](11_VALIDATION.md) |
 | Matériel | [`12_HARDWARE_QUALIFICATION.md`](12_HARDWARE_QUALIFICATION.md) |

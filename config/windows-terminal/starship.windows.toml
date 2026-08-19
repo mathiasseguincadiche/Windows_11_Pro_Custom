@@ -1,0 +1,65 @@
+add_newline = true
+command_timeout = 1000
+
+format = """
+$os\
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_status\
+$docker_context\
+$kubernetes\
+$terraform\
+$azure\
+$aws\
+$python\
+$nodejs\
+$cmd_duration\
+$line_break\
+$character"""
+
+[os]
+disabled = false
+
+[username]
+show_always = false
+
+[hostname]
+ssh_only = true
+
+[directory]
+truncation_length = 4
+truncate_to_repo = true
+
+[git_branch]
+symbol = "git:"
+
+[git_status]
+disabled = false
+
+[docker_context]
+symbol = "docker:"
+disabled = false
+
+[kubernetes]
+symbol = "k8s:"
+disabled = false
+
+[terraform]
+symbol = "tf:"
+
+[azure]
+symbol = "azure:"
+
+[aws]
+symbol = "aws:"
+
+[cmd_duration]
+min_time = 2000
+format = "[$duration]($style) "
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold green)"
