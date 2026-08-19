@@ -55,7 +55,7 @@ jobs:
           grep -Fq 'BlockingReasons' "$module"
           grep -Fq 'AdvisoryReasons' "$module"
           grep -Fq 'PendingFileRenameOperationsCount' "$module"
-          grep -Fq 'Pending = ($blockingReasons.Count -gt 0)' "$module"
+          grep -Fq "Pending = (\$blockingReasons.Count -gt 0)" "$module"
 
           grep -Fq 'scripts\core\reboot-state.psm1' "$preflight"
           grep -Fq "Import-Module \$rebootStateModule -Force" "$preflight"
