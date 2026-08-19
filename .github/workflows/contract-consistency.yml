@@ -10,6 +10,7 @@ on:
       - 'manifests/winget/apps-core.json'
       - 'README.md'
       - 'docs/**'
+      - '.github/workflows/devops-terminal-v10.yml'
       - '.github/workflows/contract-consistency.yml'
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - 'manifests/winget/apps-core.json'
       - 'README.md'
       - 'docs/**'
+      - '.github/workflows/devops-terminal-v10.yml'
       - '.github/workflows/contract-consistency.yml'
 
 permissions:
