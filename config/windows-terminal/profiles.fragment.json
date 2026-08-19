@@ -1,0 +1,27 @@
+{
+  "profiles": [
+    {
+      "name": "PowerShell 7 - DevOps",
+      "guid": "{a3cc45a8-6e2f-4f3d-bca6-7d6df942da41}",
+      "commandline": "pwsh.exe -NoLogo",
+      "startingDirectory": "%USERPROFILE%",
+      "font": {
+        "face": "JetBrainsMono Nerd Font",
+        "size": 11
+      },
+      "historySize": 9001,
+      "snapOnInput": true
+    },
+    {
+      "name": "Ubuntu - DevOps",
+      "guid": "{dd62b4eb-e12e-4e52-8f67-71415727545c}",
+      "commandline": "wsl.exe -d \"__WPC_DISTRIBUTION__\"",
+      "font": {
+        "face": "JetBrainsMono Nerd Font",
+        "size": 11
+      },
+      "historySize": 9001,
+      "snapOnInput": true
+    }
+  ]
+}
