@@ -1,15 +1,15 @@
-name: Windows native modules V16
+name: Windows native modules
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/windows-native-modules-v15.yml'
+      - '.github/workflows/windows-native-modules.yml'
       - 'scripts/core/windows-native.psm1'
       - 'scripts/bootstrap/00_preflight.ps1'
   push:
     branches: [main]
     paths:
-      - '.github/workflows/windows-native-modules-v15.yml'
+      - '.github/workflows/windows-native-modules.yml'
       - 'scripts/core/windows-native.psm1'
       - 'scripts/bootstrap/00_preflight.ps1'
 
@@ -61,7 +61,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Parse V16 PowerShell
+      - name: Parse Windows native PowerShell
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -144,5 +144,5 @@ jobs:
           $required = @('Storage','MMAgent','ScheduledTasks','Defender')
           foreach ($name in $required) {
             $entry = @($results | Where-Object Module -EQ $name)
-            if ($entry.Count -ne 1 -or -not $entry[0].Available) { throw "Required Windows module unavailable in V16 bootstrap: $name" }
+            if ($entry.Count -ne 1 -or -not $entry[0].Available) { throw "Required Windows module unavailable in native bootstrap: $name" }
           }
