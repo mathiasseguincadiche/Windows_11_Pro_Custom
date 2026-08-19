@@ -1,0 +1,149 @@
+name: Contract consistency
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'config/wsl/runtime-contract.json'
+      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/wsl/**'
+      - 'manifests/winget/apps-core.json'
+      - 'README.md'
+      - 'docs/**'
+      - '.github/workflows/devops-terminal-v10.yml'
+      - '.github/workflows/contract-consistency.yml'
+  pull_request:
+    paths:
+      - 'config/wsl/runtime-contract.json'
+      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/wsl/**'
+      - 'manifests/winget/apps-core.json'
+      - 'README.md'
+      - 'docs/**'
+      - '.github/workflows/devops-terminal-v10.yml'
+      - '.github/workflows/contract-consistency.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate canonical WSL roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract='config/wsl/runtime-contract.json'
+          jq -e '
+            (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
+            (.utilityRoots == ["~/scripts", "~/workspace", "~/backups"]) and
+            (.forbiddenRoots == ["/mnt/c", "/mnt/e"])
+          ' "$contract" >/dev/null
+
+          install='scripts/wsl/install-devops.sh'
+          validate='scripts/wsl/validate-devops.sh'
+          powershell='scripts/bootstrap/14_validate_wsl_v6.ps1'
+
+          grep -Fq '.workingRoots' "$install"
+          grep -Fq '.utilityRoots' "$install"
+          grep -Fq '.workingRoots' "$validate"
+          grep -Fq '.utilityRoots' "$validate"
+          grep -Fq '.forbiddenRoots' "$validate"
+          grep -Fq 'workingRoots' "$powershell"
+          grep -Fq 'utilityRoots' "$powershell"
+          grep -Fq 'forbiddenRoots' "$powershell"
+
+          if grep -Fq '/mnt/[cd]' "$powershell"; then
+            echo 'PowerShell WSL validation reintroduced a hard-coded C/D mount policy.' >&2
+            exit 1
+          fi
+          if grep -RInF '/mnt/d' README.md docs --include='*.md'; then
+            echo 'Active documentation reintroduced the obsolete /mnt/d DATA root.' >&2
+            exit 1
+          fi
+
+      - name: Enforce WSL documentation boundary
+        shell: python
+        run: |
+          from pathlib import Path
+
+          files = [Path('README.md'), *sorted(Path('docs').glob('*.md'))]
+          errors = []
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              if '/mnt/c' not in text and '/mnt/e' not in text:
+                  continue
+              if '/mnt/c' not in text or '/mnt/e' not in text:
+                  errors.append(f'{path}: /mnt/c et /mnt/e doivent être documentés ensemble')
+                  continue
+              if 'interdits comme racines' not in text:
+                  errors.append(
+                      f'{path}: les montages Windows doivent être explicitement décrits comme '
+                      'interdits comme racines de projets/workspaces DevOps'
+                  )
+          if errors:
+              raise SystemExit('\n'.join(errors))
+
+      - name: Reject superseded WSL entrypoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e scripts/wsl/switch-profile.ps1
+          test ! -e scripts/wsl/bootstrap.sh
+
+          if git grep -n 'switch-profile[.]ps1' -- ':!CHANGELOG.md' ':!.github/workflows/contract-consistency.yml'; then
+            echo 'A live reference to the obsolete WSL profile switcher was reintroduced.' >&2
+            exit 1
+          fi
+          if git grep -n 'scripts/wsl/bootstrap[.]sh' -- ':!CHANGELOG.md' ':!.github/workflows/contract-consistency.yml'; then
+            echo 'A live reference to the superseded WSL bootstrap was reintroduced.' >&2
+            exit 1
+          fi
+
+      - name: Reject historical labels in active DevOps output
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -nE 'Stack DevOps V[0-9]+|valide la V[0-9]+' scripts/wsl/install-devops.sh; then
+            echo 'Historical version labels must not be exposed by the active DevOps installer.' >&2
+            exit 1
+          fi
+
+      - name: Enforce single Windows application manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f manifests/winget/apps-core.json
+          test ! -e manifests/windows-apps.json
+          python3 -m json.tool manifests/winget/apps-core.json >/dev/null
+
+          if git grep -n 'manifests/windows-apps[.]json' -- ':!CHANGELOG.md' ':!.github/workflows/contract-consistency.yml'; then
+            echo 'A live reference to the superseded Windows application manifest was reintroduced.' >&2
+            exit 1
+          fi
+
+      - name: Parse changed contract scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/wsl/install-devops.sh
+          bash -n scripts/wsl/validate-devops.sh
+          python3 -m json.tool config/wsl/runtime-contract.json >/dev/null
+
+      - name: Parse PowerShell WSL validator
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\scripts\bootstrap\14_validate_wsl_v6.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if (@($errors).Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }

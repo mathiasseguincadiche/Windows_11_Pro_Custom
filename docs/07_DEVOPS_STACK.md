@@ -29,7 +29,7 @@ Les projets Linux restent dans le filesystem WSL2 :
 /home/<user>/repositories
 ```
 
-`/mnt/c` et `/mnt/e` servent aux échanges avec Windows, pas de racines quotidiennes aux projets Linux.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**.
 
 Docker Desktop n'est pas requis : Docker Engine tourne directement dans Ubuntu.
 

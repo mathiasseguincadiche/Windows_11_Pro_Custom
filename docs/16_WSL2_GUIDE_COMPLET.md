@@ -163,14 +163,14 @@ alors le dépôt doit vivre dans le filesystem Linux :
 /home/<user>/repositories
 ```
 
-Évite d'utiliser comme racine quotidienne :
+Les montages Windows restent accessibles sous :
 
 ```text
 /mnt/c/...
 /mnt/e/...
 ```
 
-Les montages `/mnt/c` et `/mnt/e` sont utiles pour **échanger** des fichiers avec Windows, mais les workloads Linux intensifs se comportent mieux sur ext4.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**. Les projets Linux restent dans le filesystem ext4 de la distribution.
 
 Pourquoi :
 
@@ -841,7 +841,7 @@ Exemple :
 ls /mnt/e
 ```
 
-Utilise ces chemins pour des échanges ponctuels, pas comme racine de projet Linux intensif.
+Utilise ces chemins uniquement pour des échanges ponctuels avec Windows : `/mnt/c` et `/mnt/e` sont **interdits comme racines de projets ou de workspaces DevOps**.
 
 ---
 

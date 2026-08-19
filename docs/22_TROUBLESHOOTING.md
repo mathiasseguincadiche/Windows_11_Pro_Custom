@@ -309,7 +309,7 @@ et non :
 /mnt/e/...
 ```
 
-comme racine quotidienne du projet Linux.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**. Si VS Code ouvre un projet Linux depuis l'un de ces montages, déplace ou reclone le projet sous le filesystem ext4 WSL2.
 
 ---
 

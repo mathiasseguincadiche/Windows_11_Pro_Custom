@@ -11,6 +11,11 @@
     "~/labs",
     "~/repositories"
   ],
+  "utilityRoots": [
+    "~/scripts",
+    "~/workspace",
+    "~/backups"
+  ],
   "forbiddenRoots": [
     "/mnt/c",
     "/mnt/e"

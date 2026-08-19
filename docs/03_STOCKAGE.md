@@ -95,7 +95,7 @@ Les projets Linux restent **dans le filesystem ext4 du VHDX** :
 /home/<user>/repositories
 ```
 
-Ils ne doivent pas être déplacés sous `/mnt/c` ou `/mnt/e` comme emplacement de travail principal.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**. Le fait que le VHDX soit stocké sur `E:` ne transforme pas `/mnt/e` en filesystem de travail Linux.
 
 Guide : [`06_WSL2.md`](06_WSL2.md).
 

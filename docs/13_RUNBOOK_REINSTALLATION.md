@@ -291,7 +291,7 @@ Si une réparation DevOps est nécessaire :
 .\install.ps1 -Mode Apply -InstallDevOps
 ```
 
-Les projets Linux actifs doivent revenir dans le filesystem ext4 WSL2, pas sous `/mnt/c` ou `/mnt/e` comme racines quotidiennes.
+`/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows, mais sont **interdits comme racines de projets ou de workspaces DevOps**. Après reprise, les projets Linux actifs doivent donc revenir dans le filesystem ext4 WSL2.
 
 ## 15. Revalider Windows Terminal et VS Code
 
