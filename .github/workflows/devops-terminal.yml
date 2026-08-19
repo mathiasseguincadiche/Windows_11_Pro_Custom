@@ -16,7 +16,7 @@ on:
       - 'scripts/bootstrap/11_validate_v3.ps1'
       - 'scripts/windows/31_windows_terminal.ps1'
       - 'manifests/winget/apps-core.json'
-      - '.github/workflows/devops-terminal-v10.yml'
+      - '.github/workflows/devops-terminal.yml'
   pull_request:
     paths:
       - 'config/windows-terminal/**'
@@ -32,7 +32,7 @@ on:
       - 'scripts/bootstrap/11_validate_v3.ps1'
       - 'scripts/windows/31_windows_terminal.ps1'
       - 'manifests/winget/apps-core.json'
-      - '.github/workflows/devops-terminal-v10.yml'
+      - '.github/workflows/devops-terminal.yml'
 
 permissions:
   contents: read
