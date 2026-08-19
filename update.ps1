@@ -18,10 +18,13 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = $PSScriptRoot
 $runtimeModule = Join-Path $repoRoot 'scripts\core\runtime.psm1'
+$rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
 $policyPath = Join-Path $repoRoot 'config\updates\v11.json'
 if (-not (Test-Path $runtimeModule)) { throw "Moteur d'orchestration absent: $runtimeModule" }
+if (-not (Test-Path $rebootStateModule)) { throw "Détection de redémarrage Windows absente: $rebootStateModule" }
 if (-not (Test-Path $policyPath)) { throw "Politique de mises à jour absente: $policyPath" }
 Import-Module $runtimeModule -Force
+Import-Module $rebootStateModule -Force
 $policy = Get-Content -Raw $policyPath | ConvertFrom-Json
 $context = New-WpcRunContext -RepoRoot $repoRoot -Mode "Update-$Mode" -NonInteractive:$NonInteractive
 $context.OrchestratorLogPath = Join-Path $repoRoot 'logs\updates\system-update.log'
@@ -43,16 +46,7 @@ function Test-IsAdministrator {
 }
 
 function Test-WindowsRebootRequired {
-    $checks = @(
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending',
-        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
-    )
-    foreach ($path in $checks) { if (Test-Path $path) { return $true } }
-    try {
-        $value = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations
-        if ($value) { return $true }
-    } catch {}
-    return $false
+    return [bool](Get-WpcPendingRebootState).Pending
 }
 
 function Test-UbuntuRebootRequired {
@@ -166,7 +160,8 @@ if ($Mode -eq 'Audit') {
     }
 }
 
-$windowsReboot = Test-WindowsRebootRequired
+$windowsRebootState = Get-WpcPendingRebootState
+$windowsReboot = [bool]$windowsRebootState.Pending
 $ubuntuReboot = Test-UbuntuRebootRequired
 $rebootRequired = $windowsReboot -or $ubuntuReboot
 
@@ -174,19 +169,25 @@ if ($rebootRequired) {
     Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Redémarrage requis' -Detail "Windows=$windowsReboot UbuntuWSL=$ubuntuReboot. Aucun redémarrage automatique sans réponse explicite." -Context $context
 } else {
     Write-WpcStatus -Status 'DEJA_OK' -Message 'Aucun redémarrage requis détecté.' -Context $context
+    if ($windowsRebootState.Advisory) {
+        Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'PendingFileRenameOperations observé' -Detail "$($windowsRebootState.PendingFileRenameOperationsCount) entrée(s) détectée(s), non bloquantes sans marqueur CBS/Windows Update." -Context $context
+    }
 }
 
 $reportDir = Join-Path $repoRoot 'reports\updates'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $reportPath = Join-Path $reportDir 'latest-run.json'
 $report = [ordered]@{
-    SchemaVersion='1.0'
+    SchemaVersion='1.1'
     RunId=$context.RunId
     Mode=$Mode
     CompletedAt=(Get-Date).ToString('o')
     Success=($failures.Count -eq 0)
     RebootRequired=$rebootRequired
     WindowsRebootRequired=$windowsReboot
+    WindowsRebootReasons=@($windowsRebootState.Reasons)
+    WindowsRebootAdvisoryReasons=@($windowsRebootState.AdvisoryReasons)
+    PendingFileRenameOperationsCount=$windowsRebootState.PendingFileRenameOperationsCount
     UbuntuRebootRequired=$ubuntuReboot
     IncludeDrivers=[bool]$IncludeDrivers
     IncludeOptionalUpdates=[bool]$IncludeOptionalUpdates
