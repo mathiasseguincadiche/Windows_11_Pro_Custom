@@ -33,9 +33,17 @@ jobs:
           grep -Fq "WriteErrorsTotal" "$script"
           grep -Fq "ReadErrorsUncorrected" "$script"
           grep -Fq "WriteErrorsUncorrected" "$script"
+          grep -Fq "Test-WpcVolumeHealthHealthy" "$script"
+          grep -Fq "UnavailableErrorCountersAreAdvisory" "$script"
+          grep -Fq "UncorrectedErrorsMustBeZeroWhenReported" "$script"
           grep -Fq "LifetimeErrorTotalsAreAdvisory" "$script"
           grep -Fq "V24 STORAGE SAFETY BLOCK" "$script"
           grep -Fq "VERDICT: STORAGE SAFETY READY" "$script"
+
+          if grep -Fq '[uint16]$msftVolume.HealthStatus' "$script"; then
+            echo 'V24 must not cast a CIM enum label such as Healthy directly to UInt16.' >&2
+            exit 1
+          fi
 
           grep -Fq "00_storage_integrity_v24.ps1" "$preflight"
           grep -Fq "& \$storageSafetyScript -Mode Verify" "$preflight"
@@ -82,7 +90,7 @@ jobs:
           }
           if ($failed) { exit 1 }
 
-      - name: Exercise V24 C/E contract self-test
+      - name: Exercise V24 C/E and telemetry capability contract self-test
         shell: pwsh
         run: .\tests\powershell\storage_v24_contract.tests.ps1
 
