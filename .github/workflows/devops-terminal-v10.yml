@@ -15,7 +15,6 @@ on:
       - 'scripts/bootstrap/10_workstation.ps1'
       - 'scripts/bootstrap/11_validate_v3.ps1'
       - 'scripts/windows/31_windows_terminal.ps1'
-      - 'manifests/windows-apps.json'
       - 'manifests/winget/apps-core.json'
       - '.github/workflows/devops-terminal-v10.yml'
   pull_request:
@@ -32,7 +31,6 @@ on:
       - 'scripts/bootstrap/10_workstation.ps1'
       - 'scripts/bootstrap/11_validate_v3.ps1'
       - 'scripts/windows/31_windows_terminal.ps1'
-      - 'manifests/windows-apps.json'
       - 'manifests/winget/apps-core.json'
       - '.github/workflows/devops-terminal-v10.yml'
 
@@ -72,7 +70,6 @@ jobs:
           python3 -m json.tool config/vscode/settings.json >/dev/null
           python3 -m json.tool config/windows-terminal/profiles.fragment.json >/dev/null
           python3 -m json.tool config/windows-terminal/actions.json >/dev/null
-          python3 -m json.tool manifests/windows-apps.json >/dev/null
           python3 -m json.tool manifests/winget/apps-core.json >/dev/null
           python3 - <<'PY'
           import json
@@ -89,7 +86,7 @@ jobs:
           assert required_ids <= automatic_ids
           assert 'wez.wezterm' not in automatic_ids
 
-          catalog = json.loads(Path('manifests/windows-apps.json').read_text())['core']
+          catalog = {a['name'] for a in apps}
           assert 'Windows Terminal' in catalog
           assert 'Starship' in catalog
           assert 'WezTerm' not in catalog
