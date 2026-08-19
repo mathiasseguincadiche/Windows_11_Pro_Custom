@@ -35,7 +35,7 @@ jobs:
           grep -Fq 'Get-WpcBaselineIntegrity' "$script"
           grep -Fq 'Get-WpcBaselineSchemaVersion' "$script"
           grep -Fq 'SchemaVersion = 1' "$script"
-          grep -Fq 'Release = $release' "$script"
+          grep -Fq "Release = \$release" "$script"
           grep -Fq 'Basic data' "$script"
           grep -Fq 'Windows11ProCustom\storage-identity\volume-identity.json' "$script"
           grep -Fq 'Windows11ProCustom\storage-v25\volume-identity.json' "$script"
