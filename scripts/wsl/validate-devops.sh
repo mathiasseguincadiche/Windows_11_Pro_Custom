@@ -64,46 +64,83 @@ printf '\nFilesystem de travail\n'
 if [[ ! -f "$RUNTIME_CONTRACT" ]]; then
   ko "Contrat WSL introuvable: $RUNTIME_CONTRACT"
 elif ! command -v jq >/dev/null 2>&1; then
-  ko 'Impossible de vérifier forbiddenRoots: jq est absent.'
+  ko 'Impossible de vérifier le contrat WSL: jq est absent.'
 else
   forbidden_roots_raw=''
+  managed_roots_raw=''
+
   if forbidden_roots_raw="$(
     jq -er '
       .forbiddenRoots
       | if type == "array"
            and length > 0
-           and all(.[]; type == "string" and length > 0)
+           and all(.[]; type == "string" and startswith("/") and length > 1)
         then .[]
         else error("forbiddenRoots invalide")
         end
     ' "$RUNTIME_CONTRACT"
   )"; then
     mapfile -t forbidden_roots <<< "$forbidden_roots_raw"
-    home_forbidden=0
+  else
+    ko 'Contrat WSL invalide: forbiddenRoots est absent ou mal formé.'
+    forbidden_roots=()
+  fi
 
+  if managed_roots_raw="$(
+    jq -er '
+      [(.workingRoots // []), (.utilityRoots // [])]
+      | add
+      | if type == "array"
+           and length > 0
+           and all(.[]; type == "string" and startswith("~/") and length > 2)
+        then .[]
+        else error("workingRoots/utilityRoots invalides")
+        end
+    ' "$RUNTIME_CONTRACT"
+  )"; then
+    mapfile -t managed_roots <<< "$managed_roots_raw"
+  else
+    ko 'Contrat WSL invalide: workingRoots/utilityRoots sont absents ou mal formés.'
+    managed_roots=()
+  fi
+
+  home_forbidden=0
+  for root in "${forbidden_roots[@]}"; do
+    if [[ "$HOME" == "$root" || "$HOME" == "$root/"* ]]; then
+      ko "HOME est sous une racine interdite par le contrat WSL: $HOME"
+      home_forbidden=1
+      break
+    fi
+  done
+  if (( home_forbidden == 0 )); then
+    ok "HOME Linux: $HOME"
+  fi
+
+  for declared_root in "${managed_roots[@]}"; do
+    path="$HOME/${declared_root#~/}"
+    if [[ ! -d "$path" ]]; then
+      ko "Répertoire géré absent: $path"
+      continue
+    fi
+
+    path_forbidden=0
     for root in "${forbidden_roots[@]}"; do
-      if [[ "$HOME" == "$root" || "$HOME" == "$root/"* ]]; then
-        ko "HOME est sous une racine interdite par le contrat WSL: $HOME"
-        home_forbidden=1
+      if [[ "$path" == "$root" || "$path" == "$root/"* ]]; then
+        ko "Racine Linux gérée sous un montage Windows interdit: $path"
+        path_forbidden=1
         break
       fi
     done
+    (( path_forbidden == 1 )) && continue
 
-    if (( home_forbidden == 0 )); then
-      ok "HOME Linux: $HOME"
+    fs_type="$(findmnt -T "$path" -n -o FSTYPE 2>/dev/null || true)"
+    if [[ "$fs_type" == ext4* ]]; then
+      ok "$path ($fs_type)"
+    else
+      ko "Racine Linux gérée hors ext4: $path (${fs_type:-inconnu})"
     fi
-  else
-    ko 'Contrat WSL invalide: forbiddenRoots est absent ou mal formé.'
-  fi
+  done
 fi
-
-for dir in projects labs repositories workspace backups; do
-  if [[ -d "$HOME/$dir" ]]; then
-    ok "$HOME/$dir"
-  else
-    ko "Répertoire absent: $HOME/$dir"
-  fi
-done
 
 printf '\nProfil shell\n'
 if bash "$SCRIPT_DIR/manage-shell-profile.sh" verify; then
