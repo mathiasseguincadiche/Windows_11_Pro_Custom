@@ -99,6 +99,10 @@ foreach ($command in @('Get-WpcPendingRebootState', 'Test-WpcRebootRequiredMessa
     }
 }
 
+# Le code 17 est attendu et validé ci-dessus. Il ne doit pas polluer le code de sortie
+# du script de test lui-même dans GitHub Actions.
+$global:LASTEXITCODE = 0
+
 Write-Host '[OK] V27: syntaxe PowerShell valide.' -ForegroundColor Green
 Write-Host '[OK] V27: scripts du dépôt isolés du scope du menu.' -ForegroundColor Green
 Write-Host '[OK] V27: contrat reboot-state intact après rechargement -Force dans un enfant.' -ForegroundColor Green
