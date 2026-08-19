@@ -9,13 +9,13 @@ on:
       - menu.ps1
       - START_MENU.cmd
       - docs/17_CONTROL_CENTER.md
-      - .github/workflows/control-center-v12.yml
+      - .github/workflows/control-center.yml
   pull_request:
     paths:
       - menu.ps1
       - START_MENU.cmd
       - docs/17_CONTROL_CENTER.md
-      - .github/workflows/control-center-v12.yml
+      - .github/workflows/control-center.yml
 
 permissions:
   contents: read
