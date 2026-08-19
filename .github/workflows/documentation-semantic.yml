@@ -1,0 +1,131 @@
+name: Documentation semantic contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - docs/**
+      - menu.ps1
+      - install.ps1
+      - update.ps1
+      - .github/workflows/documentation-semantic.yml
+  pull_request:
+    paths:
+      - README.md
+      - docs/**
+      - menu.ps1
+      - install.ps1
+      - update.ps1
+      - .github/workflows/documentation-semantic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-documentation:
+    name: Code ↔ documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Vérifier les commandes install.ps1 et update.ps1 documentées
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+          markdown_files = [root / 'README.md'] + sorted((root / 'docs').glob('*.md'))
+
+          allowed_install = {
+              'Mode', 'WslProfile', 'OptimizationProfiles', 'Distribution',
+              'WslInstallLocation', 'WslUser', 'InstallDevOps', 'ValidateDevOps',
+              'ValidateWsl', 'ValidateHardware', 'SkipV4RestorePoint',
+              'BackupAction', 'BackupTargetDrive', 'AllowNonUsbBackupTarget',
+              'SkipBackupRestorePoint', 'FullInstall', 'PlanOnly',
+              'NonInteractive', 'Yes'
+          }
+          allowed_update = {
+              'Mode', 'IncludeDrivers', 'IncludeOptionalUpdates',
+              'IncludeUnknownPackages', 'Distribution', 'LinuxUser', 'PlanOnly',
+              'NonInteractive', 'Yes', 'NoRestartPrompt'
+          }
+
+          fence_re = re.compile(r'```(?:powershell|pwsh)?\s*\n(.*?)```', re.S | re.I)
+          switch_re = re.compile(r'(?<![\w])-(?P<name>[A-Za-z][A-Za-z0-9]*)\b')
+          errors = []
+
+          for path in markdown_files:
+              text = path.read_text(encoding='utf-8')
+              for block in fence_re.findall(text):
+                  compact = re.sub(r'`\s*\n\s*', ' ', block)
+                  for command in re.split(r'[\n;]+', compact):
+                      if re.search(r'(?i)(?:^|[\\/])install\.ps1\b', command):
+                          for match in switch_re.finditer(command):
+                              name = match.group('name')
+                              if name not in allowed_install:
+                                  errors.append(f'{path.relative_to(root)}: paramètre install.ps1 inconnu -{name}')
+                      if re.search(r'(?i)(?:^|[\\/])update\.ps1\b', command):
+                          for match in switch_re.finditer(command):
+                              name = match.group('name')
+                              if name not in allowed_update:
+                                  errors.append(f'{path.relative_to(root)}: paramètre update.ps1 inconnu -{name}')
+
+          if errors:
+              raise SystemExit('\n'.join(sorted(set(errors))))
+
+      - name: Vérifier les corrections documentaires critiques
+        shell: python
+        run: |
+          from pathlib import Path
+
+          hardware = Path('docs/12_HARDWARE_QUALIFICATION.md').read_text(encoding='utf-8')
+          updates = Path('docs/15_MISES_A_JOUR.md').read_text(encoding='utf-8')
+          control = Path('docs/17_CONTROL_CENTER.md').read_text(encoding='utf-8')
+          guide = Path('docs/18_GUIDE_MAITRE.md').read_text(encoding='utf-8')
+          portal = Path('docs/README.md').read_text(encoding='utf-8')
+
+          if 'E: pour les données, WSL2, OpenClaw' in hardware:
+              raise SystemExit('docs/12 réintroduit OpenClaw dans le contrat de stockage.')
+          if '.\\install.ps1 -Mode Verify -ValidateOpenClawAI' in updates:
+              raise SystemExit('docs/15 contient encore une commande OpenClaw obsolète.')
+
+          required_control = [
+              'WSL2 + stack DevOps + validation',
+              'Qualification matérielle guidée',
+              'Audit empreinte SIMULATED',
+              'Audit empreinte PHYSICAL',
+              'Vérifier la dérive PHYSICAL',
+              'Enregistrer la baseline PHYSICAL',
+              'Remplacer la baseline PHYSICAL',
+          ]
+          missing = [item for item in required_control if item not in control]
+          if missing:
+              raise SystemExit('docs/17 n’est pas synchronisé avec menu.ps1: ' + ', '.join(missing))
+
+          for path, text in [
+              ('docs/README.md', portal),
+              ('docs/18_GUIDE_MAITRE.md', guide),
+          ]:
+              if 'GLOSSAIRE.md' not in text:
+                  raise SystemExit(f'{path} ne référence pas le glossaire.')
+
+      - name: Vérifier les invariants pédagogiques du README
+        shell: python
+        run: |
+          from pathlib import Path
+
+          text = Path('README.md').read_text(encoding='utf-8')
+          required = [
+              'À qui s’adresse ce projet ?' if 'À qui s’adresse ce projet ?' in text else "À qui s'adresse ce projet ?",
+              'Ce qui est géré — et ce qui ne l’est pas' if 'Ce qui est géré — et ce qui ne l’est pas' in text else "Ce qui est géré — et ce qui ne l'est pas",
+              'Par où commencer ?',
+              'Quick start',
+              'Comprendre les modes',
+              'Quand la workstation est-elle prête ?',
+              'docs/GLOSSAIRE.md',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit('README pédagogique incomplet: ' + ', '.join(missing))

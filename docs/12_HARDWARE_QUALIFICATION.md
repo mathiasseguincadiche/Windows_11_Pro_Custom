@@ -1,8 +1,18 @@
 # Qualification matérielle
 
-Ce guide décrit **comment vérifier que la workstation réelle correspond bien à l'architecture prévue**, sans transformer le dépôt en outil d'overclocking ou de modification automatique du BIOS.
+Ce guide explique comment vérifier que la workstation réelle correspond à l'architecture prévue, sans transformer le dépôt en outil d'overclocking ou de modification automatique du BIOS.
 
-Le projet est volontairement matériel-aware : il ne suffit pas que Windows démarre. La plateforme doit être cohérente avec le CPU, la mémoire, le GPU, les SSD, la virtualisation et les besoins DevOps/gaming de la machine cible.
+Le projet est volontairement **hardware-aware** : Windows peut démarrer alors que la plateforme ne respecte pas encore les hypothèses matérielles nécessaires à une workstation DevOps/Ops fiable.
+
+## Objectif
+
+La qualification doit répondre à trois questions :
+
+```text
+Que peut observer Windows automatiquement ?
+Que doit confirmer un humain ?
+Qu'est-ce que le dépôt refuse de modifier automatiquement ?
+```
 
 ## Matériel cible
 
@@ -19,53 +29,50 @@ Le projet est volontairement matériel-aware : il ne suffit pas que Windows dém
 | Boîtier | ASUS Prime AP201 |
 | Affichage | 2560×1440 à haut taux de rafraîchissement |
 
-## Philosophie
-
-La qualification suit trois règles :
+## Modèle de preuve
 
 ```text
-ce que Windows peut observer
+propriété observable par Windows
         ↓
 preuve automatique
 
-ce qui dépend du firmware ou du montage physique
+propriété firmware / montage / stabilité
         ↓
 preuve humaine explicite
 
-ce qui pourrait être dangereux à modifier automatiquement
+mutation sensible ou dangereuse
         ↓
-aucune mutation
+aucune automatisation
 ```
 
-Le dépôt **n'applique jamais automatiquement** :
+Le dépôt ne modifie jamais automatiquement :
 
-- un flash BIOS/UEFI ;
+- le BIOS/UEFI ;
 - PBO ou Curve Optimizer ;
 - un overclocking CPU/GPU ;
 - des timings mémoire ;
 - une fréquence DDR5 forcée ;
 - ReBAR / Above 4G ;
-- un changement de slot M.2 ;
-- un firmware SSD ;
-- des réglages réseau agressifs ou non mesurés.
+- un emplacement M.2 ;
+- un firmware SSD.
 
 ## Vérifications automatiques
 
-La validation matérielle peut contrôler notamment :
+La validation peut notamment contrôler :
 
 - modèle CPU et nombre de cœurs/threads ;
-- mémoire visible par Windows ;
+- mémoire visible ;
 - carte mère ;
 - GPU et pilote ;
 - présence des SSD et filesystems ;
 - GPT ;
-- état TRIM ;
+- TRIM ;
 - Secure Boot ;
 - TPM ;
 - virtualisation firmware ;
-- résolution / fréquence d'affichage observable ;
-- plan d'alimentation Windows ;
-- état VBS/HVCI lorsque disponible ;
+- résolution/fréquence d'affichage observable ;
+- plan d'alimentation ;
+- VBS/HVCI lorsque disponible ;
 - informations NVMe accessibles sans écriture destructive.
 
 Commande principale :
@@ -76,71 +83,81 @@ Commande principale :
 
 ## Vérifications manuelles
 
-Certaines propriétés ne sont pas démontrables de façon fiable par une API Windows générique. Le projet les traite donc comme des **preuves manuelles**, pas comme des suppositions :
+Certaines propriétés ne sont pas démontrables de manière fiable depuis une API Windows générique :
 
 - CSM désactivé ;
 - Above 4G Decoding actif ;
 - ReBAR actif ;
 - SSD installés dans les emplacements M.2 prévus ;
 - refroidissement et airflow corrects ;
-- stabilité mémoire à la fréquence retenue ;
+- stabilité mémoire ;
 - revue d'une version BIOS stable ;
-- revue des pilotes chipset/GPU/réseau installés.
+- revue des pilotes chipset/GPU/réseau.
 
-Assistant de saisie :
+Saisie guidée :
 
 ```powershell
 .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive
 ```
 
-Pour simplement afficher les contrôles :
+Affichage des contrôles :
 
 ```powershell
 .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Show
 ```
 
+Si une information obligatoire n'est pas prouvée, le bon verdict est `ACTION REQUISE`.
+
 ## Mémoire DDR5
 
-Le projet ne considère pas « 6000 MT/s » comme une obligation absolue. La règle est :
+La fréquence de 6000 MT/s n'est pas une obligation supérieure à la stabilité.
 
 ```text
-6000 stable > fréquence plus basse
-fréquence plus basse stable > 6000 instable
+6000 MT/s stable > fréquence plus basse
+fréquence plus basse stable > 6000 MT/s instable
 ```
 
-Une workstation DevOps doit privilégier la fiabilité : corruption de fichiers, crashs WSL, builds incohérents ou erreurs Terraform/Ansible coûtent beaucoup plus cher qu'un gain marginal de bande passante mémoire.
+Une workstation DevOps doit privilégier l'intégrité des builds, fichiers et environnements à un gain marginal de performance mémoire.
 
 ## Intel Arc B580
 
-Le GPU doit être utilisé avec une plateforme cohérente :
+Le GPU doit fonctionner dans une plateforme cohérente :
 
 - Above 4G Decoding vérifié ;
 - ReBAR vérifié ;
-- pilote Intel actuel et stable ;
+- pilote Intel stable ;
 - affichage cible correctement détecté ;
-- aucun tweak GPU agressif appliqué automatiquement.
-
-Le dépôt qualifie l'environnement ; il ne remplace pas la validation UEFI et le contrôle du pilote Intel.
+- aucun tweak GPU agressif imposé par le dépôt.
 
 ## Crucial T705
 
-Les SSD sont traités comme des composants critiques de la workstation :
+Les SSD sont critiques :
 
-- `C:` pour Windows et les applications ;
-- `E:` pour les données, WSL2, OpenClaw, ISO et exports ;
-- aucun benchmark d'écriture massif exécuté automatiquement ;
-- TRIM et Scheduled Optimize Windows restent actifs ;
-- le dépôt préfère les contrôles de santé et de cohérence aux pseudo-optimisations SSD.
+```text
+C: -> Windows et composants système
+E: -> données, WSL2, ISO et exports
+```
+
+Les emplacements de projets externes ne font pas partie du contrat de stockage de ce dépôt.
+
+Le projet :
+
+- n'exécute pas de benchmark d'écriture massif automatiquement ;
+- conserve TRIM et Scheduled Optimize ;
+- privilégie les contrôles de santé et d'identité ;
+- vérifie séparément l'identité physique `C:` / `E:` via le parcours V25.
+
+Référence : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 
 ## Plan d'alimentation
 
-Le profil attendu reste **Balanced**. Le projet cherche une machine réactive et efficace, pas un mode « performances maximales » permanent imposé à l'ensemble du système.
+Le profil attendu reste **Balanced**. Le projet cherche une machine réactive et efficace, pas un mode « performances maximales » imposé en permanence.
 
-Les optimisations de réactivité sont traitées dans [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md).
+Voir [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md).
 
 ## Quand refaire la qualification ?
 
-Relancer une qualification après :
+Relancez-la après :
 
 - mise à jour BIOS importante ;
 - changement de pilote chipset ou GPU ;
@@ -150,18 +167,14 @@ Relancer une qualification après :
 - instabilité inexpliquée ;
 - réinstallation complète de Windows.
 
-## Ce qu'est un résultat fiable
-
-Un résultat fiable combine :
+## Critère de réussite
 
 ```text
 inventaire automatique cohérent
-+
-preuves manuelles renseignées
-+
-aucune erreur bloquante
-+
-aucune instabilité connue
++ preuves manuelles renseignées
++ identité du stockage vérifiée
++ aucune erreur bloquante
++ aucune instabilité connue
 ```
 
-La CI GitHub peut vérifier la structure des scripts et des politiques, mais **elle ne peut pas certifier le matériel physique de la machine**. La qualification finale doit donc toujours être exécutée sur la workstation réelle.
+La CI peut vérifier le code et les contrats, mais elle ne peut pas certifier le matériel physique. La qualification finale doit être exécutée sur la workstation réelle.
