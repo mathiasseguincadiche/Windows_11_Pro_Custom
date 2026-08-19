@@ -31,9 +31,10 @@ Windows_11_Pro_Custom
 ├── Windows 11 Pro
 ├── pilotes / sécurité / mises à jour
 ├── PowerShell / WinGet
+├── Windows Terminal
 ├── WSL2 Ubuntu 26.04
 ├── stack DevOps Linux
-├── VS Code / WezTerm
+├── VS Code
 ├── stockage / sauvegarde / restauration
 └── validation de la workstation
 
@@ -63,6 +64,7 @@ signifie uniquement :
 
 ```text
 workstation Windows
++ Windows Terminal
 + WSL2
 + stack DevOps
 + qualification WSL
@@ -72,14 +74,16 @@ workstation Windows
 
 Aucune installation ou configuration OpenClaw/OpenRouter n'est déclenchée.
 
-## WezTerm
+## Windows Terminal
 
-La configuration WezTerm gérée par ce dépôt expose uniquement les contextes de la workstation :
+La configuration Windows Terminal gérée par ce dépôt expose uniquement les contextes de la workstation :
 
 ```text
-Ubuntu DevOps (WSL2)
-PowerShell 7
+PowerShell 7 - DevOps
+Ubuntu - DevOps
 ```
+
+Le composant `scripts/windows/31_windows_terminal.ps1` ne contient aucun profil, hook ou raccourci spécifique à OpenClaw, OpenRouter ou `clawops`.
 
 Si `openclaw_openrouter` souhaite ajouter une expérience terminal spécifique à sa plateforme, cette intégration doit être possédée et documentée par le dépôt IA lui-même.
 
