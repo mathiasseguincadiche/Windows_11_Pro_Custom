@@ -57,6 +57,25 @@ function ConvertTo-WpcNullableUInt64 {
     return [uint64]$Value
 }
 
+function Test-WpcVolumeHealthHealthy {
+    param($HealthStatus)
+
+    if ($null -eq $HealthStatus) { return $false }
+
+    # Selon l'adaptateur CIM / la version PowerShell, HealthStatus peut arriver sous
+    # forme numérique (0) ou sous forme enumérée ("Healthy"). On n'accepte que ces
+    # deux représentations explicites du statut sain ; toute autre valeur reste bloquante.
+    $text = ([string]$HealthStatus).Trim()
+    if ($text -eq 'Healthy') { return $true }
+
+    $numeric = [uint16]0
+    if ([uint16]::TryParse($text, [ref]$numeric)) {
+        return ($numeric -eq 0)
+    }
+
+    return $false
+}
+
 function Invoke-WpcNtfsSafetyCheck {
     param([Parameter(Mandatory)][ValidatePattern('^[A-Z]$')][string]$DriveLetter)
 
@@ -101,7 +120,8 @@ function Invoke-WpcNtfsSafetyCheck {
 
     $msftVolume = Get-WpcMsftVolume -DriveLetter $DriveLetter
     $corruptionCount = Get-WpcCorruptionCount -Volume $msftVolume
-    $msftHealthStatus = [uint16]$msftVolume.HealthStatus
+    $msftHealthStatus = [string]$msftVolume.HealthStatus
+    $msftHealthHealthy = Test-WpcVolumeHealthHealthy -HealthStatus $msftVolume.HealthStatus
 
     $global:LASTEXITCODE = 0
     $journal = @(& fsutil.exe repair enumerate $drive '$Corrupt' 2>&1 | ForEach-Object { [string]$_ })
@@ -115,7 +135,7 @@ function Invoke-WpcNtfsSafetyCheck {
     if ($dirtyEvidenceExitCode -ne 0) { $reasons += "fsutil dirty query code=$dirtyEvidenceExitCode" }
     if ($null -eq $scanReturnCode) { $reasons += 'Repair-Volume -Scan sans code de retour' }
     elseif ($scanReturnCode -ne 0) { $reasons += "Repair-Volume -Scan code=$scanReturnCode" }
-    if ($msftHealthStatus -ne 0) { $reasons += "MSFT_Volume HealthStatus=$msftHealthStatus" }
+    if (-not $msftHealthHealthy) { $reasons += "MSFT_Volume HealthStatus=$msftHealthStatus" }
     if ($corruptionCount -gt 0) { $reasons += "CorruptionCount=$corruptionCount" }
     if ($journalExitCode -ne 0) { $reasons += "fsutil repair enumerate code=$journalExitCode" }
 
@@ -189,17 +209,29 @@ function Invoke-WpcNvmeSafetyCheck {
             $powerOnHours = $counter.PowerOnHours
         }
 
+        $errorCountersComplete = (
+            $null -ne $readTotal -and
+            $null -ne $writeTotal -and
+            $null -ne $readUncorrected -and
+            $null -ne $writeUncorrected
+        )
+
         $reasons = @()
         $warnings = @()
         if ([string]$disk.HealthStatus -ne 'Healthy') { $reasons += "HealthStatus=$($disk.HealthStatus)" }
         if ($null -eq $counter) { $reasons += "Reliability unavailable: $counterError" }
-        if ($null -eq $readTotal) { $reasons += 'ReadErrorsTotal unavailable' }
+
+        # Les champs de Get-StorageReliabilityCounter sont dépendants du firmware,
+        # du pilote et du provider Windows. Une propriété non exposée n'est pas une
+        # erreur média. Elle reste visible comme avertissement ; une valeur réellement
+        # remontée et non corrigée > 0 reste, elle, strictement bloquante.
+        if ($null -eq $readTotal) { $warnings += 'ReadErrorsTotal unavailable (provider capability)' }
         elseif ($readTotal -gt 0) { $warnings += "ReadErrorsTotal historique=$readTotal" }
-        if ($null -eq $writeTotal) { $reasons += 'WriteErrorsTotal unavailable' }
+        if ($null -eq $writeTotal) { $warnings += 'WriteErrorsTotal unavailable (provider capability)' }
         elseif ($writeTotal -gt 0) { $warnings += "WriteErrorsTotal historique=$writeTotal" }
-        if ($null -eq $readUncorrected) { $reasons += 'ReadErrorsUncorrected unavailable' }
+        if ($null -eq $readUncorrected) { $warnings += 'ReadErrorsUncorrected unavailable (provider capability)' }
         elseif ($readUncorrected -gt 0) { $reasons += "ReadErrorsUncorrected=$readUncorrected" }
-        if ($null -eq $writeUncorrected) { $reasons += 'WriteErrorsUncorrected unavailable' }
+        if ($null -eq $writeUncorrected) { $warnings += 'WriteErrorsUncorrected unavailable (provider capability)' }
         elseif ($writeUncorrected -gt 0) { $reasons += "WriteErrorsUncorrected=$writeUncorrected" }
         if ($null -ne $temperature -and $temperature -gt $criticalTemperatureC) {
             $reasons += "Temperature=${temperature}C critical=${criticalTemperatureC}C"
@@ -218,6 +250,7 @@ function Invoke-WpcNvmeSafetyCheck {
             OperationalStatus = @($disk.OperationalStatus | ForEach-Object { [string]$_ })
             IsTargetT705 = (([string]$disk.FriendlyName + ' ' + [string]$disk.Model) -match $targetModelRegex)
             ReliabilityAvailable = ($null -ne $counter)
+            ReliabilityErrorCountersComplete = $errorCountersComplete
             Temperature = $temperature
             TemperatureMax = $temperatureMax
             Wear = $wear
@@ -303,8 +336,9 @@ $report = [ordered]@{
         CorruptionCountMustBeZero = $true
         CorruptionJournalCaptured = $true
         NvmeReliabilityRequired = $true
+        UnavailableErrorCountersAreAdvisory = $true
         LifetimeErrorTotalsAreAdvisory = $true
-        UncorrectedErrorsMustBeZero = $true
+        UncorrectedErrorsMustBeZeroWhenReported = $true
         TargetModelRegex = $targetModelRegex
         TargetMinimumCount = $targetMinimumCount
         CriticalTemperatureC = $criticalTemperatureC
@@ -321,7 +355,11 @@ foreach ($state in $volumeStates) {
 }
 foreach ($disk in @($nvmeState.Disks)) {
     if ($disk.Clean) {
-        Write-Host "[OK] NVMe $($disk.FriendlyName): Healthy, read/write errors=0." -ForegroundColor Green
+        if ($disk.ReliabilityErrorCountersComplete) {
+            Write-Host "[OK] NVMe $($disk.FriendlyName): Healthy, reported error counters clean." -ForegroundColor Green
+        } else {
+            Write-Host "[OK] NVMe $($disk.FriendlyName): Healthy; unsupported reliability counters are advisory." -ForegroundColor Green
+        }
     } else {
         Write-Host "[KO] NVMe $($disk.FriendlyName): $($disk.Failure)" -ForegroundColor Red
     }
