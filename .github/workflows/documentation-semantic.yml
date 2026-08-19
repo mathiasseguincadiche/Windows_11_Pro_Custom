@@ -9,6 +9,7 @@ on:
       - menu.ps1
       - install.ps1
       - update.ps1
+      - manifests/winget/apps-core.json
       - .github/workflows/documentation-semantic.yml
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - menu.ps1
       - install.ps1
       - update.ps1
+      - manifests/winget/apps-core.json
       - .github/workflows/documentation-semantic.yml
 
 permissions:
