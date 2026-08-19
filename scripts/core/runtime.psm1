@@ -1,6 +1,15 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Get-WpcProjectRelease {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+    $versionPath = Join-Path $RepoRoot 'VERSION'
+    if (-not (Test-Path -LiteralPath $versionPath)) { throw "Version globale introuvable: $versionPath" }
+    $release = (Get-Content -Raw -LiteralPath $versionPath).Trim()
+    if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "Version globale invalide dans VERSION: '$release'. Format SemVer x.y.z attendu." }
+    return $release
+}
+
 function Get-WpcRelativePath {
     param([Parameter(Mandatory)][string]$RepoRoot,[Parameter(Mandatory)][string]$Path)
     $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
@@ -29,7 +38,7 @@ function Add-WpcLogLine {
 
 function Add-WpcEvent {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][hashtable]$Data)
-    $event = [ordered]@{ Timestamp=(Get-Date).ToString('o'); RunId=$Context.RunId }
+    $event = [ordered]@{ Timestamp=(Get-Date).ToString('o'); RunId=$Context.RunId; Release=$Context.Release }
     foreach ($key in $Data.Keys) { $event[$key] = $Data[$key] }
     ($event | ConvertTo-Json -Compress -Depth 12) | Add-Content -LiteralPath $Context.EventsPath -Encoding UTF8
 }
@@ -67,16 +76,18 @@ function Write-WpcBanner {
     Write-Host ''
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
     Write-Host ("  {0}" -f $Title) -ForegroundColor Cyan
-    Write-Host ("  Run : {0}" -f $Context.RunId) -ForegroundColor DarkGray
-    Write-Host ("  Logs: {0}" -f $Context.LogRoot) -ForegroundColor DarkGray
+    Write-Host ("  Release : {0}" -f $Context.Release) -ForegroundColor White
+    Write-Host ("  Run     : {0}" -f $Context.RunId) -ForegroundColor DarkGray
+    Write-Host ("  Logs    : {0}" -f $Context.LogRoot) -ForegroundColor DarkGray
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
-    Add-WpcLogLine -Path $Context.OrchestratorLogPath -Level 'RUN' -Message "$Title | RunId=$($Context.RunId)"
+    Add-WpcLogLine -Path $Context.OrchestratorLogPath -Level 'RUN' -Message "$Title | Release=$($Context.Release) | RunId=$($Context.RunId)"
 }
 
 function New-WpcRunContext {
     param([Parameter(Mandatory)][string]$RepoRoot,[Parameter(Mandatory)][string]$Mode,[switch]$NonInteractive,[string]$ExistingRunId='')
     $runId = $ExistingRunId
     if ([string]::IsNullOrWhiteSpace($runId)) { $runId = '{0}-{1}' -f (Get-Date -Format 'yyyyMMdd-HHmmss'), ([guid]::NewGuid().ToString('N').Substring(0,8)) }
+    $release = Get-WpcProjectRelease -RepoRoot $RepoRoot
     $logRoot = Join-Path $RepoRoot 'logs'
     $runDir = Join-Path (Join-Path $logRoot 'runs') $runId
     $eventsPath = Join-Path $runDir 'events.ndjson'
@@ -84,9 +95,10 @@ function New-WpcRunContext {
     New-Item -ItemType Directory -Force -Path $runDir | Out-Null
     if (-not $ExistingRunId -or -not (Test-Path $eventsPath)) { Set-Content -LiteralPath $eventsPath -Encoding UTF8 -Value '' }
     $context = [pscustomobject]@{
-        RepoRoot=[IO.Path]::GetFullPath($RepoRoot); RunId=$runId; Mode=$Mode; LogRoot=$logRoot; RunDir=$runDir
+        RepoRoot=[IO.Path]::GetFullPath($RepoRoot); Release=$release; RunId=$runId; Mode=$Mode; LogRoot=$logRoot; RunDir=$runDir
         EventsPath=$eventsPath; OrchestratorLogPath=$orchestratorLog; NonInteractive=[bool]$NonInteractive; StartedAt=(Get-Date)
     }
+    $env:W11_CUSTOM_RELEASE = $context.Release
     $env:W11_CUSTOM_RUN_ID = $context.RunId
     $env:W11_CUSTOM_REPO_ROOT = $context.RepoRoot
     $env:W11_CUSTOM_LOG_ROOT = $context.LogRoot
@@ -153,7 +165,7 @@ function Invoke-WpcManagedScript {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath) | Out-Null
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
-    Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Phase=$Phase Purpose=$effectivePurpose Script=$relative Args=$argText"
+    Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Release=$($Context.Release) Phase=$Phase Purpose=$effectivePurpose Script=$relative Args=$argText"
     Add-WpcLogLine -Path $logPath -Level 'HOST' -Message "Computer=$env:COMPUTERNAME User=$env:USERNAME PowerShell=$($PSVersionTable.PSVersion)"
     if (-not $Quiet) { Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $relative -Context $Context }
 
@@ -246,7 +258,7 @@ function Invoke-WpcExternalCommand {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $logPath) | Out-Null
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
-    Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Command=$FilePath $safeArgs"
+    Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Release=$($Context.Release) Command=$FilePath $safeArgs"
     if (-not $Quiet) { Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $LogIdentity -Context $Context }
     $started=Get-Date
     & $FilePath @ArgumentList 2>&1 | ForEach-Object { foreach ($line in @(([string]$_) -split "`r?`n")) { Write-WpcChildLine -Line $line -LogPath $logPath -Quiet:$Quiet } }
@@ -307,7 +319,7 @@ function Complete-WpcRun {
     $latestScriptEvents=@()
     foreach ($group in ($scriptEvents | Group-Object Script)) { $latestScriptEvents += @($group.Group | Sort-Object Timestamp | Select-Object -Last 1) }
     $summary=[ordered]@{
-        Version='V9'; RunId=$Context.RunId; Mode=$Context.Mode; StartedAt=$Context.StartedAt.ToString('o'); CompletedAt=(Get-Date).ToString('o')
+        Release=$Context.Release; SchemaVersion=1; RunId=$Context.RunId; Mode=$Context.Mode; StartedAt=$Context.StartedAt.ToString('o'); CompletedAt=(Get-Date).ToString('o')
         Success=$Success; FailureMessage=(Protect-WpcCommandText -Text $FailureMessage); Components=$finalEvents; ScriptExecutions=$scriptEvents; LatestScriptState=$latestScriptEvents
         Counts=[ordered]@{
             AlreadyOk=@($finalEvents | Where-Object Outcome -EQ 'DEJA_OK').Count
@@ -323,7 +335,7 @@ function Complete-WpcRun {
     $summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $latestDir 'latest-run.json') -Encoding UTF8
     Write-Host ''
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
-    Write-Host "  SYNTHÈSE D’EXÉCUTION" -ForegroundColor Cyan
+    Write-Host "  SYNTHÈSE D’EXÉCUTION — RELEASE $($Context.Release)" -ForegroundColor Cyan
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
     Write-Host ("  Déjà conformes : {0}" -f $summary.Counts.AlreadyOk) -ForegroundColor Green
     Write-Host ("  Modifiés/validés : {0}" -f $summary.Counts.Changed) -ForegroundColor Green
@@ -335,4 +347,4 @@ function Complete-WpcRun {
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
 }
 
-Export-ModuleMember -Function New-WpcRunContext, Get-WpcRunContextFromEnvironment, Write-WpcStatus, Write-WpcBanner, Invoke-WpcManagedScript, Test-WpcManagedScript, Invoke-WpcPlannedComponent, Invoke-WpcIdempotentScript, Invoke-WpcExternalCommand, Read-WpcRequiredValue, Confirm-WpcChanges, Complete-WpcRun, Get-WpcLogPath, Add-WpcComponentResult
+Export-ModuleMember -Function Get-WpcProjectRelease, New-WpcRunContext, Get-WpcRunContextFromEnvironment, Write-WpcStatus, Write-WpcBanner, Invoke-WpcManagedScript, Test-WpcManagedScript, Invoke-WpcPlannedComponent, Invoke-WpcIdempotentScript, Invoke-WpcExternalCommand, Read-WpcRequiredValue, Confirm-WpcChanges, Complete-WpcRun, Get-WpcLogPath, Add-WpcComponentResult

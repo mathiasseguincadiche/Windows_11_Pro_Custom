@@ -3,7 +3,8 @@ name: Orchestration and idempotence
 on:
   pull_request:
     paths:
-      - '.github/workflows/orchestration-v9.yml'
+      - '.github/workflows/orchestration.yml'
+      - 'VERSION'
       - 'install.ps1'
       - 'scripts/core/**'
       - 'tests/powershell/generic_list_contract.tests.ps1'
@@ -19,7 +20,8 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/orchestration-v9.yml'
+      - '.github/workflows/orchestration.yml'
+      - 'VERSION'
       - 'install.ps1'
       - 'scripts/core/**'
       - 'tests/powershell/generic_list_contract.tests.ps1'
@@ -46,8 +48,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          release=$(tr -d '\r\n' < VERSION)
+          printf '%s' "$release" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
           jq -e '
-            (.version == "V9") and
+            (.schemaVersion == 1) and
+            (.releaseSource == "VERSION") and
             (.evidencePolicy == "machine-first") and
             (.stateFilesAreSourceOfTruth == false) and
             (.verifyBeforeApply == true) and
@@ -56,7 +61,7 @@ jobs:
             (.redactSensitiveArguments == true) and
             (.passwordsMayBeLogged == false) and
             (.requireYesWhenNonInteractive == true)
-          ' config/orchestration/v9.json >/dev/null
+          ' config/orchestration/policy.json >/dev/null
 
           test -f scripts/core/runtime.psm1
           test -f scripts/core/native-process.psm1
@@ -75,6 +80,9 @@ jobs:
           grep -Fq 'NonInteractive' install.ps1
           grep -Fq 'FullInstall' install.ps1
           grep -Fq 'WslUser' install.ps1
+          grep -Fq 'Get-WpcProjectRelease' scripts/core/runtime.psm1
+          grep -Fq 'Release=$Context.Release' scripts/core/runtime.psm1
+          grep -Fq 'SchemaVersion=1' scripts/core/runtime.psm1
           grep -Fq 'DÉJÀ OK' scripts/core/runtime.psm1
           grep -Fq '<REDACTED>' scripts/core/runtime.psm1
           grep -Fq 'state files are history/rollback data, never the source of truth' scripts/bootstrap/01_machine_state.ps1
@@ -161,7 +169,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Import-Module .\scripts\core\runtime.psm1 -Force
-          $fixture = Join-Path $PWD 'scripts\core\v9-ci-fixture.ps1'
+          $fixture = Join-Path $PWD 'scripts\core\orchestration-ci-fixture.ps1'
           @'
           [CmdletBinding()]
           param(
@@ -169,19 +177,20 @@ jobs:
             [string]$ApiToken = ''
           )
           if ($Mode -eq 'Verify') {
-            if ($env:WPC_V9_CI_STATE -ne 'ready') { throw 'fixture not ready' }
+            if ($env:WPC_ORCHESTRATION_CI_STATE -ne 'ready') { throw 'fixture not ready' }
             Write-Host '[OK] fixture ready'
             return
           }
-          if ($env:WPC_V9_CI_STATE -eq 'ready') {
+          if ($env:WPC_ORCHESTRATION_CI_STATE -eq 'ready') {
             Write-Host '[DÉJÀ OK] fixture already ready'
             return
           }
-          $env:WPC_V9_CI_STATE = 'ready'
+          $env:WPC_ORCHESTRATION_CI_STATE = 'ready'
           Write-Host '[FAIT] fixture changed'
           '@ | Set-Content -LiteralPath $fixture -Encoding utf8
 
           $context = New-WpcRunContext -RepoRoot $PWD -Mode Apply -NonInteractive
+          if ($context.Release -ne (Get-Content -Raw .\VERSION).Trim()) { throw 'Runtime release does not match VERSION.' }
           $first = Invoke-WpcPlannedComponent -Context $context -DisplayName 'CI fixture' `
             -VerifyPath $fixture -VerifyArguments @{ Mode='Verify'; ApiToken='supersecret-value' } `
             -ApplyPath $fixture -ApplyArguments @{ Mode='Apply'; ApiToken='supersecret-value' }
@@ -199,6 +208,9 @@ jobs:
           if ($logText -match 'supersecret-value') { throw 'Sensitive argument leaked into runtime log.' }
           if ($logText -notmatch '<REDACTED>') { throw 'Sensitive argument redaction marker missing.' }
           $summary = Get-Content -Raw (Join-Path $context.RunDir 'summary.json') | ConvertFrom-Json
+          if ($summary.Release -ne $context.Release) { throw 'Summary release does not match runtime release.' }
+          if ($summary.SchemaVersion -ne 1) { throw 'Unexpected run-summary schema version.' }
+          if ($summary.PSObject.Properties.Name -contains 'Version') { throw 'Legacy product Version field must not reappear in run summary.' }
           if ($summary.Counts.FailedScripts -ne 0) { throw 'Expected probe failures polluted the final failure count.' }
           if ($summary.Counts.Changed -lt 1 -or $summary.Counts.AlreadyOk -lt 1) { throw 'Component summary does not prove change then idempotent rerun.' }
 
@@ -240,6 +252,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           .\scripts\bootstrap\01_machine_state.ps1
           $report = Get-Content -Raw .\reports\orchestration\machine-state.json | ConvertFrom-Json
-          if ($report.Version -ne 'V9') { throw 'Unexpected internal machine-state schema version.' }
+          $release = (Get-Content -Raw .\VERSION).Trim()
+          if ($report.Release -ne $release) { throw 'Machine-state release does not match VERSION.' }
+          if ($report.SchemaVersion -ne 1) { throw 'Unexpected machine-state schema version.' }
+          if ($report.PSObject.Properties.Name -contains 'Version') { throw 'Legacy product Version field must not reappear in machine-state report.' }
           if ($report.EvidencePolicy -notmatch 're-read') { throw 'Machine-first evidence policy missing.' }
           if ($null -eq $report.Windows.Build) { throw 'Windows build fact missing.' }

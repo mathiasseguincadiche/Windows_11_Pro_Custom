@@ -84,8 +84,6 @@ function Get-WingetPackageFact {
         return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence=[string]$line[0] }
     }
 
-    # Le tableau global WinGet peut tronquer un identifiant selon la largeur du terminal.
-    # On ne paie donc le coût d'un appel exact que pour les candidats apparemment absents.
     $wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
     if (-not $wingetCommand) {
         return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence='WinGet unavailable during exact fallback' }
@@ -222,7 +220,8 @@ if (-not $oneDrive.Installed) { $signalsReady++ }
 $state = if ($signalsReady -eq $signalsTotal) { 'READY_CANDIDATE' } elseif ($signalsReady -eq 0 -and $installedApps -eq 0 -and -not $wslFacts.DistributionPresent) { 'FIRST_RUN' } else { 'PARTIAL' }
 
 $report = [ordered]@{
-    Version = 'V9'
+    Release = $context.Release
+    SchemaVersion = 1
     Timestamp = (Get-Date).ToString('o')
     InstallationState = $state
     EvidencePolicy = 'Machine facts are re-read on every run. Repository state files are history/rollback data, never the source of truth.'

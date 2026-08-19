@@ -1,6 +1,7 @@
 {
-  "version": "V9",
-  "reviewedAt": "2026-08-12",
+  "schemaVersion": 1,
+  "releaseSource": "VERSION",
+  "reviewedAt": "2026-08-19",
   "evidencePolicy": "machine-first",
   "stateFilesAreSourceOfTruth": false,
   "verifyBeforeApply": true,
