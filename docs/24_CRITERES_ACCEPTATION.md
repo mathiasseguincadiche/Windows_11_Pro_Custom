@@ -57,7 +57,7 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 - [ ] profil `.wslconfig` conforme ;
 - [ ] systemd fonctionne ;
 - [ ] les projets vivent sous `~/projects`, `~/labs` ou `~/repositories` ;
-- [ ] `/mnt/c` et `/mnt/e` ne sont pas les racines quotidiennes des projets Linux.
+- [ ] `/mnt/c` et `/mnt/e` restent accessibles pour des échanges ponctuels avec Windows mais sont **interdits comme racines de projets ou de workspaces DevOps**.
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateWsl
