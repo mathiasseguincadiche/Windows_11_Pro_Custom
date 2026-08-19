@@ -3,7 +3,7 @@ name: DevOps terminal
 on:
   push:
     paths:
-      - 'config/wezterm/**'
+      - 'config/windows-terminal/**'
       - 'config/vscode/**'
       - 'config/wsl/bashrc.d/**'
       - 'config/wsl/starship.toml'
@@ -12,13 +12,15 @@ on:
       - 'scripts/wsl/validate-devops-terminal.sh'
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/bootstrap/09_validate_devops.ps1'
-      - 'scripts/windows/31_wezterm.ps1'
+      - 'scripts/bootstrap/10_workstation.ps1'
+      - 'scripts/bootstrap/11_validate_v3.ps1'
+      - 'scripts/windows/31_windows_terminal.ps1'
       - 'manifests/windows-apps.json'
       - 'manifests/winget/apps-core.json'
       - '.github/workflows/devops-terminal-v10.yml'
   pull_request:
     paths:
-      - 'config/wezterm/**'
+      - 'config/windows-terminal/**'
       - 'config/vscode/**'
       - 'config/wsl/bashrc.d/**'
       - 'config/wsl/starship.toml'
@@ -27,7 +29,9 @@ on:
       - 'scripts/wsl/validate-devops-terminal.sh'
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/bootstrap/09_validate_devops.ps1'
-      - 'scripts/windows/31_wezterm.ps1'
+      - 'scripts/bootstrap/10_workstation.ps1'
+      - 'scripts/bootstrap/11_validate_v3.ps1'
+      - 'scripts/windows/31_windows_terminal.ps1'
       - 'manifests/windows-apps.json'
       - 'manifests/winget/apps-core.json'
       - '.github/workflows/devops-terminal-v10.yml'
@@ -48,7 +52,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            bash bash-completion shellcheck lua5.4 python3 passwd \
+            bash bash-completion shellcheck python3 passwd \
             starship fzf zoxide eza ripgrep fd-find bat tree
 
       - name: Parse and lint shell profile
@@ -63,12 +67,11 @@ jobs:
             scripts/wsl/manage-devops-terminal.sh \
             scripts/wsl/validate-devops-terminal.sh
 
-      - name: Parse WezTerm Lua
-        run: luac -p config/wezterm/wezterm.lua
-
-      - name: Validate JSON and terminal contract
+      - name: Validate JSON and terminal contracts
         run: |
           python3 -m json.tool config/vscode/settings.json >/dev/null
+          python3 -m json.tool config/windows-terminal/profiles.fragment.json >/dev/null
+          python3 -m json.tool config/windows-terminal/actions.json >/dev/null
           python3 -m json.tool manifests/windows-apps.json >/dev/null
           python3 -m json.tool manifests/winget/apps-core.json >/dev/null
           python3 - <<'PY'
@@ -76,42 +79,75 @@ jobs:
           from pathlib import Path
 
           apps = json.loads(Path('manifests/winget/apps-core.json').read_text())['apps']
-          assert any(a['wingetId'] == 'DEVCOM.JetBrainsMonoNerdFont' and a['autoInstall'] for a in apps)
+          required_ids = {
+              'Microsoft.WindowsTerminal',
+              'Microsoft.PowerShell',
+              'Starship.Starship',
+              'DEVCOM.JetBrainsMonoNerdFont',
+          }
+          automatic_ids = {a['wingetId'] for a in apps if a['autoInstall'] and a['wingetId']}
+          assert required_ids <= automatic_ids
+          assert 'wez.wezterm' not in automatic_ids
 
-          settings = json.loads(Path('config/vscode/settings.json').read_text())
-          assert settings['terminal.integrated.defaultProfile.windows'] == 'Ubuntu WSL'
-          assert 'JetBrainsMono Nerd Font' in settings['terminal.integrated.fontFamily']
-          assert settings['terminal.integrated.shellIntegration.enabled'] is True
+          catalog = json.loads(Path('manifests/windows-apps.json').read_text())['core']
+          assert 'Windows Terminal' in catalog
+          assert 'Starship' in catalog
+          assert 'WezTerm' not in catalog
 
-          wezterm = Path('config/wezterm/wezterm.lua').read_text()
-          required = [
-              'config.default_prog = ubuntu_devops',
-              'Ubuntu DevOps (WSL2)',
-              'PowerShell 7',
-              'JetBrainsMono Nerd Font',
-          ]
-          for needle in required:
-              assert needle in wezterm, needle
+          vscode = json.loads(Path('config/vscode/settings.json').read_text())
+          assert vscode['terminal.integrated.defaultProfile.windows'] == 'Ubuntu WSL'
+          assert 'JetBrainsMono Nerd Font' in vscode['terminal.integrated.fontFamily']
+          assert vscode['terminal.integrated.shellIntegration.enabled'] is True
 
-          forbidden_external_hooks = [
-              'OpenClaw',
-              'openclaw',
-              'clawops',
-              'OPENCLAW_',
-          ]
-          for needle in forbidden_external_hooks:
-              assert needle not in wezterm, needle
+          profiles = json.loads(Path('config/windows-terminal/profiles.fragment.json').read_text())['profiles']
+          by_name = {p['name']: p for p in profiles}
+          assert set(by_name) == {'PowerShell 7 - DevOps', 'Ubuntu - DevOps'}
+          assert by_name['PowerShell 7 - DevOps']['guid'] == '{a3cc45a8-6e2f-4f3d-bca6-7d6df942da41}'
+          assert by_name['Ubuntu - DevOps']['guid'] == '{dd62b4eb-e12e-4e52-8f67-71415727545c}'
+          assert by_name['PowerShell 7 - DevOps']['commandline'] == 'pwsh.exe -NoLogo'
+          assert '__WPC_DISTRIBUTION__' in by_name['Ubuntu - DevOps']['commandline']
+          assert all(p['font']['face'] == 'JetBrainsMono Nerd Font' for p in profiles)
+
+          actions = json.loads(Path('config/windows-terminal/actions.json').read_text())['actions']
+          keys = {a['keys']: a for a in actions}
+          assert set(keys) == {'ctrl+shift+1', 'ctrl+shift+2', 'ctrl+shift+o'}
+          assert keys['ctrl+shift+1']['command']['profile'] == 'PowerShell 7 - DevOps'
+          assert keys['ctrl+shift+2']['command']['profile'] == 'Ubuntu - DevOps'
+          assert keys['ctrl+shift+o']['command']['action'] == 'wt'
+
+          terminal_script = Path('scripts/windows/31_windows_terminal.ps1').read_text()
+          for needle in [
+              "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')",
+              'disabledProfileSources',
+              'Windows.Terminal.PowershellCore',
+              'Windows.Terminal.Wsl',
+              'Save-InitialState',
+              'Restore-InitialState',
+          ]:
+              assert needle in terminal_script, needle
+          for forbidden in ['Set-WslShell', 'Invoke-WebRequest', 'wez.wezterm', 'config\\wezterm']:
+              assert forbidden not in terminal_script, forbidden
+
+          combined = '\n'.join([
+              Path('config/windows-terminal/profiles.fragment.json').read_text(),
+              Path('config/windows-terminal/actions.json').read_text(),
+              Path('config/windows-terminal/starship.windows.toml').read_text(),
+              terminal_script,
+          ]).lower()
+          for forbidden in ['openclaw', 'clawops', 'openrouter']:
+              assert forbidden not in combined, forbidden
 
           profile = Path('config/wsl/bashrc.d/devops.sh').read_text()
           for needle in ['starship init bash', 'zoxide init bash', 'fzf --bash', "alias tf='terraform'", "alias k='kubectl'"]:
               assert needle in profile, needle
           PY
 
-      - name: Validate Starship configuration
+      - name: Validate Starship configurations
         run: |
           STARSHIP_CONFIG="$PWD/config/wsl/starship.toml" starship prompt >/dev/null
+          STARSHIP_CONFIG="$PWD/config/windows-terminal/starship.windows.toml" starship prompt >/dev/null
 
-      - name: Prove component idempotence and rollback as normal user
+      - name: Prove Linux terminal component idempotence and rollback as normal user
         run: |
           useradd --create-home --shell /bin/bash terminaltest
           runuser --user terminaltest -- env HOME=/home/terminaltest bash -Eeuo pipefail <<'BASH'
@@ -141,3 +177,29 @@ jobs:
           test ! -e "$HOME/.config/windows11-pro-custom/devops.sh"
           test ! -e "$HOME/.config/windows11-pro-custom/starship.toml"
           BASH
+
+  windows-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 pinned
+
+      - name: Parse Windows Terminal PowerShell component
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\scripts\windows\31_windows_terminal.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if (@($errors).Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+      - name: Parse managed Windows Terminal JSON
+        shell: pwsh
+        run: |
+          Get-Content -Raw '.\config\windows-terminal\profiles.fragment.json' | ConvertFrom-Json | Out-Null
+          Get-Content -Raw '.\config\windows-terminal\actions.json' | ConvertFrom-Json | Out-Null
