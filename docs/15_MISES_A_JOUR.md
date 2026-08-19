@@ -1,29 +1,31 @@
 # Gestion des mises à jour
 
-La workstation regroupe plusieurs couches qui ne se mettent pas à jour de la même manière : Windows, applications WinGet, WSL, Ubuntu, outils DevOps épinglés et extensions VS Code.
+La workstation contient plusieurs couches qui n'ont ni le même cycle de vie ni le même niveau de risque : Windows, applications WinGet, runtime WSL, Ubuntu, outils DevOps épinglés et extensions VS Code.
 
-Le dépôt centralise leur maintenance derrière :
+Le point d'entrée de maintenance est :
 
 ```powershell
 .\update.ps1
 ```
 
-L'objectif n'est pas de « tout mettre à la dernière version » mais de **mettre à jour sans perdre la reproductibilité ni casser la plateforme**.
+L'objectif n'est pas de « tout mettre à la dernière version », mais de **mettre à jour sans perdre la reproductibilité ni casser les contrats de la workstation**.
 
-## Modèle
+## Principe
 
 ```text
 état actuel
    ↓
-audit des mises à jour
+Audit
    ↓
 politique du dépôt
    ↓
 changements autorisés
    ↓
-application
+Apply
    ↓
-revalidation
+Verify
+   ↓
+revalidation globale si nécessaire
 ```
 
 ## Modes
@@ -32,6 +34,12 @@ Audit :
 
 ```powershell
 .\update.ps1 -Mode Audit
+```
+
+Prévisualisation avant mutation :
+
+```powershell
+.\update.ps1 -Mode Apply -PlanOnly
 ```
 
 Application :
@@ -46,133 +54,123 @@ Vérification :
 .\update.ps1 -Mode Verify
 ```
 
+Les options exactes et catégories facultatives sont référencées dans [`21_REFERENCE_COMMANDES.md`](21_REFERENCE_COMMANDES.md).
+
 ## Windows Update
 
-Le gestionnaire peut traiter les mises à jour Windows tout en conservant des limites claires :
+La maintenance Windows conserve des limites claires :
 
-- pas de redémarrage forcé ;
-- drivers facultatifs exclus par défaut ;
-- mises à jour facultatives exclues par défaut ;
-- le besoin de redémarrage reste visible ;
-- le BIOS et les firmwares ne sont pas flashés automatiquement.
+- pas de redémarrage forcé par défaut ;
+- drivers facultatifs exclus sauf demande explicite ;
+- mises à jour facultatives exclues sauf demande explicite ;
+- besoin de redémarrage visible ;
+- aucun flash BIOS/firmware automatique.
 
-Les pilotes critiques restent une décision contrôlée à partir des sources AMD, Intel, MSI ou Microsoft appropriées.
+Les pilotes critiques restent une décision contrôlée à partir des sources appropriées AMD, Intel, MSI ou Microsoft.
 
 ## Applications WinGet
 
-Les applications gérées par le dépôt peuvent être mises à jour via WinGet.
+Le dépôt ne traite que les applications déclarées par son catalogue.
 
 La politique respecte :
 
 - les packages réellement présents ;
-- les exclusions ou pins du dépôt ;
-- les applications volontairement manuelles lorsqu'aucun identifiant fiable n'est retenu.
+- les identifiants WinGet versionnés ;
+- les applications `autoInstall=false` ;
+- les exclusions et décisions manuelles du dépôt.
 
-Le catalogue courant est documenté dans [`08_APPLICATIONS.md`](08_APPLICATIONS.md).
+Catalogue : [`08_APPLICATIONS.md`](08_APPLICATIONS.md).
 
-## WSL
+## Runtime WSL et Ubuntu
 
-Le runtime WSL est géré séparément de la distribution Linux.
-
-Le dépôt peut vérifier et mettre à jour WSL sans confondre :
+Ces deux couches sont distinctes :
 
 ```text
-WSL runtime Windows
+runtime WSL Windows
 ≠
-Ubuntu / APT
+distribution Ubuntu / APT
 ```
 
-Après un changement important de WSL, la plateforme doit être revalidée avec :
+Après une modification importante du runtime WSL :
 
 ```powershell
 .\install.ps1 -Mode Verify -ValidateWsl
 ```
 
-## Ubuntu / APT
+La maintenance Ubuntu reste prudente :
 
-La distribution Ubuntu suit une maintenance prudente :
-
-- `apt update` ;
+- mise à jour des index APT ;
 - mise à jour des paquets dans le cadre prévu ;
-- pas de `dist-upgrade` automatique vers une nouvelle distribution ;
+- pas de changement automatique vers une nouvelle release Ubuntu ;
 - pas d'`autoremove` agressif ;
-- validation du runtime après changement.
+- revalidation du runtime après changement.
 
-Le changement de version Ubuntu est un **projet de migration**, pas une simple mise à jour de routine.
+Un changement de release Ubuntu est un projet de migration, pas une maintenance courante.
 
 ## Outils DevOps épinglés
 
-Terraform, certains outils qualité et d'autres composants sensibles sont versionnés par le dépôt.
-
-Ils ne doivent pas être remplacés aveuglément par `latest`.
-
-La réconciliation AWS CLI conserve le même niveau de confiance que
-l'installation initiale : archive et signature officielles sont téléchargées,
-l'empreinte complète de la clé AWS est contrôlée, puis la signature PGP est
-validée avant toute installation.
-
-La logique est :
+Les versions sensibles sont pilotées par les contrats du dépôt, notamment `config/devops/tool-versions.env`.
 
 ```text
-version souhaitée dans le dépôt
-        ↓
-version réellement installée
-        ↓
-aucun delta ? ne rien faire
-        ↓
-delta ? installer la version validée
-        ↓
+version attendue
+   ↓
+version installée
+   ↓
+identique ? ne rien faire
+   ↓
+différente ? appliquer la version qualifiée
+   ↓
 re-vérifier
 ```
 
-Cela protège les labs et projets contre les changements de comportement inattendus d'une nouvelle version majeure.
+Une version plus récente sur Internet n'est pas automatiquement la nouvelle cible.
 
-## Extensions VS Code
+La réconciliation AWS CLI conserve les contrôles de confiance prévus par le projet : source officielle, empreinte de clé et validation de signature.
 
-Les extensions Windows et WSL sont gérées séparément lorsque nécessaire.
+## VS Code
 
-Une extension peut être mise à jour, mais le dépôt garde la distinction entre :
+Les composants Windows et WSL peuvent avoir des responsabilités différentes. La maintenance doit conserver la distinction entre :
 
-- UI VS Code Windows ;
+- interface VS Code Windows ;
 - extensions exécutées côté WSL ;
 - configuration versionnée ;
 - secrets locaux non commités.
 
-## Ce que le gestionnaire refuse
+## Ce que la maintenance refuse
 
-La maintenance normale ne doit jamais :
+Une maintenance normale ne doit jamais :
 
 - flasher automatiquement le BIOS ;
 - installer arbitrairement tous les drivers facultatifs ;
-- forcer un reboot ;
-- lancer un changement majeur d'Ubuntu ;
-- remplacer les outils DevOps épinglés par des versions non qualifiées ;
-- supprimer agressivement des paquets ou données ;
-- désactiver Defender ou le firewall pour « faire passer » une mise à jour.
+- forcer un reboot non demandé ;
+- lancer une migration majeure Ubuntu ;
+- remplacer les versions DevOps épinglées par un `latest` non qualifié ;
+- supprimer agressivement des paquets ou des données ;
+- désactiver Defender ou le firewall pour « faire passer » une mise à jour ;
+- lancer la maintenance d'un projet externe.
 
-## Après une grosse mise à jour
+## Après une mise à jour structurante
 
-Après une mise à jour structurante :
+Revenez à la réalité observée :
 
 ```powershell
 .\install.ps1 -Mode Audit
 .\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps
+.\install.ps1 -Mode Apply -FullInstall -PlanOnly
 ```
 
-Si OpenClaw fait partie de la workstation :
+Le dernier `PlanOnly` permet de vérifier que la maintenance n'a pas créé une dérive permanente.
 
-```powershell
-.\install.ps1 -Mode Verify -ValidateOpenClawAI
-```
+OpenClaw/OpenRouter est hors périmètre : sa maintenance et ses validations appartiennent au dépôt `mathiasseguincadiche/openclaw_openrouter`.
 
-Puis, lorsque la machine est stabilisée, envisager une nouvelle sauvegarde de référence.
+Lorsque la workstation est de nouveau stable et qualifiée, évaluez la création d'une nouvelle sauvegarde de référence selon [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
 ## Rapport et diagnostic
 
-Les opérations de mise à jour alimentent les journaux et rapports du dépôt afin de pouvoir répondre à trois questions :
+Une opération de maintenance doit permettre de répondre à trois questions :
 
 1. qu'est-ce qui était installé avant ?
 2. qu'est-ce qui a réellement changé ?
-3. la machine est-elle encore conforme après le changement ?
+3. la workstation respecte-t-elle encore ses contrats ?
 
-Le Control Center expose ces opérations sans cacher leur nature. Voir [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
+Le centre de contrôle expose ces opérations sans masquer leur nature. Voir [`17_CONTROL_CENTER.md`](17_CONTROL_CENTER.md).
