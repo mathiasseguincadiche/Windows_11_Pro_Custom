@@ -77,7 +77,7 @@ ou directement :
 .\scripts\bootstrap\03_apps.ps1 -Mode Apply
 ```
 
-Cette commande directe est un composant ciblé : elle ne remplace pas la préqualification complète de la workstation. Avant un `Apply` direct, vérifier au minimum les garde-fous identité stockage et jalon historique ; pour une convergence globale, utiliser `install.ps1`.
+Cette commande directe est un composant ciblé : elle ne remplace pas la préqualification complète de la workstation. Avant un `Apply` direct, vérifier au minimum **l’identité du stockage** et **l’intégrité des volumes** ; pour une convergence globale, utiliser `install.ps1`.
 
 ```powershell
 .\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
