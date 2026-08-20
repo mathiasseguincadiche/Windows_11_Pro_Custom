@@ -136,8 +136,16 @@ foreach ($requiredFragment in @(
 }
 
 $backupSource = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'scripts\backup\60_create_backup.ps1')
-if (-not ($backupSource.Contains('$RestorePointExitCode=$LASTEXITCODE') -and $backupSource.Contains('restorePointExitCode=$RestorePointExitCode'))) {
-    throw 'Golden Backup must capture and persist the restore-point exit code.'
+foreach ($requiredFragment in @(
+    '$RestorePointOutput=@(& $RestorePointScript',
+    '$RestorePointExitCode=0',
+    '$RestorePointExitCode=1',
+    'throw "Le point de restauration Golden Backup a échoué dans PowerShell 7:',
+    'restorePointExitCode=$RestorePointExitCode'
+)) {
+    if (-not $backupSource.Contains($requiredFragment)) {
+        throw "Golden Backup PowerShell 7 restore-point contract missing: $requiredFragment"
+    }
 }
 
 Write-Host 'Workstation evidence contract self-tests: OK' -ForegroundColor Green
