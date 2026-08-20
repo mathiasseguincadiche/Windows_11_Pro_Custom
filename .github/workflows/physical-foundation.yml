@@ -1,23 +1,27 @@
-name: Physical foundation V20
+name: Physical foundation
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/physical-foundation-v20.yml'
+      - '.github/workflows/physical-foundation.yml'
+      - 'VERSION'
       - 'install.ps1'
       - 'scripts/bootstrap/00_preflight.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/02_foundation.ps1'
+      - 'scripts/bootstrap/13_validate_hardware.ps1'
       - 'scripts/windows/41_restore_point.ps1'
       - 'scripts/core/native-process.psm1'
   push:
     branches: [main]
     paths:
-      - '.github/workflows/physical-foundation-v20.yml'
+      - '.github/workflows/physical-foundation.yml'
+      - 'VERSION'
       - 'install.ps1'
       - 'scripts/bootstrap/00_preflight.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/02_foundation.ps1'
+      - 'scripts/bootstrap/13_validate_hardware.ps1'
       - 'scripts/windows/41_restore_point.ps1'
       - 'scripts/core/native-process.psm1'
 
@@ -41,30 +45,31 @@ jobs:
 
           test -f "$foundation"
           grep -Fq 'RequireFoundation' "$preflight"
-          grep -Fq -- "-RequireFoundation:\$RequireFoundation" "$preflight"
+          grep -Fq -- '-RequireFoundation:$RequireFoundation' "$preflight"
           grep -Fq 'RequireFoundation' "$readiness"
-          grep -Eq "Version = 'V(2[0-9]|[3-9][0-9])'" "$readiness"
-          grep -Fq 'Matériel cible V5 essentiel détecté' "$readiness"
-          grep -Fq 'Affichage cible V5 1440p240' "$readiness"
-          grep -Fq -- "-Blocking \$false" "$readiness"
-          grep -Fq "\$foundationBlocking = [bool]\$RequireFoundation" "$readiness"
-          grep -Fq "Microsoft-Windows-Subsystem-Linux" "$readiness"
+          grep -Fq 'Release=$release' "$readiness"
+          grep -Fq 'SchemaVersion=1' "$readiness"
+          grep -Fq 'Matériel cible essentiel détecté' "$readiness"
+          grep -Fq 'Affichage cible 1440p240' "$readiness"
+          grep -Fq -- '-Blocking $false' "$readiness"
+          grep -Fq '$foundationBlocking=[bool]$RequireFoundation' "$readiness"
+          grep -Fq 'Microsoft-Windows-Subsystem-Linux' "$readiness"
           grep -Fq 'VirtualMachinePlatform' "$readiness"
           grep -Fq 'WinGet opérationnel' "$readiness"
           grep -Fq 'Runtime WSL Store opérationnel' "$readiness"
           grep -Fq 'READY FOR FOUNDATION BOOTSTRAP' "$readiness"
 
-          grep -Fq "02_foundation.ps1" "$install"
+          grep -Fq '02_foundation.ps1' "$install"
           grep -Fq "Mode='Verify'" "$install"
           grep -Fq "Mode='Apply'" "$install"
-          grep -Fq "Point de restauration pré-fondations" "$install"
-          grep -Fq "Revalidation fondations Windows" "$install"
-          grep -Fq "RequireFoundation=[switch]::Present" "$install"
-          grep -Fq -- "-not \$PlanOnly" "$install"
+          grep -Fq 'Point de restauration pré-fondations' "$install"
+          grep -Fq 'Revalidation fondations Windows' "$install"
+          grep -Fq 'RequireFoundation=[switch]::Present' "$install"
+          grep -Fq -- '-not $PlanOnly' "$install"
 
-          manual_line=$(grep -n "Ensure-HardwareManualEvidence" "$install" | tail -n1 | cut -d: -f1)
-          foundation_line=$(grep -n "02_foundation.ps1" "$install" | head -n1 | cut -d: -f1)
-          machine_state_line=$(grep -n "01_machine_state.ps1" "$install" | head -n1 | cut -d: -f1)
+          manual_line=$(grep -n 'Ensure-HardwareManualEvidence' "$install" | tail -n1 | cut -d: -f1)
+          foundation_line=$(grep -n '02_foundation.ps1' "$install" | head -n1 | cut -d: -f1)
+          machine_state_line=$(grep -n '01_machine_state.ps1' "$install" | head -n1 | cut -d: -f1)
           if [ "$manual_line" -ge "$foundation_line" ]; then
             echo 'Manual hardware evidence must be enforced before foundation mutation.' >&2
             exit 1
@@ -74,17 +79,17 @@ jobs:
             exit 1
           fi
 
-          grep -Fq "Enable-WindowsOptionalFeature -Online -FeatureName" "$foundation"
-          grep -Fq "Microsoft-Windows-Subsystem-Linux" "$foundation"
-          grep -Fq "VirtualMachinePlatform" "$foundation"
-          grep -Fq "REDÉMARRAGE REQUIS" "$foundation"
-          grep -Fq "Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe" "$foundation"
-          grep -Fq "Microsoft.WinGet.Client" "$foundation"
-          grep -Fq "Install-PackageProvider -Name NuGet -Force -ForceBootstrap" "$foundation"
-          grep -Fq "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted" "$foundation"
-          grep -Fq "Repair-WinGetPackageManager -Force -Latest" "$foundation"
-          grep -Fq -- "--web-download" "$foundation"
-          grep -Fq "VERDICT: WINDOWS FOUNDATION READY" "$foundation"
+          grep -Fq 'Enable-WindowsOptionalFeature -Online -FeatureName' "$foundation"
+          grep -Fq 'Microsoft-Windows-Subsystem-Linux' "$foundation"
+          grep -Fq 'VirtualMachinePlatform' "$foundation"
+          grep -Fq 'REDÉMARRAGE REQUIS' "$foundation"
+          grep -Fq 'Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' "$foundation"
+          grep -Fq 'Microsoft.WinGet.Client' "$foundation"
+          grep -Fq 'Install-PackageProvider -Name NuGet -Force -ForceBootstrap' "$foundation"
+          grep -Fq 'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted' "$foundation"
+          grep -Fq 'Repair-WinGetPackageManager -Force -Latest' "$foundation"
+          grep -Fq -- '--web-download' "$foundation"
+          grep -Fq 'VERDICT: WINDOWS FOUNDATION READY' "$foundation"
 
           grep -Fq 'System32\WindowsPowerShell\v1.0\powershell.exe' "$foundation"
           grep -Fq 'System32\WindowsPowerShell\v1.0\powershell.exe' "$readiness"
@@ -96,11 +101,11 @@ jobs:
             exit 1
           fi
 
-      - name: Preserve final V5 display qualification
+      - name: Preserve final display qualification
         shell: bash
         run: |
           set -euo pipefail
-          final='scripts/bootstrap/13_validate_hardware_v5.ps1'
+          final='scripts/bootstrap/13_validate_hardware.ps1'
           grep -Fq 'Display1440p240' "$final"
           grep -Fq 'CurrentRefreshRate' "$final"
           grep -Fq 'Qualification matérielle échouée' "$final"
@@ -109,7 +114,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Parse V20 PowerShell
+      - name: Parse foundation PowerShell
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -118,6 +123,7 @@ jobs:
             '.\scripts\bootstrap\00_preflight.ps1',
             '.\scripts\bootstrap\02_physical_readiness.ps1',
             '.\scripts\bootstrap\02_foundation.ps1',
+            '.\scripts\bootstrap\13_validate_hardware.ps1',
             '.\scripts\windows\41_restore_point.ps1'
           )) {
             $tokens = $null
