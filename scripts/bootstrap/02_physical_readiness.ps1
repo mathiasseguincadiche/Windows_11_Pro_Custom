@@ -1,3 +1,4 @@
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [switch]$Strict,
@@ -18,9 +19,12 @@ $appsManifestPath = Join-Path $repoRoot 'manifests\winget\apps-core.json'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
 $nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
 $rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
+$powerShellRuntimeModule = Join-Path $repoRoot 'scripts\core\powershell-runtime.psm1'
 $hardwareSymbiosisScript = Join-Path $repoRoot 'scripts\windows\52_hardware_symbiosis.ps1'
 $hardwareSymbiosisReport = Join-Path $repoRoot 'reports\hardware\hardware-symbiosis.json'
-foreach ($path in @($hardwareTargetPath,$wslContractPath,$appsManifestPath,$windowsNativeModule,$nativeProcessModule,$rebootStateModule,$hardwareSymbiosisScript)) { if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" } }
+foreach ($path in @($hardwareTargetPath,$wslContractPath,$appsManifestPath,$windowsNativeModule,$nativeProcessModule,$rebootStateModule,$powerShellRuntimeModule,$hardwareSymbiosisScript)) { if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" } }
+Import-Module $powerShellRuntimeModule -Force
+$powerShellRuntimeFact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru
 Import-Module $windowsNativeModule
 Import-Module $nativeProcessModule
 Import-Module $rebootStateModule -Force
@@ -43,10 +47,6 @@ function Get-OptionalFeatureStateSafe {
     try { if (-not (Get-Command Get-WindowsOptionalFeature -ErrorAction SilentlyContinue)) { Import-Module Dism -ErrorAction Stop }; $feature=Get-WindowsOptionalFeature -Online -FeatureName $FeatureName -ErrorAction Stop; return [string]$feature.State }
     catch { return "UNKNOWN: $($_.Exception.Message)" }
 }
-function Get-WindowsPowerShell51Path {
-    $explicit=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'; if (Test-Path -LiteralPath $explicit) { return $explicit }
-    $command=Get-WpcNativeApplication -Name 'powershell.exe'; if ($command) { return [string]$command.Source }; return $null
-}
 function Get-WslNames {
     try {
         $wslCommand=Get-WpcNativeApplication -Name 'wsl.exe'; if (-not $wslCommand) { $explicit=Join-Path $env:WINDIR 'System32\wsl.exe'; if (Test-Path -LiteralPath $explicit) { $wslCommand=[pscustomobject]@{Source=$explicit} } }
@@ -62,8 +62,8 @@ function Test-TcpEndpoint {
 
 $os=Get-CimInstance Win32_OperatingSystem; $computer=Get-CimInstance Win32_ComputerSystem; $cpu=Get-CimInstance Win32_Processor | Select-Object -First 1
 $memory=@(Get-CimInstance Win32_PhysicalMemory); $board=Get-CimInstance Win32_BaseBoard | Select-Object -First 1; $video=@(Get-CimInstance Win32_VideoController)
-$psVersion=[version]$PSVersionTable.PSVersion; $psReady=($PSVersionTable.PSEdition -eq 'Core' -and $psVersion -ge [version]'7.4.0')
-Add-ReadinessCheck -Name 'PowerShell 7 supporté' -Passed $psReady -Detail "Edition=$($PSVersionTable.PSEdition) Version=$psVersion ; minimum=7.4.0, 7.6 LTS recommandé."
+$psVersion=[version]$powerShellRuntimeFact.Version
+Add-ReadinessCheck -Name 'PowerShell 7.6.5+ Core x64' -Passed $true -Detail "Edition=$($powerShellRuntimeFact.Edition) Version=$psVersion Executable=$($powerShellRuntimeFact.ExecutableName) Process64=$($powerShellRuntimeFact.Is64BitProcess) ; minimum=7.6.5. Windows PowerShell 5.1 non supporté."
 Add-ReadinessCheck -Name 'Session administrateur' -Passed (Test-Administrator) -Detail "Utilisateur=$env:USERNAME"
 Add-ReadinessCheck -Name 'Processus et OS 64 bits' -Passed ([Environment]::Is64BitOperatingSystem -and [Environment]::Is64BitProcess) -Detail "OS64=$([Environment]::Is64BitOperatingSystem) Process64=$([Environment]::Is64BitProcess)"
 
@@ -143,17 +143,17 @@ Add-ReadinessCheck -Name 'VirtualMachinePlatform active' -Passed ($vmpFeatureSta
 
 $restorePointProviderReady=$false; $restorePointDetail=''
 try {
-    [void](Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop); $windowsPowerShell=Get-WindowsPowerShell51Path; if (-not $windowsPowerShell) {throw 'Windows PowerShell 5.1 introuvable.'}
-    $checkpointProbe='if ($null -eq (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) { [Environment]::Exit(3) } else { [Environment]::Exit(0) }'
-    $checkpointResult=Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-Command',$checkpointProbe) -SuppressErrorOutput
-    $restorePointProviderReady=($checkpointResult.ExitCode -eq 0); $restorePointDetail="SystemRestore WMI présent; powershell.exe=$windowsPowerShell; Checkpoint-Computer=$restorePointProviderReady; ProbeExitCode=$($checkpointResult.ExitCode)"
+    $systemRestoreClass=Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop
+    $methodNames=@($systemRestoreClass.CimClassMethods.Keys)
+    $restorePointProviderReady=($methodNames -contains 'CreateRestorePoint' -and $methodNames -contains 'Enable')
+    $restorePointDetail="SystemRestore CIM/WMI présent; CreateRestorePoint=$($methodNames -contains 'CreateRestorePoint'); Enable=$($methodNames -contains 'Enable'); aucun powershell.exe requis."
 } catch {$restorePointDetail=$_.Exception.Message}
 Add-ReadinessCheck -Name 'Garde-fou point de restauration disponible' -Passed $restorePointProviderReady -Detail $restorePointDetail
 
 $winget=Get-WpcNativeApplication -Name 'winget.exe'; if (-not $winget) {$wingetAlias=Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'; if (Test-Path -LiteralPath $wingetAlias) {$winget=[pscustomobject]@{Source=$wingetAlias}}}
 $wingetReady=$null -ne $winget; $wingetVersion=''
 if ($wingetReady) {$versionResult=Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('--version') -SuppressErrorOutput; $wingetVersion=$versionResult.Text.Trim(); $wingetReady=($versionResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($wingetVersion))}
-Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) {"Version=$wingetVersion Path=$($winget.Source)"} else {'WinGet/App Installer absent ou non fonctionnel; FullInstall tentera le réenregistrement ou la réparation supportée.'}) -Blocking $foundationBlocking
+Add-ReadinessCheck -Name 'WinGet opérationnel' -Passed $wingetReady -Detail $(if ($wingetReady) {"Version=$wingetVersion Path=$($winget.Source)"} else {'WinGet/App Installer absent ou non fonctionnel; FullInstall tentera la réparation Microsoft.WinGet.Client sous PowerShell 7.'}) -Blocking $foundationBlocking
 $unresolvedApps=[System.Collections.Generic.List[string]]::new()
 if ($wingetReady) {foreach ($app in @($appsManifest.apps | Where-Object {[bool]$_.autoInstall})) {$id=[string]$app.wingetId; $showResult=Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('show','--id',$id,'--exact','--source','winget','--accept-source-agreements','--disable-interactivity'); if ($showResult.ExitCode -ne 0) {$unresolvedApps.Add("$($app.name) [$id]")}}}
 Add-ReadinessCheck -Name 'Catalogue WinGet résolvable' -Passed ($wingetReady -and $unresolvedApps.Count -eq 0) -Detail $(if (-not $wingetReady) {'WinGet indisponible avant bootstrap.'} elseif ($unresolvedApps.Count -eq 0) {'Tous les IDs autoInstall sont résolus avant convergence applicative.'} else {$unresolvedApps -join '; '}) -Blocking $foundationBlocking
@@ -176,7 +176,7 @@ Add-ReadinessCheck -Name 'Accès réseau aux fournisseurs DevOps' -Passed ($unre
 
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $blockers=@($checks | Where-Object {$_.Blocking -and -not $_.Passed}); $warnings=@($checks | Where-Object {-not $_.Blocking -and -not $_.Passed})
-[ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Strict=[bool]$Strict; RequireFoundation=[bool]$RequireFoundation; Computer=$env:COMPUTERNAME; User=$env:USERNAME; PowerShell=[ordered]@{Edition=[string]$PSVersionTable.PSEdition; Version=$psVersion.ToString()}; Windows=[ordered]@{Caption=[string]$os.Caption; Build=$build; DisplayVersion=$displayVersion; EditionID=$editionId; FeatureCompatible=$featureCompatible; SupportState=$supportState; SupportEnd=$supportEndText; Recommended=$recommendedOs}; Wsl=[ordered]@{Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent}; Checks=$checks.ToArray(); DriverFindingCount=$driverFindings.Count; BlockerCount=$blockers.Count; WarningCount=$warnings.Count; Ready=($blockers.Count -eq 0) } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
+[ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Strict=[bool]$Strict; RequireFoundation=[bool]$RequireFoundation; Computer=$env:COMPUTERNAME; User=$env:USERNAME; PowerShell=[ordered]@{Edition=[string]$powerShellRuntimeFact.Edition; Version=$psVersion.ToString(); MinimumVersion='7.6.5'; Executable=[string]$powerShellRuntimeFact.ExecutableName; Is64BitProcess=[bool]$powerShellRuntimeFact.Is64BitProcess; WindowsPowerShellSupported=$false}; Windows=[ordered]@{Caption=[string]$os.Caption; Build=$build; DisplayVersion=$displayVersion; EditionID=$editionId; FeatureCompatible=$featureCompatible; SupportState=$supportState; SupportEnd=$supportEndText; Recommended=$recommendedOs}; Wsl=[ordered]@{Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent}; Checks=$checks.ToArray(); DriverFindingCount=$driverFindings.Count; BlockerCount=$blockers.Count; WarningCount=$warnings.Count; Ready=($blockers.Count -eq 0) } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
 
 Write-Host ''; Write-Host ('='*78) -ForegroundColor DarkCyan; Write-Host '  PRÉQUALIFICATION INSTALLATION PHYSIQUE' -ForegroundColor Cyan; Write-Host ('='*78) -ForegroundColor DarkCyan
 foreach ($check in $checks) {if ($check.Passed) {Write-Host "[OK] $($check.Name) | $($check.Detail)" -ForegroundColor Green} elseif ($check.Blocking) {Write-Host "[KO] $($check.Name) | $($check.Detail)" -ForegroundColor Red} else {Write-Host "[AVERTISSEMENT] $($check.Name) | $($check.Detail)" -ForegroundColor Yellow}}
