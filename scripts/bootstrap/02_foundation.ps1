@@ -1,3 +1,4 @@
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [ValidateSet('Audit', 'Apply', 'Verify')]
@@ -9,9 +10,12 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
-if (-not (Test-Path -LiteralPath $nativeProcessModule)) {
-    throw "Helper natif introuvable: $nativeProcessModule"
+$powerShellRuntimeModule = Join-Path $repoRoot 'scripts\core\powershell-runtime.psm1'
+foreach ($required in @($nativeProcessModule,$powerShellRuntimeModule)) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Helper requis introuvable: $required" }
 }
+Import-Module $powerShellRuntimeModule -Force
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru)
 Import-Module $nativeProcessModule -Force
 
 function Get-OptionalFeatureStateSafe {
@@ -21,14 +25,6 @@ function Get-OptionalFeatureStateSafe {
     }
     $feature = Get-WindowsOptionalFeature -Online -FeatureName $FeatureName -ErrorAction Stop
     return [string]$feature.State
-}
-
-function Get-WindowsPowerShell51Path {
-    $explicit = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $explicit) { return $explicit }
-    $command = Get-WpcNativeApplication -Name 'powershell.exe'
-    if ($command) { return [string]$command.Source }
-    return $null
 }
 
 function Get-WinGetFact {
@@ -82,6 +78,35 @@ function Get-WslFact {
     }
 }
 
+function Repair-WpcWinGetPowerShell7 {
+    Write-Host '[EN COURS] Réparation WinGet via Microsoft.WinGet.Client dans PowerShell 7...' -ForegroundColor Cyan
+    $originalPolicy = $null
+    $gallery = $null
+    try {
+        Install-PackageProvider -Name NuGet -Force -ForceBootstrap -Confirm:$false | Out-Null
+        $gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+        if (-not $gallery) {
+            Register-PSRepository -Default
+            $gallery = Get-PSRepository -Name PSGallery -ErrorAction Stop
+        }
+        $originalPolicy = [string]$gallery.InstallationPolicy
+        if ($originalPolicy -ne 'Trusted') {
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        }
+        Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope AllUsers -AllowClobber -Confirm:$false | Out-Null
+        Import-Module Microsoft.WinGet.Client -Force -ErrorAction Stop
+        if (-not (Get-Command Repair-WinGetPackageManager -ErrorAction SilentlyContinue)) {
+            throw 'Repair-WinGetPackageManager est absent après import de Microsoft.WinGet.Client.'
+        }
+        Repair-WinGetPackageManager -Force -Latest
+    }
+    finally {
+        if ($gallery -and $originalPolicy -and $originalPolicy -ne 'Trusted') {
+            try { Set-PSRepository -Name PSGallery -InstallationPolicy $originalPolicy } catch {}
+        }
+    }
+}
+
 function Show-FoundationState {
     param(
         [string]$WslState,
@@ -121,7 +146,7 @@ if ($Mode -eq 'Verify') {
         if (-not $wslFact.Ready) { $failures.Add("WSL runtime: $($wslFact.Detail)") }
         throw "Fondations Windows non conformes: $($failures -join '; ')"
     }
-    Write-Host '[OK] Fondations Windows prêtes: WSL/VMP, WinGet et runtime WSL opérationnels.' -ForegroundColor Green
+    Write-Host '[OK] Fondations Windows prêtes: PowerShell 7, WSL/VMP, WinGet et runtime WSL opérationnels.' -ForegroundColor Green
     return
 }
 
@@ -153,58 +178,13 @@ if ($restartRequired) {
 
 $wingetFact = Get-WinGetFact
 if (-not $wingetFact.Ready) {
-    $windowsPowerShell = Get-WindowsPowerShell51Path
-    if (-not $windowsPowerShell) {
-        throw "Windows PowerShell 5.1 introuvable; impossible de réparer l'enregistrement App Installer/WinGet de manière supportée."
-    }
-
-    Write-Host "[EN COURS] Tentative de réenregistrement App Installer / WinGet pour l'utilisateur courant..." -ForegroundColor Cyan
-    $registerCommand = "`$ErrorActionPreference='Stop'; Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"
-    $registerResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',$registerCommand)
-    if ($registerResult.ExitCode -ne 0) {
-        Write-Warning "Réenregistrement App Installer non concluant (code=$($registerResult.ExitCode)). Tentative de réparation officielle Microsoft.WinGet.Client."
-    }
-
-    $wingetFact = Get-WinGetFact
-    if (-not $wingetFact.Ready) {
-        Write-Host '[EN COURS] Réparation WinGet via Microsoft.WinGet.Client...' -ForegroundColor Cyan
-        $repairCommand = @'
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-Install-PackageProvider -Name NuGet -Force -ForceBootstrap -Confirm:$false | Out-Null
-$gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
-if (-not $gallery) {
-    Register-PSRepository -Default
-    $gallery = Get-PSRepository -Name PSGallery -ErrorAction Stop
-}
-$originalPolicy = [string]$gallery.InstallationPolicy
-try {
-    if ($originalPolicy -ne 'Trusted') {
-        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-    }
-    Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery -Scope AllUsers -AllowClobber -Confirm:$false | Out-Null
-    Import-Module Microsoft.WinGet.Client -Force
-    Repair-WinGetPackageManager -Force -Latest
-}
-finally {
-    if ($originalPolicy -and $originalPolicy -ne 'Trusted') {
-        Set-PSRepository -Name PSGallery -InstallationPolicy $originalPolicy
-    }
-}
-'@
-        $repairResult = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-Command',$repairCommand)
-        if ($repairResult.ExitCode -ne 0) {
-            throw "Réparation WinGet échouée (code=$($repairResult.ExitCode)). Détail: $($repairResult.Text.Trim())"
-        }
-        $changes.Add('WinGet réparé/bootstrapé')
-    } else {
-        $changes.Add('App Installer/WinGet réenregistré')
-    }
+    Repair-WpcWinGetPowerShell7
+    $changes.Add('WinGet réparé/bootstrapé via Microsoft.WinGet.Client sous PowerShell 7')
 }
 
 $wingetFact = Get-WinGetFact
 if (-not $wingetFact.Ready) {
-    throw "WinGet reste indisponible après bootstrap. Détail: $($wingetFact.Detail)"
+    throw "WinGet reste indisponible après réparation PowerShell 7. Détail: $($wingetFact.Detail)"
 }
 Write-Host "[OK] WinGet opérationnel: $($wingetFact.Detail)" -ForegroundColor Green
 
@@ -236,4 +216,4 @@ if ($changes.Count -eq 0) {
 } else {
     Write-Host "[FAIT] Fondations Windows préparées: $($changes -join '; ')." -ForegroundColor Green
 }
-Write-Host 'VERDICT: WINDOWS FOUNDATION READY' -ForegroundColor Green
+Write-Host 'VERDICT: WINDOWS FOUNDATION READY - POWERSHELL 7 ONLY' -ForegroundColor Green
