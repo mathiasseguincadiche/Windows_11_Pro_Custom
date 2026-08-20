@@ -106,7 +106,7 @@ jobs:
           Set-StrictMode -Version Latest
           Import-Module .\scripts\core\native-process.psm1 -Force
           $cmd = Join-Path $env:WINDIR 'System32\cmd.exe'
-          $result = Invoke-WpcNativeCapture -FilePath $cmd -ArgumentList @('/d','/c','<nul set /p =native-capture-ok')
+          $result = Invoke-WpcNativeCapture -FilePath $cmd -ArgumentList @('/d','/c','echo native-capture-ok')
           if ($result.ExitCode -ne 0 -or $result.Text.Trim() -ne 'native-capture-ok') {
             throw "Native capture failed: exit=$($result.ExitCode) text=$($result.Text)"
           }
