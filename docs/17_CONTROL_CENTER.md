@@ -4,6 +4,30 @@ Le dépôt fournit une interface interactive pour utiliser la workstation sans m
 
 Le menu est une **façade ergonomique** au-dessus des moteurs existants. Il ne possède pas une seconde logique d'installation ou de maintenance : les opérations réelles restent portées par `install.ps1`, `update.ps1` et les scripts spécialisés.
 
+## Runtime PowerShell obligatoire
+
+Le centre de contrôle est désormais **PowerShell 7 only**.
+
+Contrat officiel :
+
+```text
+PowerShell : 7.6.5 minimum
+Edition    : Core
+Architecture: x64
+Executable : pwsh.exe
+```
+
+`Windows PowerShell 5.1` peut rester installé comme composant Windows, mais le dépôt ne l'utilise jamais comme moteur d'exécution ni comme fallback. `START_MENU.cmd` refuse donc l'absence de `pwsh.exe` au lieu de basculer silencieusement sur `powershell.exe`.
+
+Le contrôle réel est centralisé dans :
+
+```text
+config/powershell/runtime.json
+scripts/core/powershell-runtime.psm1
+```
+
+Le moteur d'orchestration importe également ce contrat : un lancement direct de `install.ps1` ou `update.ps1` ne permet donc pas de contourner la politique du menu.
+
 ## Démarrage
 
 Depuis l'Explorateur Windows :
@@ -12,10 +36,17 @@ Depuis l'Explorateur Windows :
 START_MENU.cmd
 ```
 
-Depuis PowerShell ou Windows Terminal :
+Depuis PowerShell 7 ou Windows Terminal :
 
 ```powershell
 .\menu.ps1
+```
+
+Le bandeau affiche la version réellement utilisée, par exemple :
+
+```text
+PowerShell : 7.6.5 | Core | x64 | pwsh.exe
+Runtime minimum : 7.6.5
 ```
 
 ## Menu principal
@@ -43,6 +74,7 @@ Utilisateur
    ↓
 START_MENU.cmd / menu.ps1
    │
+   ├── contrat runtime ────────────► PowerShell 7.6.5+ / Core / x64 / pwsh.exe
    ├── installation / conformité ─► install.ps1
    ├── mises à jour ──────────────► update.ps1
    ├── logiciels WinGet ──────────► scripts/bootstrap/03_apps.ps1
@@ -78,6 +110,19 @@ Cette option agit uniquement sur les applications Windows gérées par WinGet.
 
 Un logiciel déjà conforme ne doit pas être réinstallé uniquement parce que l'option a été sélectionnée.
 
+Si WinGet doit être réparé pendant le bootstrap des fondations, le dépôt utilise `Microsoft.WinGet.Client` et `Repair-WinGetPackageManager` directement depuis PowerShell 7. Aucun sous-processus Windows PowerShell 5.1 n'est requis.
+
+## Points de restauration
+
+Le garde-fou de restauration utilise directement le provider Windows `SystemRestore` via CIM depuis PowerShell 7 :
+
+```text
+SystemRestore.Enable
+SystemRestore.CreateRestorePoint
+```
+
+Le dépôt n'appelle plus `Checkpoint-Computer` via Windows PowerShell 5.1. Le comportement reste fail-closed : si le point de restauration requis ne peut pas être créé ou vérifié, la convergence protégée s'arrête.
+
 ## Mises à jour
 
 Le menu route vers `update.ps1` et sa politique de maintenance.
@@ -95,6 +140,8 @@ Le sous-menu actuel expose :
 ```
 
 La présence d'une sauvegarde ne suffit pas : le menu permet également de vérifier sa structure et sa restaurabilité selon les scripts du dépôt.
+
+Le Golden Backup appelle le script de point de restauration **dans le même processus PowerShell 7** ; il ne démarre aucun moteur PowerShell historique.
 
 ## Restauration / rollback
 
@@ -173,13 +220,15 @@ reports\
 
 Les journaux expliquent les opérations ; les rapports structurés portent les résultats de validation, inventaires et preuves.
 
+Le résumé d'orchestration enregistre aussi le runtime PowerShell utilisé : édition, version, minimum accepté, exécutable et architecture.
+
 Un ancien rapport peut expliquer un incident passé mais ne constitue pas une preuve de conformité actuelle.
 
 ## Privilèges et UAC
 
 Le menu ne doit pas fonctionner en administrateur permanent « au cas où ».
 
-Il relaie une élévation UAC uniquement pour les actions qui en ont besoin. Cette séparation rend visible la frontière entre lecture simple et mutation système.
+Il relaie une élévation UAC uniquement pour les actions qui en ont besoin. Lors de cette élévation, il réutilise explicitement **`pwsh.exe`** ; il ne bascule pas vers un autre moteur.
 
 ## Mode de test
 
@@ -221,4 +270,4 @@ J'ai un problème
 → docs/22_TROUBLESHOOTING.md
 ```
 
-Le centre de contrôle améliore l'ergonomie. L'identité du projet reste une workstation Windows 11 Pro reproductible et vérifiable.
+Le centre de contrôle améliore l'ergonomie. L'identité du projet reste une workstation Windows 11 Pro reproductible, vérifiable et standardisée sur PowerShell 7 moderne.
