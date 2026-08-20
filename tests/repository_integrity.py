@@ -139,13 +139,20 @@ if missing_dependencies:
     )
 
 
-# P1 — le centre de contrôle doit remonter le contexte d'échec courant.
+# P1 — le centre de contrôle doit remonter le contexte d'échec courant et disposer
+# d'un fallback sur le résumé du RunId, pas uniquement latest-run.json.
 menu_source = (REPO_ROOT / "menu.ps1").read_text(encoding="utf-8")
 required_menu_fragments = (
+    "Get-WpcFailureSummaryCandidates",
+    "Read-WpcFailureSummaryContext",
     "Get-WpcLatestFailureContext",
     "Format-WpcProcessFailure",
     "reports\\orchestration\\latest-run.json",
+    "logs\\runs",
+    "summary.json",
     "LatestScriptState",
+    "ScriptExecutions",
+    "Run     :",
     "Étape   :",
     "Script  :",
     "Cause   :",
@@ -160,8 +167,53 @@ if missing_menu_fragments:
         + ", ".join(missing_menu_fragments)
     )
 
+
+# P1 — une qualification matérielle KO doit exposer le nom du HardCheck et son détail,
+# puis le préflight doit propager cette information jusqu'au résumé d'orchestration.
+hardware_source = (
+    REPO_ROOT / "scripts/windows/52_hardware_symbiosis.ps1"
+).read_text(encoding="utf-8")
+required_hardware_fragments = (
+    "Get-HardCheckDetail",
+    "HardCheckFailures",
+    "ArcDriverAtLeastApproved",
+    "Realtek8126Present",
+    "WifiAdapterPresent",
+    "AmdChipsetNotBelowApprovedBaseline",
+    "versionDétectée=",
+    "minimum=",
+)
+missing_hardware_fragments = [
+    fragment for fragment in required_hardware_fragments if fragment not in hardware_source
+]
+if missing_hardware_fragments:
+    fail(
+        "Hardware-symbiosis diagnostics contract incomplete: "
+        + ", ".join(missing_hardware_fragments)
+    )
+
+preflight_source = (
+    REPO_ROOT / "scripts/bootstrap/00_preflight.ps1"
+).read_text(encoding="utf-8")
+required_preflight_fragments = (
+    "hardware-symbiosis.json",
+    "Get-WpcHardwareSymbiosisFailureDetail",
+    "HardCheckFailures",
+    "Détail matériel/pilotes:",
+)
+missing_preflight_fragments = [
+    fragment for fragment in required_preflight_fragments if fragment not in preflight_source
+]
+if missing_preflight_fragments:
+    fail(
+        "Physical preflight failure-propagation contract incomplete: "
+        + ", ".join(missing_preflight_fragments)
+    )
+
 print("[OK] storagePolicyPath -> config/hardware/symbiosis.json")
 print("[OK] no legacy component path in active code")
 print("[OK] all detected static repository dependencies exist")
-print("[OK] detailed current-run failure context available in control center")
+print("[OK] resilient current-run failure context available in control center")
+print("[OK] hardware HardCheck failures expose detected and expected values")
+print("[OK] physical preflight propagates hardware details to orchestration")
 print("VERDICT: REPOSITORY INTEGRITY READY")
