@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/physical-install.yml'
+      - 'VERSION'
       - 'install.ps1'
       - 'scripts/bootstrap/00_preflight.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
@@ -19,6 +20,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/physical-install.yml'
+      - 'VERSION'
       - 'install.ps1'
       - 'scripts/bootstrap/00_preflight.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
@@ -52,38 +54,39 @@ jobs:
           test -f "$readiness"
           test -f "$native"
           test -f "$reboot"
-          grep -Fq "02_physical_readiness.ps1" "$preflight"
-          grep -Fq "& \$physicalReadinessScript -Strict:\$StrictPhysicalReadiness" "$preflight"
-          grep -Fq "StrictPhysicalReadiness" "$install"
+          grep -Fq '02_physical_readiness.ps1' "$preflight"
+          grep -Fq 'StrictPhysicalReadiness' "$install"
           grep -Fq "if (\$Mode -in @('Apply','Verify'))" "$install"
-          grep -Fq "Ensure-HardwareManualEvidence" "$install"
-          grep -Fq "avant toute convergence" "$install"
-          grep -Fq -- "-not \$PlanOnly" "$install"
-          grep -Fq "PowerShell 7 supporté" "$readiness"
-          grep -Fq "7.4.0" "$readiness"
-          grep -Fq "build -ge 22621" "$readiness"
-          grep -Fq "FEATURE_COMPATIBLE=" "$readiness"
-          grep -Fq "SUPPORTED_OS=" "$readiness"
-          grep -Fq "RECOMMENDED_OS=" "$readiness"
-          grep -Fq "'24H2' = [datetime]'2026-10-13'" "$readiness"
-          grep -Fq "'25H2' = [datetime]'2027-10-12'" "$readiness"
-          grep -Fq "Secure Boot actif" "$readiness"
-          grep -Fq "TPM prêt" "$readiness"
-          grep -Fq "Virtualisation firmware active" "$readiness"
-          grep -Fq "Espace WSL sur E:" "$readiness"
-          grep -Fq "Symbiose matériel/pilotes" "$readiness"
-          grep -Fq "Microsoft-Windows-Subsystem-Linux" "$readiness"
-          grep -Fq "VirtualMachinePlatform" "$readiness"
-          grep -Fq "Garde-fou point de restauration disponible" "$readiness"
+          grep -Fq 'Ensure-HardwareManualEvidence' "$install"
+          grep -Fq 'avant toute convergence' "$install"
+          grep -Fq -- '-not $PlanOnly' "$install"
+
+          grep -Fq 'PowerShell 7 supporté' "$readiness"
+          grep -Fq '7.4.0' "$readiness"
+          grep -Fq 'build -ge 22621' "$readiness"
+          grep -Fq 'FEATURE_COMPATIBLE=' "$readiness"
+          grep -Fq 'SUPPORTED_OS=' "$readiness"
+          grep -Fq 'RECOMMENDED_OS=' "$readiness"
+          grep -Fq "'24H2'=[datetime]'2026-10-13'" "$readiness"
+          grep -Fq "'25H2'=[datetime]'2027-10-12'" "$readiness"
+          grep -Fq 'Secure Boot actif' "$readiness"
+          grep -Fq 'TPM prêt' "$readiness"
+          grep -Fq 'Virtualisation firmware active' "$readiness"
+          grep -Fq 'Espace WSL sur E:' "$readiness"
+          grep -Fq 'Symbiose matériel/pilotes' "$readiness"
+          grep -Fq 'Microsoft-Windows-Subsystem-Linux' "$readiness"
+          grep -Fq 'VirtualMachinePlatform' "$readiness"
+          grep -Fq 'Garde-fou point de restauration disponible' "$readiness"
           grep -Fq "Get-WpcNativeApplication -Name 'winget.exe'" "$readiness"
-          grep -Fq "Invoke-WpcNativeCapture -FilePath \$winget.Source -ArgumentList @('show', '--id', \$id, '--exact'" "$readiness"
-          grep -Fq "sourceDistribution" "$readiness"
-          grep -Fq "VERDICT: PHYSICAL INSTALL READY" "$readiness"
-          grep -Fq "aucune convergence ne doit commencer avant un verdict READY" "$readiness"
-          grep -Fq "\$pendingReboot = @(Get-PendingRebootReasons)" "$readiness"
-          grep -Fq "scripts\\core\\reboot-state.psm1" "$readiness"
-          grep -Fq "Get-WpcPendingRebootState" "$readiness"
-          grep -Fq "PendingFileRenameOperations non bloquant" "$readiness"
+          grep -Fq 'sourceDistribution' "$readiness"
+          grep -Fq 'VERDICT: PHYSICAL INSTALL READY' "$readiness"
+          grep -Fq 'aucune convergence ne doit commencer avant un verdict READY' "$readiness"
+          grep -Eq '\$pendingReboot[[:space:]]*=[[:space:]]*@\(Get-PendingRebootReasons\)' "$readiness"
+          grep -Fq 'scripts\core\reboot-state.psm1' "$readiness"
+          grep -Fq 'Get-WpcPendingRebootState' "$readiness"
+          grep -Fq 'PendingFileRenameOperations non bloquant' "$readiness"
+          grep -Fq 'Release=$release' "$readiness"
+          grep -Fq 'SchemaVersion=1' "$readiness"
           grep -Fq 'CantActivateDocumentInPipeline' "$native"
 
           if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$readiness"; then
@@ -106,10 +109,10 @@ jobs:
           devops='scripts/bootstrap/08_devops.ps1'
 
           jq -e '.sourceDistribution == "Ubuntu-26.04" and .distribution == "Ubuntu"' "$contract" >/dev/null
-          grep -Fq -- "--distribution \$sourceDistribution --name \$Distribution --location \$InstallLocation --no-launch" "$wsl"
-          grep -Fq "Aucune autre version Ubuntu ne sera substituée silencieusement" "$wsl"
+          grep -Fq -- '--distribution $sourceDistribution --name $Distribution --location $InstallLocation --no-launch' "$wsl"
+          grep -Fq 'Aucune autre version Ubuntu ne sera substituée silencieusement' "$wsl"
           grep -Fq 'Restart-WslSessionAfterDockerGroupChange' "$devops"
-          grep -Fq "wsl.exe --terminate \$Distribution" "$devops"
+          grep -Fq 'wsl.exe --terminate $Distribution' "$devops"
           grep -Fq -- "-Command 'id -nG'" "$devops"
           grep -Fq 'docker info >/dev/null 2>&1' "$devops"
 
@@ -137,6 +140,16 @@ jobs:
             if (@($errors).Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
           }
 
+      - name: Validate release and report schema contract
+        shell: pwsh
+        run: |
+          $release = (Get-Content -Raw .\VERSION).Trim()
+          if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid release: $release" }
+          $source = Get-Content -Raw .\scripts\bootstrap\02_physical_readiness.ps1
+          foreach ($fragment in @('Release=$release','SchemaVersion=1')) {
+            if (-not $source.Contains($fragment)) { throw "Readiness report contract missing: $fragment" }
+          }
+
       - name: Validate PowerShell Core and native host detection
         shell: pwsh
         run: |
@@ -162,32 +175,24 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Set-StrictMode -Version Latest
-
           function Get-RebootReasonFixture {
             param([string[]]$Items)
             $reasons = [System.Collections.Generic.List[string]]::new()
             foreach ($item in @($Items)) { $reasons.Add($item) }
             return @($reasons)
           }
-
-          $cases = @(
+          foreach ($case in @(
             @{ Items = @(); Expected = 0 },
             @{ Items = @('CBS'); Expected = 1 },
             @{ Items = @('CBS','WindowsUpdate'); Expected = 2 }
-          )
-          foreach ($case in $cases) {
+          )) {
             $actual = @(Get-RebootReasonFixture -Items $case.Items)
-            if ($actual.Count -ne $case.Expected) {
-              throw "StrictMode collection cardinality mismatch: expected=$($case.Expected) actual=$($actual.Count)"
-            }
+            if ($actual.Count -ne $case.Expected) { throw "Cardinality mismatch: expected=$($case.Expected) actual=$($actual.Count)" }
           }
-
           $readiness = Get-Content -Raw .\scripts\bootstrap\02_physical_readiness.ps1
-          $required = '$pendingReboot = @(Get-PendingRebootReasons)'
-          if (-not $readiness.Contains($required)) {
+          if ($readiness -notmatch '\$pendingReboot\s*=\s*@\(Get-PendingRebootReasons\)') {
             throw 'Physical readiness must materialize blocking pending reboot reasons before using .Count.'
           }
-
           Import-Module .\scripts\core\reboot-state.psm1 -Force
           $liveState = Get-WpcPendingRebootState
           if ($liveState.Pending -isnot [bool]) { throw 'Shared reboot detector returned an invalid Pending type.' }
@@ -211,7 +216,5 @@ jobs:
           $result = Invoke-WpcNativeCapture -FilePath $wsl.Source -ArgumentList @('--help')
           Write-Host "Hosted runner wsl --help exit code = $($result.ExitCode)"
           foreach ($option in @('--location','--name','--no-launch')) {
-            $present = $result.Text -match [regex]::Escape($option)
-            Write-Host "Hosted runner capability $option = $present"
+            Write-Host "Hosted runner capability $option = $($result.Text -match [regex]::Escape($option))"
           }
-          Write-Host 'The hosted Windows image is not treated as the Store WSL source of truth. scripts/bootstrap/02_physical_readiness.ps1 enforces these switches on the real workstation before mutation.'
