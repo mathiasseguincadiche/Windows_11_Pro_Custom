@@ -87,7 +87,10 @@ function New-WpcRestorePointPowerShell7 {
     param([Parameter(Mandatory)][string]$RestorePointDescription)
 
     $systemRestoreClass = Get-CimClass -Namespace 'root/default' -ClassName 'SystemRestore' -ErrorAction Stop
-    $methodNames = @($systemRestoreClass.CimClassMethods.Keys)
+    $methodNames = @(
+        $systemRestoreClass.CimClassMethods |
+            ForEach-Object { [string]$_.Name }
+    )
     foreach ($requiredMethod in @('Enable','CreateRestorePoint')) {
         if ($methodNames -notcontains $requiredMethod) {
             throw "Méthode SystemRestore requise absente: $requiredMethod"
