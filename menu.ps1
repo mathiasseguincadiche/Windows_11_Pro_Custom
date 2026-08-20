@@ -170,7 +170,7 @@ function Format-WpcProcessFailure {
     $lines.Add("Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode.")
     if ($null -eq $context) {
         $fallbackLog=Join-Path $RepoRoot 'logs\install.log'
-        $lines.Add('  Cause   : contexte structuré indisponible; la dernière erreur n’a pas pu être relue automatiquement.')
+        $lines.Add("  Cause   : contexte structuré indisponible; la dernière erreur n'a pas pu être relue automatiquement.")
         $lines.Add("  Journal : $fallbackLog")
         return ($lines -join [Environment]::NewLine)
     }
