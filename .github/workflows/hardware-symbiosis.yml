@@ -98,7 +98,10 @@ jobs:
             exit 1
           fi
           grep -Fq "ValidateSet('Audit', 'Verify')" "$script"
-          echo 'Hardware safety boundary: OK'
+          grep -Fq '$driverChecks = [ordered]@{' "$script"
+          grep -Fq 'DriverFindings' "$script"
+          grep -Fq 'non bloquant' "$script"
+          echo 'Hardware safety and driver-advisory boundary: OK'
 
   audit-smoke:
     runs-on: windows-latest
@@ -116,7 +119,14 @@ jobs:
           $release = (Get-Content -Raw .\VERSION).Trim()
           $report = Get-Content -Raw .\reports\hardware\hardware-symbiosis.json | ConvertFrom-Json
           if ($report.Release -ne $release) { throw "Unexpected hardware report release: $($report.Release)" }
-          if ([int]$report.SchemaVersion -ne 1) { throw 'Unexpected hardware report schema version.' }
+          if ([int]$report.SchemaVersion -ne 2) { throw 'Unexpected hardware report schema version.' }
           if ($report.PolicyReviewedAt -ne '2026-08-12') { throw 'Hardware policy review date is missing.' }
           if ($null -eq $report.HardChecks) { throw 'HardChecks section is missing.' }
+          if ($null -eq $report.HardCheckFailures) { throw 'HardCheckFailures section is missing.' }
+          if ($null -eq $report.DriverChecks) { throw 'DriverChecks section is missing.' }
+          if ($null -eq $report.DriverFindings) { throw 'DriverFindings section is missing.' }
           if ($null -eq $report.Advisory) { throw 'Advisory section is missing.' }
+          foreach ($name in @('ArcDriverAtLeastApproved','Realtek8126Present','WifiAdapterPresent','AmdChipsetAtLeastApprovedBaseline')) {
+            if ($null -eq $report.DriverChecks.PSObject.Properties[$name]) { throw "Driver advisory missing: $name" }
+            if ($null -ne $report.HardChecks.PSObject.Properties[$name]) { throw "Driver advisory incorrectly blocks hardware readiness: $name" }
+          }
