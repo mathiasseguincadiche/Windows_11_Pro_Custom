@@ -1,16 +1,16 @@
-name: Restore point exit-code V22
+name: Restore point exit-code
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/restore-point-exitcode-v22.yml'
+      - '.github/workflows/restore-point-exitcode.yml'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/core/native-process.psm1'
       - 'scripts/windows/41_restore_point.ps1'
   push:
     branches: [main]
     paths:
-      - '.github/workflows/restore-point-exitcode-v22.yml'
+      - '.github/workflows/restore-point-exitcode.yml'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/core/native-process.psm1'
       - 'scripts/windows/41_restore_point.ps1'
@@ -29,8 +29,9 @@ jobs:
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
           grep -Fq '[Environment]::Exit(3)' "$readiness"
-          grep -Fq "ProbeExitCode=" "$readiness"
-          grep -Fq "Version = 'V22'" "$readiness"
+          grep -Fq 'ProbeExitCode=' "$readiness"
+          grep -Fq 'Release=$release' "$readiness"
+          grep -Fq 'SchemaVersion=1' "$readiness"
           if grep -Fq 'checkpointName -eq' "$readiness"; then
             echo 'Text comparison is forbidden for Checkpoint-Computer capability.' >&2
             exit 1
@@ -88,7 +89,7 @@ jobs:
           Import-Module .\scripts\core\native-process.psm1 -Force
 
           $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-          $probe = 'if ($null -eq (Get-Command WpcDefinitelyMissingCommandV22 -ErrorAction SilentlyContinue)) { [Environment]::Exit(3) } else { [Environment]::Exit(0) }'
+          $probe = 'if ($null -eq (Get-Command WpcDefinitelyMissingCommand -ErrorAction SilentlyContinue)) { [Environment]::Exit(3) } else { [Environment]::Exit(0) }'
           $result = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @(
             '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $probe
           ) -SuppressErrorOutput
