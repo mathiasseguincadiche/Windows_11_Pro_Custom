@@ -42,13 +42,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Parse corrected control-center and storage scripts
+      - name: Parse corrected control-center and physical diagnostics
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
             '.\menu.ps1',
-            '.\scripts\bootstrap\00_storage_integrity.ps1'
+            '.\scripts\bootstrap\00_storage_integrity.ps1',
+            '.\scripts\bootstrap\00_preflight.ps1',
+            '.\scripts\windows\52_hardware_symbiosis.ps1'
           )) {
             $tokens = $null
             $errors = $null
