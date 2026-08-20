@@ -1,8 +1,7 @@
 name: Temporary PowerShell 7.6.4 migration
 
 on:
-  push:
-    branches: [refactor/powershell-7-only]
+  pull_request:
     paths:
       - '.github/workflows/tmp-powershell-764-migration.yml'
 
