@@ -88,12 +88,18 @@ jobs:
           grep -Fq 'scripts\core\reboot-state.psm1' "$update"
           grep -Fq 'Get-WpcPendingRebootState' "$update"
 
-          gate_line=$(grep -n "Invoke-WpcPendingRebootGate -Context 'avant l installation complete'" "$menu" | head -n1 | cut -d: -f1)
-          install_line=$(grep -n "DisplayName 'Installation complete'" "$menu" | head -n1 | cut -d: -f1)
-          if [ "$gate_line" -ge "$install_line" ]; then
-            echo 'Pending reboot gate must run before FullInstall.' >&2
-            exit 1
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('menu.ps1').read_text(encoding='utf-8')
+          gate = "Invoke-WpcPendingRebootGate -Context 'avant l installation complete'"
+          install = "DisplayName 'Installation complete'"
+          gate_pos = text.find(gate)
+          install_pos = text.find(install)
+          if gate_pos < 0 or install_pos < 0:
+              raise SystemExit('Pending reboot gate or FullInstall route is missing.')
+          if gate_pos >= install_pos:
+              raise SystemExit('Pending reboot gate must run before FullInstall.')
+          PY
 
           duplicate_detection='Get-ItemProperty(Value)?[^[:cntrl:]]*PendingFileRenameOperations|Session Manager[^[:cntrl:]]*PendingFileRenameOperations'
           if grep -InE "$duplicate_detection" "$machine" "$readiness" "$update"; then
