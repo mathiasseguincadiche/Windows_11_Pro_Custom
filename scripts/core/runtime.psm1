@@ -1,5 +1,11 @@
+#Requires -Version 7.6
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$powerShellRuntimeModule = Join-Path $PSScriptRoot 'powershell-runtime.psm1'
+if (-not (Test-Path -LiteralPath $powerShellRuntimeModule)) { throw "Contrat PowerShell introuvable: $powerShellRuntimeModule" }
+Import-Module $powerShellRuntimeModule -Force
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 
 if (-not ('Windows11ProCustom.ConsoleHeartbeat' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -202,11 +208,12 @@ function Write-WpcBanner {
     Write-Host ("  Release : {0}" -f $Context.Release) -ForegroundColor White
     Write-Host ("  Run     : {0}" -f $Context.RunId) -ForegroundColor DarkGray
     Write-Host ("  Logs    : {0}" -f $Context.LogRoot) -ForegroundColor DarkGray
+    Write-Host ("  PowerShell: {0} | Core | x64 | pwsh.exe | minimum 7.6.4" -f $PSVersionTable.PSVersion) -ForegroundColor DarkGray
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
     Write-Host '  Suivi interactif actif : phases, sous-etapes, durees et journaux sont affiches.' -ForegroundColor White
     Write-Host ("  Battement de vie       : apres {0}s sans sortie, [ACTIF] confirme que le traitement continue." -f (Get-WpcHeartbeatSeconds)) -ForegroundColor DarkGray
     Write-Host '  Legende                 : DEJA OK=rien a faire | A FAIRE=changement | EN COURS=travail | FAIT=termine | AVERTISSEMENT=non bloquant' -ForegroundColor DarkGray
-    Add-WpcLogLine -Path $Context.OrchestratorLogPath -Level 'RUN' -Message "$Title | Release=$($Context.Release) | RunId=$($Context.RunId)"
+    Add-WpcLogLine -Path $Context.OrchestratorLogPath -Level 'RUN' -Message "$Title | Release=$($Context.Release) | RunId=$($Context.RunId) | PowerShell=$($PSVersionTable.PSVersion) Core x64 pwsh.exe"
 }
 
 function New-WpcRunContext {
@@ -293,7 +300,7 @@ function Invoke-WpcManagedScript {
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
     Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Release=$($Context.Release) Phase=$Phase Purpose=$effectivePurpose Script=$relative Args=$argText"
-    Add-WpcLogLine -Path $logPath -Level 'HOST' -Message "Computer=$env:COMPUTERNAME User=$env:USERNAME PowerShell=$($PSVersionTable.PSVersion)"
+    Add-WpcLogLine -Path $logPath -Level 'HOST' -Message "Computer=$env:COMPUTERNAME User=$env:USERNAME PowerShell=$($PSVersionTable.PSVersion) Core x64 pwsh.exe"
     if (-not $Quiet -and $Purpose -ne 'Probe') {
         Write-WpcPhaseHeader -Context $Context -Phase $Phase
         Write-WpcActionHeader -Context $Context -DisplayName $DisplayName -Identity $relative -LogPath $logPath
@@ -482,6 +489,7 @@ function Complete-WpcRun {
     $summary=[ordered]@{
         Release=$Context.Release; SchemaVersion=1; RunId=$Context.RunId; Mode=$Context.Mode; StartedAt=$Context.StartedAt.ToString('o'); CompletedAt=(Get-Date).ToString('o')
         Success=$Success; FailureMessage=(Protect-WpcCommandText -Text $FailureMessage); Components=$finalEvents; ScriptExecutions=$scriptEvents; LatestScriptState=$latestScriptEvents
+        PowerShell=[ordered]@{ Edition=[string]$PSVersionTable.PSEdition; Version=[string]$PSVersionTable.PSVersion; MinimumVersion='7.6.4'; Executable='pwsh.exe'; Architecture='x64'; WindowsPowerShellSupported=$false }
         TotalDurationSeconds=$totalDuration; VisiblePhases=[int]$Context.PhaseNumber; VisibleActions=[int]$Context.ActionNumber
         Counts=[ordered]@{
             AlreadyOk=@($finalEvents | Where-Object Outcome -EQ 'DEJA_OK').Count
@@ -499,6 +507,7 @@ function Complete-WpcRun {
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
     Write-Host "  SYNTHESE D EXECUTION - RELEASE $($Context.Release)" -ForegroundColor Cyan
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
+    Write-Host ("  PowerShell         : {0} | Core | x64 | pwsh.exe" -f $PSVersionTable.PSVersion) -ForegroundColor White
     Write-Host ("  Duree totale       : {0}" -f (Get-WpcElapsedText -StartedAt $Context.StartedAt)) -ForegroundColor White
     Write-Host ("  Phases visibles    : {0}" -f $summary.VisiblePhases)
     Write-Host ("  Sous-etapes        : {0}" -f $summary.VisibleActions)

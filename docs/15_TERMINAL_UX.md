@@ -2,12 +2,26 @@
 
 L'option **1. Installation complete** doit rester comprehensible pendant toute son execution. Le terminal n'est pas un simple flux de logs : il doit indiquer en permanence ce que l'orchestrateur fait, dans quelle phase il se trouve et si une operation longue continue reellement a travailler.
 
+## Runtime du terminal
+
+Le suivi interactif appartient au runtime moderne du projet :
+
+```text
+PowerShell 7.6.4 minimum
+PSEdition Core
+processus x64
+pwsh.exe
+```
+
+Windows PowerShell 5.1 n'est pas une cible de compatibilite. Le menu, les sous-processus eleves, l'orchestrateur et la CI utilisent `pwsh`.
+
 ## Contrat d'affichage
 
 Au debut du run, le bandeau annonce :
 
 - le numero de release et le RunId ;
 - le dossier des journaux ;
+- la version PowerShell 7 reelle et le minimum accepte ;
 - l'activation du suivi interactif ;
 - le delai du battement de vie ;
 - la signification des principaux statuts.
@@ -71,6 +85,7 @@ En cas d'erreur, l'action courante, le script et le journal ont deja ete affiche
 
 La synthese contient notamment :
 
+- le runtime PowerShell 7 qui a execute le run ;
 - la duree totale ;
 - le nombre de phases visibles ;
 - le nombre de sous-etapes visibles ;
@@ -80,9 +95,16 @@ La synthese contient notamment :
 - le nombre d'echecs actuels ;
 - le chemin du resume JSON.
 
+Le `summary.json` conserve egalement l'edition, la version, la version minimale, l'executable et l'architecture PowerShell.
+
 ## Exemple simplifie
 
 ```text
+==============================================================================
+  Windows 11 Pro Custom - Orchestrateur
+  PowerShell: 7.6.4 | Core | x64 | pwsh.exe | minimum 7.6.4
+==============================================================================
+
 ==============================================================================
   ETAPE 03 | Application de la configuration
   Objectif   : Applique uniquement les ecarts detectes.

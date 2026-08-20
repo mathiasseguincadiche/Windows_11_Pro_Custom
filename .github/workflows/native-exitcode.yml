@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/native-exitcode.yml'
       - 'scripts/core/native-process.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
       - 'scripts/bootstrap/**'
       - 'scripts/windows/**'
       - 'scripts/updates/**'
@@ -13,6 +14,7 @@ on:
     paths:
       - '.github/workflows/native-exitcode.yml'
       - 'scripts/core/native-process.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
       - 'scripts/bootstrap/**'
       - 'scripts/windows/**'
       - 'scripts/updates/**'
@@ -35,9 +37,6 @@ jobs:
           # shellcheck disable=SC2016
           grep -Fq '$global:LASTEXITCODE = 0' "$helper"
           grep -Fq 'Get-Variable -Name LASTEXITCODE -ErrorAction SilentlyContinue' "$helper"
-
-          # A direct read is forbidden: under StrictMode the automatic variable
-          # may not exist yet in a fresh PowerShell session.
           # shellcheck disable=SC2016
           if grep -nE '\$exitCode[[:space:]]*=[^\n]*\$LASTEXITCODE' "$helper"; then
             echo 'Unsafe direct LASTEXITCODE dereference detected.' >&2
@@ -48,6 +47,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate PowerShell 7.6.4 runtime
+        shell: pwsh
+        run: |
+          Import-Module .\scripts\core\powershell-runtime.psm1 -Force
+          [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 
       - name: Parse helper
         shell: pwsh
@@ -60,38 +65,26 @@ jobs:
             [ref]$tokens,
             [ref]$errors
           )
-          if (@($errors).Count -gt 0) {
-            throw "native-process.psm1 parse errors: $($errors.Message -join '; ')"
-          }
+          if (@($errors).Count -gt 0) { throw "native-process.psm1 parse errors: $($errors.Message -join '; ')" }
 
       - name: Reproduce fresh-session LASTEXITCODE absence
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           Set-StrictMode -Version Latest
-          if ($PSVersionTable.PSVersion -lt [version]'7.4') {
-            throw "PowerShell 7.4+ required, got $($PSVersionTable.PSVersion)"
-          }
-
           Import-Module .\scripts\core\native-process.psm1 -Force
           Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
-          if (Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue) {
-            throw 'Test precondition failed: LASTEXITCODE should be absent.'
-          }
+          if (Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue) { throw 'Test precondition failed: LASTEXITCODE should be absent.' }
 
-          $powershell = Get-WpcNativeApplication -Name 'powershell.exe'
-          if (-not $powershell) { throw 'powershell.exe unavailable.' }
-          $result = Invoke-WpcNativeCapture -FilePath $powershell.Source -ArgumentList @(
-            '-NoLogo', '-NoProfile', '-NonInteractive', '-Command', "[Console]::Out.Write('strictmode-ok')"
-          )
+          $cmd = Get-WpcNativeApplication -Name 'cmd.exe'
+          if (-not $cmd) { throw 'cmd.exe unavailable.' }
+          $result = Invoke-WpcNativeCapture -FilePath $cmd.Source -ArgumentList @('/d','/c','echo strictmode-ok')
           if ($result.ExitCode -ne 0 -or $result.Text.Trim() -ne 'strictmode-ok') {
             throw "Fresh-session native capture failed: exit=$($result.ExitCode) text=$($result.Text)"
           }
 
           $normalized = Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
-          if ($null -eq $normalized -or [int]$normalized.Value -ne 0) {
-            throw 'Helper must leave global LASTEXITCODE initialized to 0.'
-          }
+          if ($null -eq $normalized -or [int]$normalized.Value -ne 0) { throw 'Helper must leave global LASTEXITCODE initialized to 0.' }
 
       - name: Preserve nonzero native exit codes
         shell: pwsh
@@ -100,13 +93,10 @@ jobs:
           Set-StrictMode -Version Latest
           Import-Module .\scripts\core\native-process.psm1 -Force
           Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
-
           $cmd = Get-WpcNativeApplication -Name 'cmd.exe'
           if (-not $cmd) { throw 'cmd.exe unavailable.' }
           $result = Invoke-WpcNativeCapture -FilePath $cmd.Source -ArgumentList @('/d', '/c', 'exit 7')
-          if ($result.ExitCode -ne 7) {
-            throw "Expected native exit code 7, got $($result.ExitCode)"
-          }
+          if ($result.ExitCode -ne 7) { throw "Expected native exit code 7, got $($result.ExitCode)" }
 
       - name: Exercise WinGet WindowsApps alias with LASTEXITCODE absent
         shell: pwsh
@@ -115,16 +105,10 @@ jobs:
           Set-StrictMode -Version Latest
           Import-Module .\scripts\core\native-process.psm1 -Force
           Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
-
           $winget = Get-WpcNativeApplication -Name 'winget.exe'
           if (-not $winget) {
             Write-Warning 'winget.exe unavailable on hosted runner; generic fresh-session and nonzero-exit tests remain authoritative.'
             return
           }
-
-          Write-Host "WinGet source: $($winget.Source)"
           $result = Invoke-WpcNativeCapture -FilePath $winget.Source -ArgumentList @('--version') -SuppressErrorOutput
-          if ($result.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($result.Text)) {
-            throw "WinGet capture failed: exit=$($result.ExitCode) text=$($result.Text)"
-          }
-          Write-Host "WinGet version: $($result.Text.Trim())"
+          if ($result.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($result.Text)) { throw "WinGet capture failed: exit=$($result.ExitCode) text=$($result.Text)" }

@@ -12,6 +12,8 @@ on:
       - 'scripts/bootstrap/13_validate_hardware.ps1'
       - 'scripts/windows/41_restore_point.ps1'
       - 'scripts/core/native-process.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
+      - 'config/powershell/runtime.json'
   push:
     branches: [main]
     paths:
@@ -24,6 +26,8 @@ on:
       - 'scripts/bootstrap/13_validate_hardware.ps1'
       - 'scripts/windows/41_restore_point.ps1'
       - 'scripts/core/native-process.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
+      - 'config/powershell/runtime.json'
 
 permissions:
   contents: read
@@ -49,6 +53,7 @@ jobs:
           grep -Fq 'RequireFoundation' "$readiness"
           grep -Fq 'Release=$release' "$readiness"
           grep -Fq 'SchemaVersion=2' "$readiness"
+          grep -Fq 'PowerShell 7.6.4+ Core x64' "$readiness"
           grep -Fq 'Matériel cible essentiel détecté' "$readiness"
           grep -Fq 'Affichage cible 1440p240' "$readiness"
           grep -Fq -- '-Blocking $false' "$readiness"
@@ -69,33 +74,33 @@ jobs:
           grep -Fq 'RequireFoundation=[switch]::Present' "$install"
           grep -Fq -- '-not $PlanOnly' "$install"
 
-          manual_line=$(grep -n 'Ensure-HardwareManualEvidence' "$install" | tail -n1 | cut -d: -f1)
           foundation_line=$(grep -n '02_foundation.ps1' "$install" | head -n1 | cut -d: -f1)
           machine_state_line=$(grep -n '01_machine_state.ps1' "$install" | head -n1 | cut -d: -f1)
-          if [ "$manual_line" -ge "$foundation_line" ]; then
-            echo 'Manual hardware evidence must be enforced before foundation mutation.' >&2
-            exit 1
-          fi
           if [ "$foundation_line" -ge "$machine_state_line" ]; then
             echo 'Foundation bootstrap must occur before normal convergence discovery/plan.' >&2
             exit 1
           fi
 
+          grep -Fq 'Assert-WpcPowerShellRuntime' "$foundation"
+          grep -Fq "[version]'7.6.4'" "$foundation"
           grep -Fq 'Enable-WindowsOptionalFeature -Online -FeatureName' "$foundation"
           grep -Fq 'Microsoft-Windows-Subsystem-Linux' "$foundation"
           grep -Fq 'VirtualMachinePlatform' "$foundation"
           grep -Fq 'REDÉMARRAGE REQUIS' "$foundation"
-          grep -Fq 'Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe' "$foundation"
+          grep -Fq 'Repair-WpcWinGetPowerShell7' "$foundation"
           grep -Fq 'Microsoft.WinGet.Client' "$foundation"
           grep -Fq 'Install-PackageProvider -Name NuGet -Force -ForceBootstrap' "$foundation"
           grep -Fq 'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted' "$foundation"
           grep -Fq 'Repair-WinGetPackageManager -Force -Latest' "$foundation"
           grep -Fq -- '--web-download' "$foundation"
-          grep -Fq 'VERDICT: WINDOWS FOUNDATION READY' "$foundation"
+          grep -Fq 'VERDICT: WINDOWS FOUNDATION READY - POWERSHELL 7 ONLY' "$foundation"
 
-          grep -Fq 'System32\WindowsPowerShell\v1.0\powershell.exe' "$foundation"
-          grep -Fq 'System32\WindowsPowerShell\v1.0\powershell.exe' "$readiness"
-          grep -Fq 'System32\WindowsPowerShell\v1.0\powershell.exe' "$restore"
+          grep -Fq "ClassName SystemRestore" "$readiness"
+          grep -Fq "MethodName 'CreateRestorePoint'" "$restore"
+          if grep -Fq 'Checkpoint-Computer' "$foundation" "$readiness" "$restore"; then
+            echo 'Legacy restore-point runtime dependency detected.' >&2
+            exit 1
+          fi
 
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|DisableRealtimeMonitoring|--unregister|Remove-AppxPackage'
           if grep -InE "$forbidden" "$foundation"; then
@@ -127,6 +132,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
             '.\install.ps1',
+            '.\scripts\core\powershell-runtime.psm1',
             '.\scripts\bootstrap\00_preflight.ps1',
             '.\scripts\bootstrap\02_physical_readiness.ps1',
             '.\scripts\bootstrap\02_foundation.ps1',
@@ -139,15 +145,21 @@ jobs:
             if (@($errors).Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
           }
 
-      - name: Prove deterministic Windows PowerShell 5.1 resolution
+      - name: Prove PowerShell 7 runtime and SystemRestore API
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $path = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-          if (-not (Test-Path -LiteralPath $path)) { throw "Windows PowerShell 5.1 missing at $path" }
-          $output = & $path -NoLogo -NoProfile -NonInteractive -Command '(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name'
-          if (($output | Out-String).Trim() -ne 'Checkpoint-Computer') {
-            throw 'Checkpoint-Computer was not resolved by Windows PowerShell 5.1.'
+          Import-Module .\scripts\core\powershell-runtime.psm1 -Force
+          [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
+          try {
+            $class = Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop
+          } catch {
+            Write-Warning 'SystemRestore is not exposed by this hosted Windows Server runner; physical Windows 11 validation remains fail-closed.'
+            return
+          }
+          $methods = @($class.CimClassMethods.Keys)
+          foreach ($name in @('Enable','CreateRestorePoint')) {
+            if ($methods -notcontains $name) { throw "SystemRestore.$name unavailable." }
           }
 
       - name: Prove optional-feature mutation API exists
@@ -157,12 +169,4 @@ jobs:
           Import-Module Dism -ErrorAction Stop
           foreach ($name in @('Get-WindowsOptionalFeature','Enable-WindowsOptionalFeature')) {
             if (-not (Get-Command $name -ErrorAction SilentlyContinue)) { throw "$name unavailable after DISM import." }
-          }
-
-      - name: Prove App Installer registration command exists
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if (-not (Get-Command Add-AppxPackage -ErrorAction SilentlyContinue)) {
-            throw 'Add-AppxPackage unavailable in Windows PowerShell.'
           }

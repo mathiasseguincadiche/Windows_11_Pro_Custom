@@ -1,3 +1,4 @@
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
@@ -12,6 +13,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$PowerShellRuntimeModule = Join-Path $RepoRoot 'scripts\core\powershell-runtime.psm1'
+if (-not (Test-Path -LiteralPath $PowerShellRuntimeModule)) { throw "Contrat PowerShell introuvable: $PowerShellRuntimeModule" }
+Import-Module $PowerShellRuntimeModule -Force
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 $Release = (Get-Content -Raw (Join-Path $RepoRoot 'VERSION')).Trim()
 if ($Release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION invalide: $Release" }
 $PolicyPath = Join-Path $RepoRoot 'config\backup\policy.json'
@@ -64,7 +69,7 @@ function Resolve-StorageIdentityBaseline {
     throw "Baseline d'identité stockage absente. Exécute et vérifie .\scripts\bootstrap\00_storage_identity.ps1 avant de créer un Golden Backup."
 }
 
-if (-not (Test-Administrator)) { throw 'La création de sauvegarde nécessite une session PowerShell élevée.' }
+if (-not (Test-Administrator)) { throw 'La création de sauvegarde nécessite une session PowerShell 7 élevée.' }
 $StorageIdentity = Resolve-StorageIdentityBaseline
 $StorageIdentityDocument = Get-Content -Raw -LiteralPath $StorageIdentity.Path | ConvertFrom-Json
 $storageSchema = if ($StorageIdentityDocument.PSObject.Properties.Name -contains 'SchemaVersion') { [int]$StorageIdentityDocument.SchemaVersion } else { $null }
@@ -73,7 +78,7 @@ if (-not (($storageSchema -eq 1) -or ($legacyContract -eq 'V25'))) {
     throw "Format de baseline stockage non supporté: SchemaVersion=$storageSchema ContractVersion=$legacyContract"
 }
 
-foreach ($command in @('wbadmin.exe','reagentc.exe','wsl.exe','powershell.exe')) {
+foreach ($command in @('wbadmin.exe','reagentc.exe','wsl.exe','pwsh.exe')) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Commande requise indisponible: $command" }
 }
 
@@ -146,10 +151,16 @@ $RestorePointAttempted=$false; $RestorePointExitCode=$null
 if (-not $SkipRestorePoint) {
     $RestorePointAttempted=$true
     $RestorePointScript=Join-Path $RepoRoot 'scripts\windows\41_restore_point.ps1'
-    $RestorePointOutput=@(& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestorePointScript -Description 'Windows_11_Pro_Custom Golden Backup' 2>&1)
-    $RestorePointExitCode=$LASTEXITCODE; $global:LASTEXITCODE=0
+    try {
+        $RestorePointOutput=@(& $RestorePointScript -Description 'Windows_11_Pro_Custom Golden Backup' *>&1)
+        $RestorePointExitCode=0
+    } catch {
+        $RestorePointExitCode=1
+        $RestorePointOutput=@([string]$_.Exception.Message)
+        $RestorePointOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
+        throw "Le point de restauration Golden Backup a échoué dans PowerShell 7: $($_.Exception.Message)"
+    }
     $RestorePointOutput | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt')
-    if ($RestorePointExitCode -ne 0) { throw "Le point de restauration Golden Backup a échoué avec le code $RestorePointExitCode." }
 } else { 'Restore point explicitly skipped by operator.' | Set-Content -Encoding UTF8 (Join-Path $MetadataDirectory 'restore-point.txt') }
 
 Write-Host '[INFO] Arrêt de WSL avant lʼimage de C: et E:.' -ForegroundColor Yellow
@@ -184,6 +195,7 @@ $Manifest=[ordered]@{
     capacityPreflight=$CapacityPreflight; protectedVolumes=@($Policy.systemVolumes); windowsImageBackupRoot=$WindowsImageRoot
     wbadminBackupExitCode=$WbadminExitCode; wbadminVersionsExitCode=$VersionsExitCode; wbadminVersionIdentifier=$CreatedWbadminVersionIdentifier
     winReEnabled=[bool]$WinReEnabled; restorePointAttempted=[bool]$RestorePointAttempted; restorePointExitCode=$RestorePointExitCode
+    powerShell=[ordered]@{ edition=[string]$PSVersionTable.PSEdition; version=[string]$PSVersionTable.PSVersion; executable='pwsh.exe'; minimumVersion='7.6.4' }
     wsl=[ordered]@{ distribution=$Distribution; exportPath=$WslBackupPath; relativePath="WSL\$($WslFile.Name)"; bytes=$WslFile.Length; sha256=$WslHash.Hash; format='vhdx' }
     storageIdentity=[ordered]@{ schemaVersion=$storageSchema; legacyContractVersion=$legacyContract; sourcePath=$StorageIdentity.Path; relativePath='metadata\storage-identity.json'; sha256=$StorageIdentityHash.Hash; legacySource=[bool]$StorageIdentity.Legacy }
     safety=[ordered]@{ destructiveRestoreAutomation=$false; unregisterExistingDistribution=$false; automaticDiskRecreation=$false }

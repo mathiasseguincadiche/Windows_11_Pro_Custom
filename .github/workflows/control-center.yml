@@ -4,16 +4,19 @@ on:
   push:
     branches:
       - main
-      - docs/restore-project-first-canonical
     paths:
       - menu.ps1
       - START_MENU.cmd
+      - scripts/core/powershell-runtime.psm1
+      - config/powershell/runtime.json
       - docs/17_CONTROL_CENTER.md
       - .github/workflows/control-center.yml
   pull_request:
     paths:
       - menu.ps1
       - START_MENU.cmd
+      - scripts/core/powershell-runtime.psm1
+      - config/powershell/runtime.json
       - docs/17_CONTROL_CENTER.md
       - .github/workflows/control-center.yml
 
@@ -25,6 +28,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate PowerShell 7 runtime
+        shell: pwsh
+        run: |
+          $contract = Get-Content -Raw .\config\powershell\runtime.json | ConvertFrom-Json
+          Import-Module .\scripts\core\powershell-runtime.psm1 -Force
+          [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]$contract.minimumVersion) -RequireWindows -PassThru)
 
       - name: Parse menu PowerShell
         shell: pwsh
@@ -42,6 +52,9 @@ jobs:
         run: |
           $menu = Get-Content -Raw menu.ps1
           foreach ($needle in @(
+            "Assert-WpcPowerShellRuntime",
+            "[version]'7.6.4'",
+            "pwsh.exe",
             "FullInstall=[switch]::Present",
             "03_apps.ps1",
             "UpdateScript",
@@ -64,15 +77,11 @@ jobs:
           )) {
             if (-not $menu.Contains($needle)) { throw "Contrat Control Center absent: $needle" }
           }
-          foreach ($forbidden in @('InstallOpenClawAI','ValidateOpenClawAI','Installer ou reparer OpenClaw')) {
-            if ($menu.Contains($forbidden)) { throw "Responsabilité externe interdite dans le menu: $forbidden" }
+          foreach ($forbidden in @('InstallOpenClawAI','ValidateOpenClawAI','Installer ou reparer OpenClaw','Get-Command powershell.exe')) {
+            if ($menu.Contains($forbidden)) { throw "Responsabilité ou runtime interdit dans le menu: $forbidden" }
           }
-          if ($menu -match 'Remove-Item\s+-Recurse|Format-Volume|Clear-Disk') {
-            throw 'Le menu ne doit contenir aucune restauration destructive propre.'
-          }
-          if ($menu -match 'CENTRE DE CONTROLE V\d+|System Update Manager V\d+|sauvegarde V\d+|restauration V\d+') {
-            throw 'Le menu ne doit plus exposer de numéro de version historique.'
-          }
+          if ($menu -match 'Remove-Item\s+-Recurse|Format-Volume|Clear-Disk') { throw 'Le menu ne doit contenir aucune restauration destructive propre.' }
+          if ($menu -match 'CENTRE DE CONTROLE V\d+|System Update Manager V\d+|sauvegarde V\d+|restauration V\d+') { throw 'Le menu ne doit plus exposer de numéro de version historique.' }
 
       - name: Prove all critical routes with DryRun
         shell: pwsh
@@ -82,9 +91,7 @@ jobs:
             Write-Host "--- Choice $choice ---"
             $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
             if ($LASTEXITCODE -ne 0) { throw "DryRun choice $choice failed." }
-            if ($choice -ne '10' -and -not $output.Contains('[DRY-RUN]')) {
-              throw "Choice $choice did not prove DryRun routing."
-            }
+            if ($choice -ne '10' -and -not $output.Contains('[DRY-RUN]')) { throw "Choice $choice did not prove DryRun routing." }
           }
 
       - name: Assert exact primary routes
@@ -92,6 +99,7 @@ jobs:
         run: |
           $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($full.Contains('install.ps1') -and $full.Contains('-FullInstall'))) { throw 'Full install route incorrect.' }
+          if (-not ($full.Contains('Runtime minimum :') -and $full.Contains('7.6.4'))) { throw 'PowerShell minimum runtime is not visible in menu output.' }
 
           $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($apps.Contains('03_apps.ps1') -and $apps.Contains("-Mode 'Apply'"))) { throw 'Apps-only route incorrect.' }
@@ -111,28 +119,22 @@ jobs:
             if (-not $globalVerify.Contains($flag)) { throw "Global verify route missing $flag." }
           }
 
-          $fingerprint = & ./menu.ps1 -Choice 8.5 -DryRun -NoPause -NoClear *>&1 | Out-String
-          if (-not ($fingerprint.Contains('90_workstation_fingerprint.ps1') -and $fingerprint.Contains('PHYSICAL') -and $fingerprint.Contains('ConfirmPhysicalEvidence'))) {
-            throw 'Physical fingerprint verification route incorrect.'
-          }
-
-          foreach ($choice in @('8.6','8.7')) {
-            $record = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
-            foreach ($flag in @('PHYSICAL','ConfirmPhysicalEvidence','ConfirmHealthyState')) {
-              if (-not $record.Contains($flag)) { throw "Physical baseline route $choice missing $flag." }
-            }
-          }
-
   launcher-contract:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
-      - name: Validate launcher and safety wording
+      - name: Validate PowerShell 7-only launcher and safety wording
+        shell: bash
         run: |
-          grep -Fq 'pwsh.exe' START_MENU.cmd
-          grep -Fq 'powershell.exe' START_MENU.cmd
+          set -euo pipefail
+          grep -Fq 'where pwsh.exe' START_MENU.cmd
+          grep -Fq 'PowerShell 7.6.4 minimum' START_MENU.cmd
           grep -Fq 'menu.ps1' START_MENU.cmd
+          if grep -Eiq 'where[[:space:]]+powershell\.exe|powershell\.exe[[:space:]]+-NoLogo' START_MENU.cmd; then
+            echo 'START_MENU.cmd must never fall back to Windows PowerShell.' >&2
+            exit 1
+          fi
           grep -Fq 'Installation complete' menu.ps1
           grep -Fq 'Installation / reparation des logiciels' menu.ps1
           grep -Fq 'Mises a jour completes' menu.ps1

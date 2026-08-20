@@ -13,6 +13,8 @@ on:
       - 'scripts/core/windows-native.psm1'
       - 'scripts/core/native-process.psm1'
       - 'scripts/core/reboot-state.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
+      - 'config/powershell/runtime.json'
       - 'config/hardware/**'
       - 'config/wsl/**'
       - 'manifests/winget/apps-core.json'
@@ -29,6 +31,8 @@ on:
       - 'scripts/core/windows-native.psm1'
       - 'scripts/core/native-process.psm1'
       - 'scripts/core/reboot-state.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
+      - 'config/powershell/runtime.json'
       - 'config/hardware/**'
       - 'config/wsl/**'
       - 'manifests/winget/apps-core.json'
@@ -61,8 +65,8 @@ jobs:
           grep -Fq 'avant toute convergence' "$install"
           grep -Fq -- '-not $PlanOnly' "$install"
 
-          grep -Fq 'PowerShell 7 supporté' "$readiness"
-          grep -Fq '7.4.0' "$readiness"
+          grep -Fq 'PowerShell 7.6.4+ Core x64' "$readiness"
+          grep -Fq 'minimum=7.6.4' "$readiness"
           grep -Fq 'build -ge 22621' "$readiness"
           grep -Fq 'FEATURE_COMPATIBLE=' "$readiness"
           grep -Fq 'SUPPORTED_OS=' "$readiness"
@@ -135,7 +139,8 @@ jobs:
             '.\scripts\bootstrap\08_devops.ps1',
             '.\scripts\core\windows-native.psm1',
             '.\scripts\core\native-process.psm1',
-            '.\scripts\core\reboot-state.psm1'
+            '.\scripts\core\reboot-state.psm1',
+            '.\scripts\core\powershell-runtime.psm1'
           )) {
             $tokens = $null
             $errors = $null
@@ -158,7 +163,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           if ($PSVersionTable.PSEdition -ne 'Core') { throw "Expected PowerShell Core, got $($PSVersionTable.PSEdition)" }
-          if ([version]$PSVersionTable.PSVersion -lt [version]'7.4.0') { throw "PowerShell runner too old: $($PSVersionTable.PSVersion)" }
+          if ([version]$PSVersionTable.PSVersion -lt [version]'7.6.4') { throw "PowerShell runner too old: $($PSVersionTable.PSVersion); minimum=7.6.4" }
+          Import-Module .\scripts\core\powershell-runtime.psm1 -Force
+          [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
           Import-Module .\scripts\core\windows-native.psm1 -Force
           if (-not (Test-WpcWindowsHost)) { throw 'Windows runner was not detected as Windows.' }
           $hadOS = Test-Path Env:OS

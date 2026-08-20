@@ -1,32 +1,29 @@
+#Requires -Version 7.6
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Test-WpcWindowsHost {
-    # Ne jamais utiliser $env:OS comme source de vérité : cette variable peut être
-    # absente, altérée ou non transmise dans certains environnements PowerShell.
-    # PowerShell 7 expose $IsWindows de façon native ; Windows PowerShell 5.1
-    # utilise le fallback .NET historique.
-    if ($PSVersionTable.PSEdition -eq 'Core') {
-        return [bool]$IsWindows
-    }
-
-    return ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT)
+    return [bool]$IsWindows
 }
 
-function Get-WpcWindowsPowerShellModuleRoot {
+function Get-WpcWindowsNativeModuleRoot {
     if (-not (Test-WpcWindowsHost)) {
         throw 'Les modules Windows natifs ne sont disponibles que sous Windows.'
     }
     if ([string]::IsNullOrWhiteSpace($env:SystemRoot)) {
         throw 'SystemRoot est indisponible; impossible de localiser les modules Windows natifs.'
     }
+
+    # Windows conserve plusieurs modules système inbox sous ce répertoire historique.
+    # Ce chemin est seulement un emplacement de modules système ; ils sont
+    # importés directement dans le processus PowerShell 7 courant.
     return (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules')
 }
 
-function Add-WpcWindowsPowerShellModulePath {
-    $legacyRoot = Get-WpcWindowsPowerShellModuleRoot
-    if (-not (Test-Path -LiteralPath $legacyRoot)) {
-        throw "Répertoire des modules Windows introuvable: $legacyRoot"
+function Add-WpcWindowsNativeModulePath {
+    $nativeRoot = Get-WpcWindowsNativeModuleRoot
+    if (-not (Test-Path -LiteralPath $nativeRoot)) {
+        throw "Répertoire des modules Windows introuvable: $nativeRoot"
     }
 
     $separator = [IO.Path]::PathSeparator
@@ -38,7 +35,7 @@ function Add-WpcWindowsPowerShellModulePath {
         try {
             [string]::Equals(
                 [IO.Path]::GetFullPath($_).TrimEnd('\'),
-                [IO.Path]::GetFullPath($legacyRoot).TrimEnd('\'),
+                [IO.Path]::GetFullPath($nativeRoot).TrimEnd('\'),
                 [StringComparison]::OrdinalIgnoreCase
             )
         } catch {
@@ -48,13 +45,13 @@ function Add-WpcWindowsPowerShellModulePath {
 
     if (-not $alreadyPresent) {
         $env:PSModulePath = if ([string]::IsNullOrWhiteSpace($env:PSModulePath)) {
-            $legacyRoot
+            $nativeRoot
         } else {
-            $legacyRoot + $separator + $env:PSModulePath
+            $nativeRoot + $separator + $env:PSModulePath
         }
     }
 
-    return $legacyRoot
+    return $nativeRoot
 }
 
 function Import-WpcWindowsModule {
@@ -69,7 +66,7 @@ function Import-WpcWindowsModule {
         return [pscustomobject]@{ Module=$ModuleName; Available=$true; Imported=$false; Source='already-available'; Missing=@() }
     }
 
-    $legacyRoot = Add-WpcWindowsPowerShellModulePath
+    $nativeRoot = Add-WpcWindowsNativeModulePath
     $errors = [System.Collections.Generic.List[string]]::new()
 
     try {
@@ -80,7 +77,7 @@ function Import-WpcWindowsModule {
 
     $missingAfterName = @($RequiredCommands | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
     if ($missingAfterName.Count -gt 0) {
-        $manifest = Join-Path (Join-Path $legacyRoot $ModuleName) "$ModuleName.psd1"
+        $manifest = Join-Path (Join-Path $nativeRoot $ModuleName) "$ModuleName.psd1"
         if (Test-Path -LiteralPath $manifest) {
             try {
                 Import-Module -Name $manifest -ErrorAction Stop
@@ -92,7 +89,7 @@ function Import-WpcWindowsModule {
 
     $missing = @($RequiredCommands | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
     if ($missing.Count -eq 0) {
-        return [pscustomobject]@{ Module=$ModuleName; Available=$true; Imported=$true; Source='explicit-import'; Missing=@() }
+        return [pscustomobject]@{ Module=$ModuleName; Available=$true; Imported=$true; Source='explicit-import-pwsh'; Missing=@() }
     }
 
     $detail = "Module=$ModuleName | commandes manquantes=$($missing -join ', ') | PowerShell=$($PSVersionTable.PSVersion) $($PSVersionTable.PSEdition) | PSModulePath=$env:PSModulePath"
@@ -137,4 +134,4 @@ function Initialize-WpcWindowsNativeModules {
     return $results.ToArray()
 }
 
-Export-ModuleMember -Function Test-WpcWindowsHost, Get-WpcWindowsPowerShellModuleRoot, Add-WpcWindowsPowerShellModulePath, Import-WpcWindowsModule, Initialize-WpcWindowsNativeModules
+Export-ModuleMember -Function Test-WpcWindowsHost, Get-WpcWindowsNativeModuleRoot, Add-WpcWindowsNativeModulePath, Import-WpcWindowsModule, Initialize-WpcWindowsNativeModules

@@ -13,6 +13,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+      - name: Validate PowerShell 7 runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $contract = Get-Content -Raw .\config\powershell\runtime.json | ConvertFrom-Json
+          if ($PSVersionTable.PSEdition -ne 'Core') { throw "PowerShell Core required; detected $($PSVersionTable.PSEdition)." }
+          if ([version]$PSVersionTable.PSVersion -lt [version]$contract.minimumVersion) { throw "PowerShell $($contract.minimumVersion)+ required; detected $($PSVersionTable.PSVersion)." }
+          if (-not [Environment]::Is64BitProcess) { throw 'x64 PowerShell process required.' }
+          Import-Module .\scripts\core\powershell-runtime.psm1 -Force
+          $fact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]$contract.minimumVersion) -RequireWindows -PassThru
+          Write-Host "Validated: PowerShell $($fact.Version) | $($fact.Edition) | $($fact.ExecutableName) | x64=$($fact.Is64BitProcess)"
+
       - name: Parse PowerShell files and modules
         shell: pwsh
         run: |
@@ -53,11 +65,11 @@ jobs:
             & .\scripts\windows\40_optimize.ps1 -Mode Audit -Profile $profile
           }
 
-      - name: Windows PowerShell 5.1 hardware smoke test
-        shell: powershell
+      - name: PowerShell 7 hardware contract smoke test
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
+          Write-Host "PowerShell 7: $($PSVersionTable.PSVersion)"
           Get-Content -Raw .\config\hardware\target.json | ConvertFrom-Json | Out-Null
           & .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Show
 
@@ -89,6 +101,19 @@ jobs:
         run: |
           set -euo pipefail
           find . -type f -name '*.json' -not -path './.git/*' -print0 | while IFS= read -r -d '' file; do jq empty "$file"; done
+
+      - name: Validate PowerShell runtime policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            (.schemaVersion == 1) and
+            (.edition == "Core") and
+            (.minimumVersion == "7.6.4") and
+            (.architecture == "x64") and
+            (.executable == "pwsh.exe") and
+            (.windowsPowerShellSupported == false)
+          ' config/powershell/runtime.json >/dev/null
 
       - name: Validate canonical optimization profiles
         shell: bash
@@ -191,7 +216,8 @@ jobs:
           grep -Fq 'wbadminVersionIdentifier' scripts/backup/60_create_backup.ps1
           grep -Fq 'wbadminVersionIdentifier' scripts/backup/61_validate_backup.ps1
           grep -Fq 'wbadminVersionIdentifier' scripts/backup/63_restore_drill.ps1
-          grep -Fq '$RestorePointExitCode=$LASTEXITCODE' scripts/backup/60_create_backup.ps1
+          grep -Fq "& \$RestorePointScript" scripts/backup/60_create_backup.ps1
+          grep -Fq "minimumVersion='7.6.4'" scripts/backup/60_create_backup.ps1
           grep -Fq 'restorePointExitCode=$RestorePointExitCode' scripts/backup/60_create_backup.ps1
 
       - name: Validate Windows Terminal configuration contract

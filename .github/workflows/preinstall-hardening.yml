@@ -19,11 +19,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
+            'scripts/core/powershell-runtime.psm1',
             'scripts/core/native-process.psm1',
             'scripts/core/reboot-state.psm1',
             'scripts/bootstrap/00_preflight.ps1',
             'scripts/bootstrap/01_machine_state.ps1',
             'scripts/bootstrap/02_physical_readiness.ps1',
+            'scripts/bootstrap/02_foundation.ps1',
             'scripts/bootstrap/03_apps.ps1',
             'scripts/bootstrap/07_wsl_user.ps1',
             'scripts/bootstrap/08_devops.ps1',
@@ -113,14 +115,21 @@ jobs:
             if ($edition -notmatch '^Core') { throw "Edition Home non détectée: $edition" }
           }
 
-      - name: Enforce fail-closed restore point
+      - name: Enforce fail-closed restore point through PowerShell 7 CIM
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'powershell.exe' scripts/windows/41_restore_point.ps1
-          grep -Fq 'Impossible de créer ou confirmer le point de restauration de sécurité' scripts/windows/41_restore_point.ps1
-          grep -Fq 'Point de restauration récent déjà présent' scripts/windows/41_restore_point.ps1
-          if grep -Fq "Registry backups remain the primary rollback mechanism" scripts/windows/41_restore_point.ps1; then
+          restore='scripts/windows/41_restore_point.ps1'
+          grep -Fq 'Assert-WpcPowerShellRuntime' "$restore"
+          grep -Fq 'Invoke-CimMethod' "$restore"
+          grep -Fq "MethodName 'CreateRestorePoint'" "$restore"
+          grep -Fq 'Impossible de créer ou confirmer le point de restauration de sécurité' "$restore"
+          grep -Fq 'Point de restauration récent déjà présent' "$restore"
+          if grep -Fq 'Checkpoint-Computer' "$restore"; then
+            echo 'Restore-point creation must not fall back to Windows PowerShell.' >&2
+            exit 1
+          fi
+          if grep -Fq "Registry backups remain the primary rollback mechanism" "$restore"; then
             echo 'Restore-point failure must not silently continue.' >&2
             exit 1
           fi
