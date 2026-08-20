@@ -1,3 +1,4 @@
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [string]$Choice = '',
@@ -20,11 +21,14 @@ $AppsScript = Join-Path $RepoRoot 'scripts\bootstrap\03_apps.ps1'
 $FingerprintScript = Join-Path $RepoRoot 'scripts\windows\90_workstation_fingerprint.ps1'
 $RestoreDrillScript = Join-Path $RepoRoot 'scripts\backup\63_restore_drill.ps1'
 $RebootStateModule = Join-Path $RepoRoot 'scripts\core\reboot-state.psm1'
+$PowerShellRuntimeModule = Join-Path $RepoRoot 'scripts\core\powershell-runtime.psm1'
 $script:LastActionRequiresReboot = $false
 
-foreach ($required in @($InstallScript,$UpdateScript,$AppsScript,$FingerprintScript,$RestoreDrillScript,$RebootStateModule)) {
+foreach ($required in @($InstallScript,$UpdateScript,$AppsScript,$FingerprintScript,$RestoreDrillScript,$RebootStateModule,$PowerShellRuntimeModule)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Point d'entree introuvable: $required" }
 }
+Import-Module $PowerShellRuntimeModule -Force
+$PowerShellRuntimeFact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru
 Import-Module $RebootStateModule -Force
 
 function Test-IsAdministrator {
@@ -35,9 +39,14 @@ function Test-IsAdministrator {
     } catch { return $false }
 }
 function Get-PowerShellExecutable {
-    $pwsh=Get-Command pwsh.exe -ErrorAction SilentlyContinue;if ($pwsh) {return $pwsh.Source}
-    $windowsPowerShell=Get-Command powershell.exe -ErrorAction SilentlyContinue;if ($windowsPowerShell) {return $windowsPowerShell.Source}
-    try {return (Get-Process -Id $PID).Path} catch {throw 'Aucun executable PowerShell utilisable.'}
+    $processPath = [string]$PowerShellRuntimeFact.ExecutablePath
+    if ([string]::IsNullOrWhiteSpace($processPath) -or -not (Test-Path -LiteralPath $processPath)) {
+        $pwsh = Get-Command pwsh.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $pwsh) { throw 'pwsh.exe est introuvable alors que le runtime PowerShell 7 a déjà été validé.' }
+        $processPath = [string]$pwsh.Source
+    }
+    if ([IO.Path]::GetFileName($processPath) -ine 'pwsh.exe') { throw "Exécutable PowerShell non autorisé: $processPath. pwsh.exe est requis." }
+    return $processPath
 }
 function Assert-WpcRebootStateCommands {
     $requiredCommands=@('Get-WpcPendingRebootState','Test-WpcRebootRequiredMessage')
@@ -52,7 +61,8 @@ function Write-Header {
     $admin=Test-IsAdministrator;$adminText=if ($admin) {'OUI'} else {'NON'};$adminColor=if ($admin) {[ConsoleColor]::Green} else {[ConsoleColor]::Yellow}
     Write-Line ('='*78) DarkCyan;Write-Line ' WINDOWS 11 PRO CUSTOM - CENTRE DE CONTROLE' Cyan;Write-Line ('='*78) DarkCyan
     Write-Host ' Release : ' -NoNewline -ForegroundColor DarkGray;Write-Host $ProjectRelease -ForegroundColor White
-    Write-Host ' PowerShell : ' -NoNewline -ForegroundColor DarkGray;Write-Host $PSVersionTable.PSVersion -ForegroundColor White
+    Write-Host ' PowerShell : ' -NoNewline -ForegroundColor DarkGray;Write-Host ("{0} | Core | x64 | pwsh.exe" -f $PowerShellRuntimeFact.Version) -ForegroundColor White
+    Write-Host ' Runtime minimum : ' -NoNewline -ForegroundColor DarkGray;Write-Host '7.6.5' -ForegroundColor Green
     Write-Host ' Administrateur : ' -NoNewline -ForegroundColor DarkGray;Write-Host $adminText -ForegroundColor $adminColor
     Write-Host ' Depot : ' -NoNewline -ForegroundColor DarkGray;Write-Host $RepoRoot -ForegroundColor White
     Write-Line ('-'*78) DarkCyan
@@ -189,8 +199,8 @@ function Invoke-WpcRepoScript {
     $actionStartedAt=Get-Date
     try {
         $exe=Get-PowerShellExecutable;$argList=New-Object System.Collections.Generic.List[string];$argList.Add('-NoProfile');$argList.Add('-ExecutionPolicy');$argList.Add('Bypass');$argList.Add('-File');$argList.Add($Path);foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) {$argList.Add($arg)};$childArgs=$argList.ToArray();$exitCode=0
-        if ($RequiresAdmin -and -not (Test-IsAdministrator)) {Write-Line '[ADMIN] Elevation UAC requise. Une fenetre PowerShell admin va etre ouverte.' Yellow;$process=Start-Process -FilePath $exe -Verb RunAs -ArgumentList $childArgs -Wait -PassThru;$exitCode=$process.ExitCode} else {& $exe @childArgs;$exitCode=$LASTEXITCODE}
-        if ($exitCode -ne 0) {Assert-WpcRebootStateCommands;$state=Get-WpcPendingRebootState;if ($state.Pending) {$script:LastActionRequiresReboot=$true;throw "REDÉMARRAGE REQUIS: le processus PowerShell isolé s'est arrêté avec un redémarrage Windows en attente ($($state.Reasons -join ', '))."};throw (Format-WpcProcessFailure -DisplayName $DisplayName -ExitCode $exitCode -StartedAt $actionStartedAt)}
+        if ($RequiresAdmin -and -not (Test-IsAdministrator)) {Write-Line '[ADMIN] Elevation UAC requise. Une fenetre PowerShell 7 admin va etre ouverte.' Yellow;$process=Start-Process -FilePath $exe -Verb RunAs -ArgumentList $childArgs -Wait -PassThru;$exitCode=$process.ExitCode} else {& $exe @childArgs;$exitCode=$LASTEXITCODE}
+        if ($exitCode -ne 0) {Assert-WpcRebootStateCommands;$state=Get-WpcPendingRebootState;if ($state.Pending) {$script:LastActionRequiresReboot=$true;throw "REDÉMARRAGE REQUIS: le processus PowerShell 7 isolé s'est arrêté avec un redémarrage Windows en attente ($($state.Reasons -join ', '))."};throw (Format-WpcProcessFailure -DisplayName $DisplayName -ExitCode $exitCode -StartedAt $actionStartedAt)}
         Write-Line '[TERMINE] Action terminee.' Green;return $true
     } catch {$message=$_.Exception.Message;Assert-WpcRebootStateCommands;if (Test-WpcRebootRequiredMessage -Message $message) {$script:LastActionRequiresReboot=$true;Write-Line ("[ACTION REQUISE] {0}" -f $message) Yellow;return $false};Write-Line ("[ERREUR] {0}" -f $message) Red;return $false}
 }
@@ -229,6 +239,7 @@ function Show-ComponentsMenu {while ($true) {Write-Header;Write-Line ' COMPOSANT
 function Show-LogsMenu {while ($true) {Write-Header;Write-Line ' JOURNAUX ET RAPPORTS' White;Write-Line '';Write-Line '  1. Ouvrir logs\' White;Write-Line '  2. Ouvrir reports\' White;Write-Line '  0. Retour' DarkGray;Write-Host '';$value=(Read-Host 'Ton choix').Trim();if ($value -eq '0') {return};if ($value -in @('1','2')) {Invoke-MainAction -Selected "9.$value";Pause-WpcMenu}}}
 function Show-Help {
     Write-Header;Write-Line ' AIDE RAPIDE' White;Write-Line ''
+    Write-Line 'PowerShell' Cyan;Write-Line '  Runtime unique: PowerShell 7.6.5 minimum, edition Core, processus x64, executable pwsh.exe.' DarkGray;Write-Line '  Windows PowerShell 5.1 peut rester installe dans Windows mais ce depot ne l execute jamais et ne l utilise pas comme fallback.' DarkGray
     Write-Line 'Installation complete' Cyan;Write-Line '  Converge toute la workstation avec install.ps1 -FullInstall.' DarkGray;Write-Line '  Si Windows exige un reboot, le menu bloque proprement puis propose le redemarrage; relancer ensuite la meme option reprend idempotemment.' DarkGray
     Write-Line 'Logiciels' Cyan;Write-Line '  Installe uniquement les applications WinGet manquantes ou non conformes.' DarkGray
     Write-Line 'Mises a jour' Cyan;Write-Line '  Gere Windows Update, WinGet, WSL, Ubuntu/APT, VS Code et les outils DevOps epingles.' DarkGray
