@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/install-hardening.yml'
       - 'scripts/core/wsl-detection.psm1'
+      - 'scripts/core/wsl-release.psm1'
       - 'scripts/bootstrap/01_machine_state.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/07_wsl_user.ps1'
@@ -18,6 +19,7 @@ on:
     paths:
       - '.github/workflows/install-hardening.yml'
       - 'scripts/core/wsl-detection.psm1'
+      - 'scripts/core/wsl-release.psm1'
       - 'scripts/bootstrap/01_machine_state.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/07_wsl_user.ps1'
@@ -60,9 +62,14 @@ jobs:
           done
 
           machine='scripts/bootstrap/01_machine_state.ps1'
-          grep -Fq 'Exact fallback:' "$machine"
+          grep -Fq "ArgumentList @('list', '--id', \$Id, '--exact', '--accept-source-agreements', '--disable-interactivity')" "$machine"
+          grep -Fq 'Exact WinGet IDs only' "$machine"
           grep -Fq 'Get-WpcWslRegistrationFact' "$machine"
           grep -Fq "\$detectionSource = 'registry'" "$machine"
+          if grep -Fq 'Get-WingetInventory' "$machine"; then
+            echo 'Machine-state must not use the legacy global WinGet inventory heuristic.' >&2
+            exit 1
+          fi
 
           for script in scripts/bootstrap/06_wsl.ps1 scripts/bootstrap/07_wsl_user.ps1 scripts/bootstrap/09_validate_devops.ps1; do
             grep -Fq 'wsl-detection.psm1' "$script"
@@ -79,6 +86,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $paths = @(
             '.\scripts\core\wsl-detection.psm1',
+            '.\scripts\core\wsl-release.psm1',
             '.\scripts\bootstrap\01_machine_state.ps1',
             '.\scripts\bootstrap\06_wsl.ps1',
             '.\scripts\bootstrap\07_wsl_user.ps1',
