@@ -1,6 +1,9 @@
 name: Release canonical migration
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-canonical-migration.yml'
   push:
     branches: [release-1.0.0-unification]
     paths:
@@ -78,7 +81,6 @@ jobs:
                   text = text.replace(old, new)
               for old, new in phrase_replacements.items():
                   text = text.replace(old, new)
-              # L'historique produit appartient au CHANGELOG, pas aux guides actifs.
               text = re.sub(r'\bV(?:3|4|5|6|8|9|10|11|12|13|18|19|20|21|22|23|24|27)\b', 'jalon historique', text)
               if text != original:
                   path.write_text(text, encoding='utf-8')
