@@ -102,6 +102,39 @@ function Get-StorageState {
     $volumes = @(Get-Volume | Where-Object DriveLetter -In @('C','E') | ForEach-Object { [pscustomobject]@{ Drive="$($_.DriveLetter):"; FileSystem=$_.FileSystem; HealthStatus=[string]$_.HealthStatus; FreeGB=[math]::Round($_.SizeRemaining/1GB,1); FreePercent=if ($_.Size -gt 0) { [math]::Round(($_.SizeRemaining/$_.Size)*100,1) } else { $null } } })
     [pscustomobject]@{ TrimEnabled=($trimText -match 'DisableDeleteNotify\s*=\s*0'); TrimRaw=$trimText; ScheduledOptimizeEnabled=$scheduledOptimize; Volumes=$volumes }
 }
+function Enable-TrimSafetyBaseline {
+    $storage = Get-StorageState
+    if ($storage.TrimEnabled -eq $true) {
+        Write-Host '[DÉJÀ OK] TRIM déjà actif (DisableDeleteNotify=0).' -ForegroundColor Green
+        return
+    }
+    if (-not [bool]$policy.storage.requireTrim) {
+        Write-Host '[INFO] La politique n impose pas TRIM; aucun changement.' -ForegroundColor DarkGray
+        return
+    }
+
+    Write-Host '[EN COURS] Activation de TRIM via fsutil behavior set DisableDeleteNotify 0...' -ForegroundColor Cyan
+    & fsutil.exe behavior set DisableDeleteNotify 0 | Out-Host
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ne 0) { throw "Activation TRIM échouée via fsutil (code=$code)." }
+    $after = Get-StorageState
+    if ($after.TrimEnabled -ne $true) { throw "TRIM reste désactivé après Apply. Sortie observée: $($after.TrimRaw)" }
+    Write-Host '[FAIT] TRIM activé et revalidé.' -ForegroundColor Green
+}
+function Enable-ScheduledOptimizeSafetyBaseline {
+    $storage = Get-StorageState
+    if ($storage.ScheduledOptimizeEnabled -ne $false) {
+        Write-Host '[DÉJÀ OK] Windows Scheduled Optimize n est pas désactivé.' -ForegroundColor Green
+        return
+    }
+
+    Write-Host '[EN COURS] Réactivation de Windows Scheduled Optimize...' -ForegroundColor Cyan
+    Enable-ScheduledTask -TaskPath '\Microsoft\Windows\Defrag\' -TaskName 'ScheduledDefrag' -ErrorAction Stop | Out-Null
+    $after = Get-StorageState
+    if ($after.ScheduledOptimizeEnabled -eq $false) { throw 'Windows Scheduled Optimize reste désactivé après Apply.' }
+    Write-Host '[FAIT] Windows Scheduled Optimize réactivé et revalidé.' -ForegroundColor Green
+}
 function Get-StartupInventory { @(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue | Select-Object Name, Command, Location, User) }
 function Get-CurrentState {
     [pscustomobject]@{ Timestamp=(Get-Date).ToString('o'); Memory=Get-MemoryManagerState; PageFile=Get-PageFileState; ActivePowerSchemeGuid=Get-ActivePowerSchemeGuid; AcPowerModeGuid=Get-AcPowerModeGuid; UI=Get-UiAnimationState; Storage=Get-StorageState; Startup=Get-StartupInventory }
@@ -149,6 +182,8 @@ if ($Mode -eq 'Apply') {
     if ((Get-ActivePowerSchemeGuid) -ne [string]$policy.power.activeSchemeGuid) { & powercfg.exe /SetActive ([string]$policy.power.activeSchemeGuid) | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Failed to activate Balanced power scheme.' } }
     if ([string]$policy.power.acPowerModeManagement -eq 'enforce') { if (Get-AcPowerModeGuid) { Set-AcPowerModeGuid -Guid ([string]$policy.power.acPowerModeGuid) } else { Write-Warning 'Windows AC power-mode API unavailable; the managed AC power mode could not be applied.' } }
     else { Write-Host '[INFO] Mode de puissance secteur observé uniquement; le réglage Windows actuel est conservé.' }
+    Enable-TrimSafetyBaseline
+    Enable-ScheduledOptimizeSafetyBaseline
     Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$policy.ui.minimizeRestoreAnimation) -ClientAreaAnimations ([bool]$policy.ui.clientAreaAnimations)
     Write-Host "[INFO] Les applications de démarrage sont uniquement inventoriées; aucune n'est désactivée automatiquement."
 }
@@ -166,7 +201,7 @@ elseif ($Mode -eq 'Rollback') {
     if ($before.ActivePowerSchemeGuid) { & powercfg.exe /SetActive ([string]$before.ActivePowerSchemeGuid) | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Failed to restore previous power scheme.' } }
     if ($before.AcPowerModeGuid) { Set-AcPowerModeGuid -Guid ([string]$before.AcPowerModeGuid) }
     if ($null -ne $before.UI.MinimizeRestoreAnimation -and $null -ne $before.UI.ClientAreaAnimations) { Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$before.UI.MinimizeRestoreAnimation) -ClientAreaAnimations ([bool]$before.UI.ClientAreaAnimations) }
-    Write-Host "[OK] État de réactivité Windows restauré depuis $initialStatePath. Un redémarrage peut être nécessaire pour les changements de pagefile." -ForegroundColor Green
+    Write-Host "[OK] État de réactivité Windows restauré depuis $initialStatePath. TRIM et Scheduled Optimize restent volontairement sur leur baseline de sécurité. Un redémarrage peut être nécessaire pour les changements de pagefile." -ForegroundColor Green
 }
 
 $current = Get-CurrentState
