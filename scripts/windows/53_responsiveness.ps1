@@ -150,7 +150,7 @@ if ($Mode -eq 'Apply') {
     if ([string]$policy.power.acPowerModeManagement -eq 'enforce') { if (Get-AcPowerModeGuid) { Set-AcPowerModeGuid -Guid ([string]$policy.power.acPowerModeGuid) } else { Write-Warning 'Windows AC power-mode API unavailable; the managed AC power mode could not be applied.' } }
     else { Write-Host '[INFO] Mode de puissance secteur observé uniquement; le réglage Windows actuel est conservé.' }
     Set-UiAnimationState -MinimizeRestoreAnimation ([bool]$policy.ui.minimizeRestoreAnimation) -ClientAreaAnimations ([bool]$policy.ui.clientAreaAnimations)
-    Write-Host '[INFO] Les applications de démarrage sont uniquement inventoriées; aucune n’est désactivée automatiquement.'
+    Write-Host "[INFO] Les applications de démarrage sont uniquement inventoriées; aucune n'est désactivée automatiquement."
 }
 elseif ($Mode -eq 'Rollback') {
     Assert-Administrator
