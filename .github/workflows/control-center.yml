@@ -55,8 +55,8 @@ jobs:
             "ValidateHardware=[switch]::Present",
             "ValidateWsl=[switch]::Present",
             "ValidateDevOps=[switch]::Present",
-            "90_workstation_fingerprint_v26.ps1",
-            "63_restore_drill_v26.ps1",
+            "90_workstation_fingerprint.ps1",
+            "63_restore_drill.ps1",
             "ConfirmPhysicalEvidence=[switch]::Present",
             "ReplaceBaseline=[switch]::Present",
             "DryRun",
@@ -112,7 +112,7 @@ jobs:
           }
 
           $fingerprint = & ./menu.ps1 -Choice 8.5 -DryRun -NoPause -NoClear *>&1 | Out-String
-          if (-not ($fingerprint.Contains('90_workstation_fingerprint_v26.ps1') -and $fingerprint.Contains('PHYSICAL') -and $fingerprint.Contains('ConfirmPhysicalEvidence'))) {
+          if (-not ($fingerprint.Contains('90_workstation_fingerprint.ps1') -and $fingerprint.Contains('PHYSICAL') -and $fingerprint.Contains('ConfirmPhysicalEvidence'))) {
             throw 'Physical fingerprint verification route incorrect.'
           }
 
