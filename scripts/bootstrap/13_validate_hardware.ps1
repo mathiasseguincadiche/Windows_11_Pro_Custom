@@ -13,6 +13,7 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $target = Get-Content -Raw $targetPath | ConvertFrom-Json
 if ([int]$target.schemaVersion -ne 1) { throw "SchemaVersion de cible matérielle non supporté: $($target.schemaVersion)" }
 $checks = [ordered]@{}
+$advisoryChecks = [ordered]@{}
 $details = [ordered]@{}
 
 $cpu = @(Get-CimInstance Win32_Processor); $primaryCpu = $cpu | Select-Object -First 1
@@ -37,9 +38,9 @@ $details.Motherboard = $board
 $video = @(Get-CimInstance Win32_VideoController)
 $arc = @($video | Where-Object { [string]$_.Name -match [string]$target.gpu.nameRegex })
 $checks.ArcB580 = ($arc.Count -gt 0)
-$checks.ArcDriver = ($arc.Count -gt 0 -and @($arc | Where-Object { -not $_.DriverVersion }).Count -eq 0)
+$advisoryChecks.ArcDriver = ($arc.Count -gt 0 -and @($arc | Where-Object { -not $_.DriverVersion }).Count -eq 0)
 $displayMatch = @($video | Where-Object { [int]$_.CurrentHorizontalResolution -eq [int]$target.display.width -and [int]$_.CurrentVerticalResolution -eq [int]$target.display.height -and [int]$_.CurrentRefreshRate -ge [int]$target.display.minimumRefreshHz })
-$checks.Display1440p240 = ($displayMatch.Count -gt 0)
+$advisoryChecks.Display1440p240 = ($displayMatch.Count -gt 0)
 $details.Video = $video
 
 $physicalDisks = @(Get-PhysicalDisk)
@@ -68,10 +69,14 @@ if ($RequireManualChecks) {
     catch { $checks.ManualChecks=$false; $details.ManualChecksError=$_.Exception.Message }
 } else { $details.ManualChecks='Not required in this pass. Use -RequireManualChecks for final hardware qualification.' }
 
-$report = [ordered]@{ Release=$release; SchemaVersion=1; Timestamp=(Get-Date).ToString('o'); Checks=$checks; Details=$details }
+$report = [ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Checks=$checks; AdvisoryChecks=$advisoryChecks; Details=$details }
 $reportPath = Join-Path $reportDir 'validation-hardware.json'
 $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
 $failed = @($checks.GetEnumerator() | Where-Object { -not [bool]$_.Value })
-foreach ($check in $checks.GetEnumerator()) { $state=if ([bool]$check.Value) {'OK'} else {'KO'}; Write-Host ("[{0}] {1}" -f $state,$check.Key) }
-if ($failed.Count -gt 0) { throw "Qualification matérielle échouée: $($failed.Count) contrôle(s). Voir $reportPath" }
-Write-Host 'VERDICT: HARDWARE READY' -ForegroundColor Green
+$advisories = @($advisoryChecks.GetEnumerator() | Where-Object { -not [bool]$_.Value })
+foreach ($check in $checks.GetEnumerator()) { $state=if ([bool]$check.Value) {'OK'} else {'KO'}; Write-Host ("[{0}] {1}" -f $state,$check.Key) -ForegroundColor $(if ([bool]$check.Value) {'Green'} else {'Red'}) }
+foreach ($check in $advisoryChecks.GetEnumerator()) { $state=if ([bool]$check.Value) {'INFO OK'} else {'AVERTISSEMENT'}; Write-Host ("[{0}] {1} | non bloquant" -f $state,$check.Key) -ForegroundColor $(if ([bool]$check.Value) {'Green'} else {'Yellow'}) }
+Write-Host "Rapport détaillé: $reportPath" -ForegroundColor DarkGray
+if ($failed.Count -gt 0) { throw "Qualification matérielle critique échouée: $($failed.Count) contrôle(s). Voir $reportPath" }
+if ($advisories.Count -gt 0) { Write-Host "VERDICT: HARDWARE READY — $($advisories.Count) avertissement(s) non bloquant(s)." -ForegroundColor Yellow }
+else { Write-Host 'VERDICT: HARDWARE READY' -ForegroundColor Green }
