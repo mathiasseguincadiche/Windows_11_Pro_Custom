@@ -10,7 +10,7 @@ on:
       - 'scripts/**'
       - 'config/**'
       - 'manifests/**'
-      - 'tests/powershell/repository_integrity.tests.ps1'
+      - 'tests/repository_integrity.py'
       - '.github/workflows/**'
   push:
     branches: [main]
@@ -22,7 +22,7 @@ on:
       - 'scripts/**'
       - 'config/**'
       - 'manifests/**'
-      - 'tests/powershell/repository_integrity.tests.ps1'
+      - 'tests/repository_integrity.py'
       - '.github/workflows/**'
   workflow_dispatch:
 
@@ -35,8 +35,8 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
       - name: Validate active paths and static repository dependencies
-        shell: pwsh
-        run: .\tests\powershell\repository_integrity.tests.ps1
+        shell: bash
+        run: python3 tests/repository_integrity.py
 
   windows-parse:
     runs-on: windows-latest
@@ -48,8 +48,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
             '.\menu.ps1',
-            '.\scripts\bootstrap\00_storage_integrity.ps1',
-            '.\tests\powershell\repository_integrity.tests.ps1'
+            '.\scripts\bootstrap\00_storage_integrity.ps1'
           )) {
             $tokens = $null
             $errors = $null
