@@ -14,6 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
+Import-Module (Join-Path $repoRoot 'scripts\core\wsl-release.psm1')
 $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
@@ -93,13 +94,22 @@ function Test-WslLocationMatch {
 }
 
 function Get-WslRelease {
-    $value = (& wsl.exe -d $Distribution -u root -- bash -lc ". /etc/os-release; printf '%s|%s' \"`$VERSION_ID\" \"`$VERSION_CODENAME\"" 2>&1 | Out-String).Trim()
+    $rawLines = @(& wsl.exe -d $Distribution -u root -- cat /etc/os-release 2>&1)
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($code -ne 0 -or $value -notmatch '^([^|]+)\|(.+)$') {
-        throw "Impossible de lire /etc/os-release dans $Distribution. Sortie: $value"
+    $cleanLines = @($rawLines | ForEach-Object { ([string]$_) -replace "`0", '' })
+
+    if ($code -ne 0) {
+        $detail = ($cleanLines -join ' | ').Trim()
+        throw "Impossible de lire /etc/os-release dans $Distribution (code=$code). Sortie: $detail"
     }
-    return [pscustomobject]@{ VersionId=$matches[1]; Codename=$matches[2] }
+
+    try {
+        return ConvertFrom-WpcOsRelease -Lines $cleanLines
+    } catch {
+        $detail = ($cleanLines -join ' | ').Trim()
+        throw "Impossible de parser /etc/os-release dans $Distribution: $($_.Exception.Message) Sortie: $detail"
+    }
 }
 
 function Get-WslState {
