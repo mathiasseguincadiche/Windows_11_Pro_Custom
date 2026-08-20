@@ -146,7 +146,7 @@ if (-not (Test-LinuxUserExists -Name $targetUser)) {
     }
     Write-Host ''
     Write-Host "[ACTION REQUISE] Création de lʼutilisateur Linux '$targetUser' défini par le contrat WSL." -ForegroundColor Magenta
-    Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et nʼest jamais passée dans une variable, un argument, un fichier de configuration ou un journal.' -ForegroundColor Yellow
+    Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et nʼest jamais passée dans une variable, un argument ou un fichier log.' -ForegroundColor Yellow
     Write-Host 'Les champs complémentaires sont laissés vides automatiquement.' -ForegroundColor DarkGray
     & wsl.exe -d $Distribution -u root -- adduser --gecos '' $targetUser
     $addUserCode = $LASTEXITCODE
