@@ -1,3 +1,4 @@
+#Requires -Version 7.6
 [CmdletBinding()]
 param(
     [string]$Description = 'Windows_11_Pro_Custom before optimization'
@@ -6,10 +7,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+$powerShellRuntimeModule = Join-Path $repoRoot 'scripts\core\powershell-runtime.psm1'
+if (-not (Test-Path -LiteralPath $powerShellRuntimeModule)) { throw "Contrat PowerShell introuvable: $powerShellRuntimeModule" }
+Import-Module $powerShellRuntimeModule -Force
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru)
+
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'La création du point de restauration exige une session PowerShell administrateur.'
+    throw 'La création du point de restauration exige une session PowerShell 7 administrateur.'
 }
 
 function ConvertFrom-WpcRestorePointTime {
@@ -62,57 +69,41 @@ function Get-WpcLatestRestorePoint {
     }
 }
 
-function Get-WpcWindowsPowerShell51Path {
-    $explicit = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    if (Test-Path -LiteralPath $explicit) { return $explicit }
+function Invoke-WpcSystemRestoreMethod {
+    param(
+        [Parameter(Mandatory)][string]$MethodName,
+        [Parameter(Mandatory)][hashtable]$Arguments
+    )
 
-    $command = Get-Command powershell.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($command) { return [string]$command.Source }
-    return $null
+    $result = Invoke-CimMethod -Namespace 'root/default' -ClassName 'SystemRestore' -MethodName $MethodName -Arguments $Arguments -ErrorAction Stop
+    $returnValue = [uint32]$result.ReturnValue
+    if ($returnValue -ne 0) {
+        throw "SystemRestore.$MethodName a retourné le code $returnValue."
+    }
+    return $result
 }
 
-function New-WpcRestorePointCurrentHost {
+function New-WpcRestorePointPowerShell7 {
     param([Parameter(Mandatory)][string]$RestorePointDescription)
 
-    if (-not (Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue)) {
-        return $false
+    $systemRestoreClass = Get-CimClass -Namespace 'root/default' -ClassName 'SystemRestore' -ErrorAction Stop
+    $methodNames = @($systemRestoreClass.CimClassMethods.Keys)
+    foreach ($requiredMethod in @('Enable','CreateRestorePoint')) {
+        if ($methodNames -notcontains $requiredMethod) {
+            throw "Méthode SystemRestore requise absente: $requiredMethod"
+        }
     }
 
     $systemDrive = "$($env:SystemDrive)\"
-    if (Get-Command Enable-ComputerRestore -ErrorAction SilentlyContinue) {
-        Enable-ComputerRestore -Drive $systemDrive -ErrorAction Stop
-    }
-    Checkpoint-Computer -Description $RestorePointDescription -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
-    return $true
-}
+    Write-Host "[EN COURS] Activation/vérification de System Restore sur $systemDrive via CIM..." -ForegroundColor Cyan
+    [void](Invoke-WpcSystemRestoreMethod -MethodName 'Enable' -Arguments @{ Drive=$systemDrive })
 
-function New-WpcRestorePointWindowsPowerShell {
-    param([Parameter(Mandatory)][string]$RestorePointDescription)
-
-    $windowsPowerShell = Get-WpcWindowsPowerShell51Path
-    if (-not $windowsPowerShell) {
-        throw 'Checkpoint-Computer est indisponible dans cet hôte et Windows PowerShell 5.1 est introuvable.'
-    }
-
-    $escapedDescription = $RestorePointDescription.Replace("'", "''")
-    $command = @'
-$ErrorActionPreference = 'Stop'
-$systemDrive = "$env:SystemDrive\"
-if (Get-Command Enable-ComputerRestore -ErrorAction SilentlyContinue) {
-    Enable-ComputerRestore -Drive $systemDrive -ErrorAction Stop
-}
-Checkpoint-Computer -Description '__DESCRIPTION__' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
-'@
-    $command = $command.Replace('__DESCRIPTION__', $escapedDescription)
-
-    $global:LASTEXITCODE = 0
-    & $windowsPowerShell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command $command
-    $exitVariable = Get-Variable -Name LASTEXITCODE -ErrorAction SilentlyContinue
-    $exitCode = if ($null -eq $exitVariable) { 0 } else { [int]$exitVariable.Value }
-    $global:LASTEXITCODE = 0
-    if ($exitCode -ne 0) {
-        throw "Windows PowerShell n'a pas pu créer le point de restauration (code=$exitCode)."
-    }
+    Write-Host '[EN COURS] Création du point de restauration via SystemRestore.CreateRestorePoint...' -ForegroundColor Cyan
+    [void](Invoke-WpcSystemRestoreMethod -MethodName 'CreateRestorePoint' -Arguments @{
+        Description = $RestorePointDescription
+        RestorePointType = [uint32]12
+        EventType = [uint32]100
+    })
 }
 
 try {
@@ -124,21 +115,17 @@ try {
     }
 
     $startedAt = Get-Date
-    $createdInCurrentHost = New-WpcRestorePointCurrentHost -RestorePointDescription $Description
-    if (-not $createdInCurrentHost) {
-        Write-Host '[INFO] Checkpoint-Computer indisponible dans cet hôte; bascule vers Windows PowerShell 5.1.' -ForegroundColor Cyan
-        New-WpcRestorePointWindowsPowerShell -RestorePointDescription $Description
-    }
+    New-WpcRestorePointPowerShell7 -RestorePointDescription $Description
 
     $after = Get-WpcLatestRestorePoint
     if ($after.QuerySucceeded) {
         if (-not $after.Point -or $after.Point.CreationTime -lt $startedAt.AddMinutes(-1)) {
-            throw 'Checkpoint-Computer a terminé sans quʼun point de restauration récent puisse être confirmé.'
+            throw 'SystemRestore.CreateRestorePoint a terminé sans qu’un point de restauration récent puisse être confirmé.'
         }
-        Write-Host ("[OK] Point de restauration Windows créé et vérifié ({0:yyyy-MM-dd HH:mm}, séquence {1})." -f $after.Point.CreationTime, $after.Point.SequenceNumber) -ForegroundColor Green
+        Write-Host ("[OK] Point de restauration Windows créé et vérifié via PowerShell 7/CIM ({0:yyyy-MM-dd HH:mm}, séquence {1})." -f $after.Point.CreationTime, $after.Point.SequenceNumber) -ForegroundColor Green
     } else {
-        Write-Host "[OK] Point de restauration Windows créé avant les modifications. Vérification WMI indisponible: $($after.Error)" -ForegroundColor Green
+        throw "Le point de restauration a été demandé mais la vérification CIM est indisponible: $($after.Error)"
     }
 } catch {
-    throw "Impossible de créer ou confirmer le point de restauration de sécurité. Aucune optimisation ne doit continuer sans ce garde-fou, sauf choix explicite de l'orchestrateur via -SkipFoundationRestorePoint. Détail: $($_.Exception.Message)"
+    throw "Impossible de créer ou confirmer le point de restauration de sécurité depuis PowerShell 7. Aucune optimisation ne doit continuer sans ce garde-fou, sauf choix explicite de l'orchestrateur via -SkipFoundationRestorePoint. Détail: $($_.Exception.Message)"
 }
