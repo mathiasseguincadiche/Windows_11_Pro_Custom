@@ -192,11 +192,11 @@ enrôler et vérifier l'identité de `C:` et `E:` selon
 [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 .\install.ps1 -Mode Apply -FullInstall
 ```
 

@@ -140,14 +140,14 @@ Commencez toujours par l'observation :
 .\install.ps1 -Mode Audit
 ```
 
-Lors d'une première qualification, l'identité physique du stockage V25 doit être enrôlée après contrôle humain :
+Lors d'une première qualification, l'identité physique du stockage identité stockage doit être enrôlée après contrôle humain :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 Si la baseline existe déjà, n'exécutez pas `Record` : vérifiez-la.

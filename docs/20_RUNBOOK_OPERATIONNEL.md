@@ -94,11 +94,11 @@ Prouver que `C:` et `E:` correspondent aux bons rôles physiques avant les parco
 ### Première qualification uniquement
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 ### Contrôle humain obligatoire avant `Record`
@@ -115,7 +115,7 @@ Vérifiez que :
 N'exécutez pas `Record`. Utilisez :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 ### Condition d'arrêt
@@ -337,7 +337,7 @@ Si une même mutation revient sans raison à chaque plan, traitez-la comme une d
 Après validation complète sur la workstation réelle :
 
 ```powershell
-.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+.\scripts\windows\90_workstation_fingerprint.ps1 `
   -Mode Audit `
   -EvidenceLevel PHYSICAL `
   -ConfirmPhysicalEvidence
@@ -384,7 +384,7 @@ Après une mise à jour structurante, rejouez la vérification globale et l'idem
 La workstation peut être déclarée prête lorsque :
 
 - l'état initial a été observé et compris ;
-- la baseline V25 de stockage est valide ;
+- la baseline d’identité stockage de stockage est valide ;
 - le plan a été relu avant mutation ;
 - Windows et le matériel sont qualifiés ;
 - WSL2 respecte son contrat ;

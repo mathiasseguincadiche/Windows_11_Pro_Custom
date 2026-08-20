@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-08-14",
+  "memory": {
+    "memoryCompression": true,
+    "applicationLaunchPrefetching": true,
+    "applicationPreLaunch": true,
+    "pageCombining": "observe-only"
+  },
+  "pageFile": {
+    "systemManaged": true,
+    "automaticMemoryDump": true,
+    "crashDumpEnabled": 7,
+    "rebootRecommended": true
+  },
+  "power": {
+    "activeSchemeGuid": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "activeScheme": "Balanced",
+    "acPowerModeGuid": "ded574b5-45a0-4f42-8737-46345c09c238",
+    "acPowerMode": "Best Performance",
+    "acPowerModeManagement": "observe-only",
+    "keepDynamicProcessorManagement": true
+  },
+  "ui": {
+    "minimizeRestoreAnimation": true,
+    "clientAreaAnimations": true,
+    "keepFontSmoothing": true,
+    "keepDesktopComposition": true
+  },
+  "storage": {
+    "requireTrim": true,
+    "keepScheduledOptimize": true,
+    "minimumFreePercentWarning": 15,
+    "syntheticWriteBenchmark": false
+  },
+  "startup": {
+    "mode": "inventory-only",
+    "automaticDisable": false
+  },
+  "backgroundApps": {
+    "mode": "inventory-and-manual-review",
+    "globalDisable": false
+  },
+  "forbiddenTweaks": [
+    "disable-memory-compression",
+    "standby-list-purge",
+    "ram-cleaner",
+    "disable-pagefile",
+    "fixed-pagefile-without-measurement",
+    "disable-prefetch",
+    "disable-scheduled-optimize",
+    "disable-core-parking",
+    "disable-c-states",
+    "force-hpet",
+    "disable-dynamic-tick",
+    "ultimate-performance-default",
+    "force-best-performance-power-mode",
+    "disable-network-offloads",
+    "mass-service-disable",
+    "disable-defender",
+    "disable-windows-update"
+  ]
+}

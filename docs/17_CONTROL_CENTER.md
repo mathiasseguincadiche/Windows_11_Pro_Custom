@@ -46,8 +46,8 @@ START_MENU.cmd / menu.ps1
    ├── installation / conformité ─► install.ps1
    ├── mises à jour ──────────────► update.ps1
    ├── logiciels WinGet ──────────► scripts/bootstrap/03_apps.ps1
-   ├── empreinte workstation ─────► scripts/windows/90_workstation_fingerprint_v26.ps1
-   ├── drill restauration ────────► scripts/backup/63_restore_drill_v26.ps1
+   ├── empreinte workstation ─────► scripts/windows/90_workstation_fingerprint.ps1
+   ├── drill restauration ────────► scripts/backup/63_restore_drill.ps1
    └── logs / rapports ───────────► logs\ et reports\
 ```
 
@@ -66,7 +66,7 @@ Elle couvre notamment :
 - Windows Terminal / VS Code ;
 - validations matériel, WSL et DevOps.
 
-Lors d'un premier parcours strict, la baseline V25 d'identité physique de `C:` et `E:` doit être enregistrée après contrôle humain puis vérifiée.
+Lors d'un premier parcours strict, la baseline d’identité stockage d'identité physique de `C:` et `E:` doit être enregistrée après contrôle humain puis vérifiée.
 
 Référence : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 

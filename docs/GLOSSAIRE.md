@@ -183,7 +183,7 @@ Dans ce projet, WSL2 héberge Ubuntu 26.04 et la stack DevOps Linux.
 
 | Je rencontre ce terme | Document principal |
 | --- | --- |
-| V25 / identité stockage | [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
+| identité stockage / identité stockage | [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md) |
 | STATIC / SIMULATED / PHYSICAL | [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION.md) |
 | WSL2 / VHDX / ext4 | [`16_WSL2_GUIDE_COMPLET.md`](16_WSL2_GUIDE_COMPLET.md) |
 | Audit / Apply / Verify | [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) |

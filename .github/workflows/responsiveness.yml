@@ -1,0 +1,126 @@
+name: Windows responsiveness
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/responsiveness.yml'
+      - 'VERSION'
+      - 'config/windows/responsiveness.json'
+      - 'scripts/windows/53_responsiveness.ps1'
+      - 'scripts/windows/42_benchmark.ps1'
+      - 'scripts/windows/43_compare_benchmarks.ps1'
+      - 'install.ps1'
+      - 'docs/04_OPTIMISATION_WINDOWS.md'
+      - 'CHANGELOG.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/responsiveness.yml'
+      - 'VERSION'
+      - 'config/windows/responsiveness.json'
+      - 'scripts/windows/53_responsiveness.ps1'
+      - 'scripts/windows/42_benchmark.ps1'
+      - 'scripts/windows/43_compare_benchmarks.ps1'
+      - 'install.ps1'
+      - 'docs/04_OPTIMISATION_WINDOWS.md'
+      - 'CHANGELOG.md'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+      - name: Validate responsiveness policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '
+            (.schemaVersion == 1) and
+            (.reviewedAt == "2026-08-14") and
+            (.memory.memoryCompression == true) and
+            (.memory.applicationLaunchPrefetching == true) and
+            (.memory.applicationPreLaunch == true) and
+            (.memory.pageCombining == "observe-only") and
+            (.pageFile.systemManaged == true) and
+            (.pageFile.crashDumpEnabled == 7) and
+            (.power.activeSchemeGuid == "381b4222-f694-41f0-9685-ff5bb260df2e") and
+            (.power.acPowerModeGuid == "ded574b5-45a0-4f42-8737-46345c09c238") and
+            (.power.acPowerModeManagement == "observe-only") and
+            (.power.keepDynamicProcessorManagement == true) and
+            (.ui.minimizeRestoreAnimation == true) and
+            (.ui.clientAreaAnimations == true) and
+            ((.forbiddenTweaks | index("force-best-performance-power-mode")) != null) and
+            (.storage.requireTrim == true) and
+            (.storage.keepScheduledOptimize == true) and
+            (.startup.automaticDisable == false) and
+            (.backgroundApps.globalDisable == false) and
+            (.storage.syntheticWriteBenchmark == false)
+          ' config/windows/responsiveness.json >/dev/null
+
+      - name: Enforce responsiveness safety boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/windows/53_responsiveness.ps1'
+          forbidden='EmptyStandbyList|Clear-Standby|bcdedit|useplatformclock|disabledynamictick|Set-Service|Stop-Service|Set-MpPreference|DisableRealtimeMonitoring|Remove-AppxPackage|Disable-WindowsOptionalFeature|winget[[:space:]]+uninstall|Optimize-Volume.*-Defrag|DisableDeleteNotify[[:space:]]+1'
+          if grep -nEi "$forbidden" "$script"; then
+            echo 'Unsafe responsiveness tweak detected.' >&2
+            exit 1
+          fi
+          grep -Fq 'AutomaticManagedPagefile=$true' "$script"
+          grep -Fq 'Enable-MMAgent -MemoryCompression' "$script"
+          grep -Fq 'Enable-MMAgent -ApplicationLaunchPrefetching' "$script"
+          grep -Fq 'Enable-MMAgent -ApplicationPreLaunch' "$script"
+          grep -Fq "acPowerModeManagement -eq 'enforce'" "$script"
+          grep -Fq 'Mode de puissance secteur observé uniquement' "$script"
+          grep -Fq 'Set-UiAnimationState' "$script"
+          grep -Fq 'Les applications de démarrage sont uniquement inventoriées' "$script"
+          grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
+          grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness.ps1'" install.ps1
+          grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness.ps1'" install.ps1
+          grep -Fq 'Release=$release; SchemaVersion=1' "$script"
+
+      - name: Protect benchmark methodology
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -nEi 'diskspd|winsat[[:space:]]+disk|fio|WriteAllBytes|fsutil[[:space:]]+file[[:space:]]+createnew|EmptyStandbyList' scripts/windows/42_benchmark.ps1; then
+            echo 'Responsiveness benchmark must stay lightweight and non-destructive.' >&2
+            exit 1
+          fi
+          grep -Fq 'AutomaticManagedPagefile' scripts/windows/42_benchmark.ps1
+          grep -Fq 'CommitPercent' scripts/windows/42_benchmark.ps1
+          grep -Fq 'CurrentQueueLength' scripts/windows/42_benchmark.ps1
+          grep -Fq 'Release = $release' scripts/windows/42_benchmark.ps1
+          grep -Fq 'SchemaVersion = 1' scripts/windows/42_benchmark.ps1
+
+  audit-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+      - name: Execute non-mutating responsiveness audit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\windows\53_responsiveness.ps1 -Mode Audit
+          .\scripts\windows\42_benchmark.ps1 -Stage snapshot
+
+      - name: Validate responsiveness reports
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = (Get-Content -Raw .\VERSION).Trim()
+          $report = Get-Content -Raw .\reports\windows\responsiveness.json | ConvertFrom-Json
+          if ($report.Release -ne $release) { throw "Unexpected responsiveness release: $($report.Release)" }
+          if ([int]$report.SchemaVersion -ne 1) { throw 'Unexpected responsiveness schema version.' }
+          if ($report.AcPowerModeManagement -ne 'observe-only') { throw 'AC power mode must remain observe-only.' }
+          if ($report.StartupAutomaticDisable -ne $false) { throw 'Startup automatic disable must remain off.' }
+          if ($report.BackgroundGlobalDisable -ne $false) { throw 'Background global disable must remain off.' }
+          $benchmark = Get-Content -Raw .\reports\windows\benchmark-snapshot.json | ConvertFrom-Json
+          if ($benchmark.Release -ne $release) { throw "Unexpected benchmark release: $($benchmark.Release)" }
+          if ([int]$benchmark.SchemaVersion -ne 1) { throw 'Unexpected benchmark schema version.' }
+          if ($null -eq $benchmark.AutomaticManagedPagefile) { throw 'Pagefile telemetry missing.' }
+          if ($null -eq $benchmark.CommitPercent) { throw 'Commit telemetry missing.' }

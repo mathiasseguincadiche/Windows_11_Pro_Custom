@@ -155,11 +155,11 @@ Portail complet : [`docs/README.md`](docs/README.md).
 ### 2. Enrôler l'identité du stockage lors de la première qualification
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 Avant `Record`, vérifiez que `C:` est bien le volume Windows attendu et que `E:` est le second SSD NTFS destiné aux données et à WSL2. Si la baseline existe déjà, utilisez uniquement `-Mode Verify`.

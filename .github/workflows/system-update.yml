@@ -1,0 +1,161 @@
+name: System Update
+
+on:
+  push:
+    branches:
+      - main
+      - docs/restore-project-first-canonical
+    paths:
+      - update.ps1
+      - config/updates/**
+      - scripts/updates/**
+      - scripts/wsl/update-system-packages.sh
+      - scripts/wsl/reconcile-pinned-devops.sh
+      - .github/workflows/system-update.yml
+  pull_request:
+    paths:
+      - update.ps1
+      - config/updates/**
+      - scripts/updates/**
+      - scripts/wsl/update-system-packages.sh
+      - scripts/wsl/reconcile-pinned-devops.sh
+      - .github/workflows/system-update.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate update policy
+        run: |
+          jq -e '.schemaVersion == 1' config/updates/policy.json >/dev/null
+          jq -e '.windowsUpdate.includeDriversByDefault == false' config/updates/policy.json >/dev/null
+          jq -e '.windowsUpdate.includeOptionalByDefault == false' config/updates/policy.json >/dev/null
+          jq -e '.windowsUpdate.forceReboot == false' config/updates/policy.json >/dev/null
+          jq -e '.winget.respectPins == true and .winget.force == false' config/updates/policy.json >/dev/null
+          jq -e '.wsl.allowDistributionReleaseUpgrade == false' config/updates/policy.json >/dev/null
+          jq -e '.ubuntu.autoremove == false and .ubuntu.distUpgrade == false' config/updates/policy.json >/dev/null
+          jq -e '.devops.internetLatestIsTruth == false and .devops.reconcileOnlyPinnedTargets == true' config/updates/policy.json >/dev/null
+
+      - name: Parse and lint update Bash
+        run: |
+          bash -n scripts/wsl/update-system-packages.sh
+          bash -n scripts/wsl/reconcile-pinned-devops.sh
+          shellcheck scripts/wsl/update-system-packages.sh scripts/wsl/reconcile-pinned-devops.sh
+
+      - name: Enforce update safety boundaries
+        run: |
+          grep -Fq 'Microsoft.Update.Session' scripts/updates/10_windows_update.ps1
+          if grep -Fq 'PSWindowsUpdate' scripts/updates/10_windows_update.ps1; then
+            echo 'Le module tiers PSWindowsUpdate est interdit.' >&2
+            exit 1
+          fi
+          grep -Fq -- '--upgrade-available' scripts/updates/20_winget_update.ps1
+          grep -Fq "@('upgrade','--all'" scripts/updates/20_winget_update.ps1
+          if grep -Eq "\$args.*(--include-pinned|--force)" scripts/updates/20_winget_update.ps1; then
+            echo 'Les arguments WinGet ne doivent contourner aucun pin.' >&2
+            exit 1
+          fi
+          grep -Fq "@('--update')" scripts/updates/30_wsl_update.ps1
+          grep -Fq -- '--update-extensions' scripts/updates/60_vscode_extensions_update.ps1
+          grep -Fq 'tool-versions.env' scripts/wsl/reconcile-pinned-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq '${aws_archive}.sig' scripts/wsl/reconcile-pinned-devops.sh
+          grep -Fq 'FB5DB77FD5C118B80511ADA8A6310ACC4672475C' scripts/wsl/reconcile-pinned-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq 'gpg --batch --homedir "$aws_gnupg" --verify' scripts/wsl/reconcile-pinned-devops.sh
+          if grep -Eq 'apt-get[[:space:]]+(dist-upgrade|full-upgrade|autoremove)' scripts/wsl/update-system-packages.sh; then
+            echo 'Upgrade APT destructif/interdit détecté.' >&2
+            exit 1
+          fi
+          grep -Fq 'apt-get upgrade -y --with-new-pkgs' scripts/wsl/update-system-packages.sh
+          grep -Fq 'Confirm-WpcChanges' update.ps1
+          grep -Fq 'Redémarrer Windows maintenant ? [O/N]' update.ps1
+
+      - name: Prove pinned DevOps factual idempotence
+        run: |
+          mkdir -p .ci-fake-bin
+          cat > .ci-fake-bin/kubectl <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' '{"clientVersion":{"gitVersion":"v1.36.2"}}'
+          EOF
+          cat > .ci-fake-bin/helm <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' 'v3.21.1'
+          EOF
+          cat > .ci-fake-bin/terraform <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' '{"terraform_version":"1.15.8"}'
+          EOF
+          cat > .ci-fake-bin/aws <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' 'aws-cli/2.36.21 Python/3.13 Linux/x86_64'
+          EOF
+          cat > .ci-fake-bin/minikube <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' 'v1.38.1'
+          EOF
+          cat > .ci-fake-bin/kind <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' 'kind v0.32.0 go1.25 linux/amd64'
+          EOF
+          chmod +x .ci-fake-bin/*
+          PATH="$PWD/.ci-fake-bin:$PATH" bash scripts/wsl/reconcile-pinned-devops.sh verify
+
+          cat > .ci-fake-bin/terraform <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' '{"terraform_version":"0.0.0"}'
+          EOF
+          chmod +x .ci-fake-bin/terraform
+          if PATH="$PWD/.ci-fake-bin:$PATH" bash scripts/wsl/reconcile-pinned-devops.sh verify > .ci-update-negative.log 2>&1; then
+            echo 'Le verify devait échouer avec Terraform hors cible.' >&2
+            exit 1
+          fi
+          grep -Fq '[À FAIRE] terraform' .ci-update-negative.log
+
+  powershell-parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse update PowerShell
+        shell: pwsh
+        run: |
+          $files = @(
+            'update.ps1',
+            'scripts/updates/10_windows_update.ps1',
+            'scripts/updates/20_winget_update.ps1',
+            'scripts/updates/30_wsl_update.ps1',
+            'scripts/updates/40_ubuntu_update.ps1',
+            'scripts/updates/50_devops_pinned.ps1',
+            'scripts/updates/60_vscode_extensions_update.ps1'
+          )
+          $failed = $false
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors)
+            foreach ($parseError in @($errors)) {
+              Write-Host "${file}:$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
+              $failed = $true
+            }
+          }
+          if ($failed) { throw 'Update PowerShell parse failed.' }
+
+      - name: Validate update orchestration contract
+        shell: pwsh
+        run: |
+          $root = Get-Content -Raw update.ps1
+          foreach ($needle in @('Audit','Apply','Verify','PlanOnly','NonInteractive','IncludeDrivers','IncludeOptionalUpdates','IncludeUnknownPackages','PARTIELLEMENT À JOUR','SYSTÈME À JOUR')) {
+            if (-not $root.Contains($needle)) { throw "Contrat update.ps1 absent: $needle" }
+          }
+          $windows = Get-Content -Raw scripts/updates/10_windows_update.ps1
+          foreach ($needle in @('Microsoft.Update.Session','BrowseOnly','AcceptEula','CreateUpdateDownloader','CreateUpdateInstaller','RebootRequired')) {
+            if (-not $windows.Contains($needle)) { throw "Contrat Windows Update absent: $needle" }
+          }
+          $winget = Get-Content -Raw scripts/updates/20_winget_update.ps1
+          if ($winget -match '\$args[^\r\n]*(--include-pinned|--force)') { throw 'Les arguments WinGet ne doivent jamais contourner les pins.' }

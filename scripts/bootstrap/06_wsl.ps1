@@ -17,14 +17,14 @@ Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $configSource = Join-Path $repoRoot "config\wsl\$Profile.wslconfig"
 $configTarget = Join-Path $env:USERPROFILE '.wslconfig'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
-$storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity_v25.ps1'
+$storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity.ps1'
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
     throw 'wsl.exe est introuvable. Vérifie que Windows 11 est à jour puis exécute « wsl --install --no-distribution » dans PowerShell administrateur et relance la même commande.'
 }
 if (-not (Test-Path $configSource)) { throw "Profil WSL introuvable: $configSource" }
 if (-not (Test-Path $runtimeContractPath)) { throw "Contrat runtime WSL absent: $runtimeContractPath" }
-if (-not (Test-Path $storageIdentityScript)) { throw "Gate d'identité stockage V25 absent: $storageIdentityScript" }
+if (-not (Test-Path $storageIdentityScript)) { throw "Contrôle d'identité stockage absent: $storageIdentityScript" }
 
 $runtimeContract = Get-Content -Raw $runtimeContractPath | ConvertFrom-Json
 $expectedDistribution = [string]$runtimeContract.distribution
@@ -139,7 +139,7 @@ function Assert-WslInstallCapabilities {
     }
 }
 
-Write-Host '[ANALYSE] Vérification V25 de lʼidentité physique de E: avant toute opération WSL...' -ForegroundColor Cyan
+Write-Host '[ANALYSE] Vérification de lʼidentité physique de E: avant toute opération WSL...' -ForegroundColor Cyan
 & $storageIdentityScript -Mode Verify
 
 $eVolume = Get-Volume -DriveLetter E -ErrorAction Stop

@@ -1,0 +1,102 @@
+name: Restore point capability
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/restore-point-capability.yml'
+      - 'scripts/core/native-process.psm1'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
+      - 'scripts/windows/41_restore_point.ps1'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/restore-point-capability.yml'
+      - 'scripts/core/native-process.psm1'
+      - 'scripts/bootstrap/02_physical_readiness.ps1'
+      - 'scripts/windows/41_restore_point.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+      - name: Enforce native text normalization contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper='scripts/core/native-process.psm1'
+          readiness='scripts/bootstrap/02_physical_readiness.ps1'
+
+          grep -Fq 'Invoke-WpcNativeCapture' "$helper"
+          grep -Fq 'replace "`0"' "$helper"
+          grep -Fq 'Checkpoint-Computer' "$readiness"
+          grep -Fq "Invoke-WpcNativeCapture -FilePath \$windowsPowerShell" "$readiness"
+
+  windows-host-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse helper and readiness PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            '.\scripts\core\native-process.psm1',
+            '.\scripts\bootstrap\02_physical_readiness.ps1',
+            '.\scripts\windows\41_restore_point.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Reproduce exact Checkpoint-Computer probe through helper
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          Import-Module .\scripts\core\native-process.psm1 -Force
+
+          $windowsPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          if (-not (Test-Path -LiteralPath $windowsPowerShell)) {
+            throw "Windows PowerShell 5.1 missing at $windowsPowerShell"
+          }
+
+          $result = Invoke-WpcNativeCapture -FilePath $windowsPowerShell -ArgumentList @(
+            '-NoLogo',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            '(Get-Command Checkpoint-Computer -ErrorAction SilentlyContinue).Name'
+          ) -SuppressErrorOutput
+
+          if ($result.ExitCode -ne 0) {
+            throw "Windows PowerShell probe failed with exit code $($result.ExitCode)."
+          }
+          if ($result.Text.Trim() -ne 'Checkpoint-Computer') {
+            $codes = @($result.Text.ToCharArray() | ForEach-Object { [int][char]$_ }) -join ','
+            throw "Unexpected Checkpoint-Computer text: '$($result.Text)' char-codes=$codes"
+          }
+          if ($result.Text.Contains([char]0)) {
+            throw 'Native helper leaked a NUL character into captured text.'
+          }
+
+      - name: Prove native exit code contract still works
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          Import-Module .\scripts\core\native-process.psm1 -Force
+
+          $cmd = Join-Path $env:WINDIR 'System32\cmd.exe'
+          $result = Invoke-WpcNativeCapture -FilePath $cmd -ArgumentList @('/d','/c','exit 7') -SuppressErrorOutput
+          if ($result.ExitCode -ne 7) {
+            throw "Expected exit code 7, got $($result.ExitCode)."
+          }

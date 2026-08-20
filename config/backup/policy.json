@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "description": "Golden backup and disaster recovery policy for Windows 11 Pro Custom",
+  "systemVolumes": ["C:", "E:"],
+  "minimumTargetFreeGB": 100,
+  "capacitySafetyMarginPercent": 20,
+  "requireUsbTargetByDefault": true,
+  "wslDistribution": "Ubuntu",
+  "wslExportFormat": "vhdx",
+  "hashAlgorithm": "SHA256",
+  "restoreTestDistribution": "Ubuntu-Restore-Test",
+  "restoreTestLocation": "E:\\WSL\\Ubuntu-Restore-Test",
+  "destructiveRestoreAutomation": false,
+  "recoveryMediaRecommended": true,
+  "legacySessionRoots": ["Windows_11_Pro_Custom_Backup\\V7"]
+}

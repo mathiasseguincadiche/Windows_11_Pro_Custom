@@ -8,6 +8,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+$release = (Get-Content -Raw (Join-Path $repoRoot 'VERSION')).Trim()
+if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION invalide: $release" }
 $reportDir = Join-Path $repoRoot 'reports\windows'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 
@@ -17,7 +19,7 @@ $cpu = @(Get-CimInstance Win32_Processor)
 $processes = @(Get-Process)
 $services = @(Get-CimInstance Win32_Service)
 $startupCommands = @(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue)
-$volumes = @(Get-Volume | Where-Object DriveLetter -In @('C', 'D'))
+$volumes = @(Get-Volume | Where-Object DriveLetter -In @('C', 'E'))
 $defender = Get-MpComputerStatus -ErrorAction SilentlyContinue
 $preferences = Get-MpPreference -ErrorAction SilentlyContinue
 $memoryPerf = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction SilentlyContinue
@@ -47,22 +49,15 @@ $volumeData = @(
 )
 
 $cpuLoad = @($cpu | Where-Object { $null -ne $_.LoadPercentage } | Select-Object -ExpandProperty LoadPercentage)
-$averageCpuLoad = if ($cpuLoad.Count -gt 0) {
-    [math]::Round(($cpuLoad | Measure-Object -Average).Average, 1)
-} else {
-    $null
-}
-
+$averageCpuLoad = if ($cpuLoad.Count -gt 0) { [math]::Round(($cpuLoad | Measure-Object -Average).Average, 1) } else { $null }
 $activePowerScheme = (& powercfg.exe /GetActiveScheme 2>&1 | Out-String).Trim()
 $committedBytes = if ($memoryPerf) { [double]$memoryPerf.CommittedBytes } else { $null }
 $commitLimit = if ($memoryPerf) { [double]$memoryPerf.CommitLimit } else { $null }
-$commitPercent = if ($null -ne $committedBytes -and $null -ne $commitLimit -and $commitLimit -gt 0) {
-    [math]::Round(($committedBytes / $commitLimit) * 100, 1)
-} else {
-    $null
-}
+$commitPercent = if ($null -ne $committedBytes -and $null -ne $commitLimit -and $commitLimit -gt 0) { [math]::Round(($committedBytes / $commitLimit) * 100, 1) } else { $null }
 
 $report = [ordered]@{
+    Release = $release
+    SchemaVersion = 1
     Stage = $Stage
     Timestamp = (Get-Date).ToString('o')
     Computer = $env:COMPUTERNAME
@@ -103,9 +98,7 @@ $report = [ordered]@{
     Notes = 'Lightweight responsiveness snapshot. No synthetic disk write benchmark and no standby-list purge are performed.'
 }
 
-$fileName = "v4-benchmark-$Stage.json"
-$path = Join-Path $reportDir $fileName
+$path = Join-Path $reportDir "benchmark-$Stage.json"
 $report | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $path
-
 Write-Host "[OK] Windows responsiveness benchmark snapshot: $path" -ForegroundColor Green
 Write-Host ("Processes={0} | svchost={1} | services={2} | free RAM={3} GB | commit={4}% | CPU={5}%" -f $report.ProcessCount, $report.SvchostProcessCount, $report.RunningServiceCount, $report.FreeMemoryGB, $report.CommitPercent, $report.CpuLoadPercent)

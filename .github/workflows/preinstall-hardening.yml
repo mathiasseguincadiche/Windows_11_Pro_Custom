@@ -1,0 +1,178 @@
+name: Preinstall hardening
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate PowerShell syntax of hardened scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            'scripts/core/native-process.psm1',
+            'scripts/core/reboot-state.psm1',
+            'scripts/bootstrap/00_preflight.ps1',
+            'scripts/bootstrap/01_machine_state.ps1',
+            'scripts/bootstrap/02_physical_readiness.ps1',
+            'scripts/bootstrap/03_apps.ps1',
+            'scripts/bootstrap/07_wsl_user.ps1',
+            'scripts/bootstrap/08_devops.ps1',
+            'scripts/bootstrap/09_validate_devops.ps1',
+            'scripts/bootstrap/10_workstation.ps1',
+            'scripts/bootstrap/11_validate_windows.ps1',
+            'scripts/windows/41_restore_point.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors)
+            if (@($errors).Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "${path}: $($_.Message)" }
+            }
+          }
+
+      - name: Forbid forced runtime reloads in child scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          offenders="$(grep -RIn --include='*.ps1' -E 'Import-Module .*runtime\.psm1.*-Force|Import-Module \$runtimeModule -Force' scripts || true)"
+          if [[ -n "$offenders" ]]; then
+            echo 'Child scripts must never reload scripts/core/runtime.psm1 with -Force while the orchestrator is using it.' >&2
+            echo "$offenders" >&2
+            exit 1
+          fi
+
+      - name: Enforce global WinGet inventory with targeted exact fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/bootstrap/01_machine_state.ps1'
+          grep -Fq 'Get-WingetInventory' "$script"
+          grep -Fq "Invoke-WpcNativeCapture -FilePath \$wingetCommand.Source -ArgumentList @('list', '--accept-source-agreements', '--disable-interactivity')" "$script"
+          grep -Fq 'Exact fallback:' "$script"
+          # shellcheck disable=SC2016
+          exact_calls="$(grep -Fc "ArgumentList @('list', '--id', \$Id, '--exact', '--accept-source-agreements', '--disable-interactivity')" "$script")"
+          if [[ "$exact_calls" -ne 1 ]]; then
+            echo "Machine-state must contain exactly one targeted WinGet exact-fallback command location; found ${exact_calls}." >&2
+            exit 1
+          fi
+          global_hit_line="$(grep -nF "State='INSTALLED'; Evidence=[string]\$line[0]" "$script" | head -n1 | cut -d: -f1)"
+          exact_line="$(grep -nF "ArgumentList @('list', '--id', \$Id, '--exact'" "$script" | head -n1 | cut -d: -f1)"
+          if [[ -z "$global_hit_line" || -z "$exact_line" || "$exact_line" -le "$global_hit_line" ]]; then
+            echo 'Targeted exact WinGet fallback must execute only after the global inventory lookup misses.' >&2
+            exit 1
+          fi
+          if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$script"; then
+            echo 'Machine-state must not pipe a WinGet App Execution Alias into another command.' >&2
+            exit 1
+          fi
+
+      - name: Enforce Windows 11 non-Home and reboot guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          preflight='scripts/bootstrap/00_preflight.ps1'
+          validator='scripts/bootstrap/11_validate_windows.ps1'
+          reboot='scripts/core/reboot-state.psm1'
+
+          grep -Fq 'EditionID' "$preflight"
+          grep -Fq "editionId -match '^Core'" "$preflight"
+          grep -Fq "Windows 11 Home n'est pas pris en charge" "$preflight"
+          grep -Fq 'scripts\core\reboot-state.psm1' "$preflight"
+          grep -Fq 'Get-WpcPendingRebootState' "$preflight"
+          grep -Fq 'Un redémarrage Windows est en attente' "$preflight"
+          grep -Fq 'Component Based Servicing\RebootPending' "$reboot"
+          grep -Fq 'WindowsUpdate\Auto Update\RebootRequired' "$reboot"
+          grep -Fq 'PendingFileRenameOperations' "$reboot"
+          grep -Fq 'Windows11SupportedEdition' "$validator"
+          grep -Fq "editionId -notmatch '^Core'" "$validator"
+          if grep -Fq "editionId -eq 'Professional'" "$preflight" "$validator"; then
+            echo 'Edition validation must not reject ProfessionalWorkstation or other Windows 11 non-Home editions.' >&2
+            exit 1
+          fi
+
+      - name: Validate edition policy examples
+        shell: pwsh
+        run: |
+          $supportedEditions = @('Professional', 'ProfessionalWorkstation', 'Enterprise', 'Education')
+          $homeEditions = @('Core', 'CoreN', 'CoreSingleLanguage', 'CoreCountrySpecific')
+          foreach ($edition in $supportedEditions) {
+            if ($edition -match '^Core') { throw "Edition attendue supportée mais classée Home: $edition" }
+          }
+          foreach ($edition in $homeEditions) {
+            if ($edition -notmatch '^Core') { throw "Edition Home non détectée: $edition" }
+          }
+
+      - name: Enforce fail-closed restore point
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'powershell.exe' scripts/windows/41_restore_point.ps1
+          grep -Fq 'Impossible de créer ou confirmer le point de restauration de sécurité' scripts/windows/41_restore_point.ps1
+          grep -Fq 'Point de restauration récent déjà présent' scripts/windows/41_restore_point.ps1
+          if grep -Fq "Registry backups remain the primary rollback mechanism" scripts/windows/41_restore_point.ps1; then
+            echo 'Restore-point failure must not silently continue.' >&2
+            exit 1
+          fi
+
+      - name: Enforce WinGet preflight before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/bootstrap/03_apps.ps1'
+          grep -Fq 'Préflight WinGet: validation de tous les identifiants avant la première installation.' "$script"
+          grep -Fq 'Préflight WinGet échoué avant toute mutation' "$script"
+          grep -Fq 'Invoke-WpcNativeCapture' "$script"
+          grep -Fq "ArgumentList @('show', '--id', \$Id, '--exact'" "$script"
+          if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$script"; then
+            echo 'Application bootstrap must not pipe a WinGet App Execution Alias into another command.' >&2
+            exit 1
+          fi
+
+      - name: Enforce FileZilla manual fallback
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content -Raw 'manifests/winget/apps-core.json' | ConvertFrom-Json
+          $fileZilla = @($manifest.apps | Where-Object { $_.name -eq 'FileZilla' })
+          if ($fileZilla.Count -ne 1) { throw 'FileZilla must have exactly one manifest entry.' }
+          if ($fileZilla[0].autoInstall -ne $false) { throw 'FileZilla must remain manual while no supported WinGet package exists.' }
+          if (-not [string]::IsNullOrWhiteSpace([string]$fileZilla[0].wingetId)) { throw 'FileZilla must not reference the removed TimKosse WinGet identifier.' }
+
+      - name: Enforce supply-chain verification for AWS CLI and kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/wsl/install-devops.sh
+          grep -Fq 'FB5DB77FD5C118B80511ADA8A6310ACC4672475C' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq 'gpg --batch --homedir "$aws_gnupg" --verify "$aws_sig" "$aws_zip"' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq '${aws_archive}.sig' scripts/wsl/install-devops.sh
+          # shellcheck disable=SC2016
+          grep -Fq '${kind_url}.sha256sum' scripts/wsl/install-devops.sh
+          grep -Fq 'sha256sum -c kind-linux-amd64.sha256sum' scripts/wsl/install-devops.sh
+
+  upstream-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+      - name: Validate pinned signature and checksum assets exist upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source config/devops/tool-versions.env
+          curl --retry 3 --retry-all-errors -fsSL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64.sha256sum" | grep -Eq '^[0-9a-f]{64}[[:space:]]+kind-linux-amd64$'
+          curl --retry 3 --retry-all-errors -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip.sig" -o awscliv2.sig
+          test -s awscliv2.sig

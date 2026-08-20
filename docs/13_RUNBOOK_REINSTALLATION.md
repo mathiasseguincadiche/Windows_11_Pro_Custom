@@ -15,7 +15,7 @@ Windows démarre ?
 │
 ├── Oui
 │   ├── simple dérive de configuration
-│   │   └── Audit → V25 Verify → PlanOnly → Apply → Verify
+│   │   └── Audit → identité stockage Verify → PlanOnly → Apply → Verify
 │   ├── réglage géré récemment en cause
 │   │   └── Rollback si un état initial fiable existe
 │   └── WSL2 seulement endommagé
@@ -53,7 +53,7 @@ Windows démarre ?
 ### Vérifier l'identité du stockage
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 Si la baseline est absente ou la topologie a changé volontairement, suivez [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md). Ne remplacez pas une baseline pour masquer une alerte.
@@ -211,13 +211,13 @@ Conservez cet audit comme premier état factuel de la reconstruction.
 Après remplacement ou reconstruction du stockage :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
 ```
 
 Si une baseline restaurée correspond toujours à la topologie réelle :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 Si la baseline est légitimement absente, contrôlez humainement la topologie puis effectuez l'enrôlement selon [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).

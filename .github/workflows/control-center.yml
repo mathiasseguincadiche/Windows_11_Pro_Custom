@@ -1,0 +1,146 @@
+name: Interactive Control Center
+
+on:
+  push:
+    branches:
+      - main
+      - docs/restore-project-first-canonical
+    paths:
+      - menu.ps1
+      - START_MENU.cmd
+      - docs/17_CONTROL_CENTER.md
+      - .github/workflows/control-center.yml
+  pull_request:
+    paths:
+      - menu.ps1
+      - START_MENU.cmd
+      - docs/17_CONTROL_CENTER.md
+      - .github/workflows/control-center.yml
+
+permissions:
+  contents: read
+
+jobs:
+  powershell-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse menu PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'menu.ps1'), [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -gt 0) {
+            $errors | ForEach-Object { Write-Host "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber): $($_.Message)" }
+            throw 'menu.ps1 parse failed.'
+          }
+
+      - name: Validate menu routing contract
+        shell: pwsh
+        run: |
+          $menu = Get-Content -Raw menu.ps1
+          foreach ($needle in @(
+            "FullInstall=[switch]::Present",
+            "03_apps.ps1",
+            "UpdateScript",
+            "BackupAction='Create'",
+            "BackupAction='Verify'",
+            "BackupAction='RestorePlan'",
+            "Mode='Rollback'",
+            "Mode='Audit'",
+            "Mode='Verify'",
+            "InstallDevOps=[switch]::Present",
+            "ValidateHardware=[switch]::Present",
+            "ValidateWsl=[switch]::Present",
+            "ValidateDevOps=[switch]::Present",
+            "90_workstation_fingerprint.ps1",
+            "63_restore_drill.ps1",
+            "ConfirmPhysicalEvidence=[switch]::Present",
+            "ReplaceBaseline=[switch]::Present",
+            "DryRun",
+            "Start-Process -FilePath `$exe -Verb RunAs"
+          )) {
+            if (-not $menu.Contains($needle)) { throw "Contrat Control Center absent: $needle" }
+          }
+          foreach ($forbidden in @('InstallOpenClawAI','ValidateOpenClawAI','Installer ou reparer OpenClaw')) {
+            if ($menu.Contains($forbidden)) { throw "Responsabilité externe interdite dans le menu: $forbidden" }
+          }
+          if ($menu -match 'Remove-Item\s+-Recurse|Format-Volume|Clear-Disk') {
+            throw 'Le menu ne doit contenir aucune restauration destructive propre.'
+          }
+          if ($menu -match 'CENTRE DE CONTROLE V\d+|System Update Manager V\d+|sauvegarde V\d+|restauration V\d+') {
+            throw 'Le menu ne doit plus exposer de numéro de version historique.'
+          }
+
+      - name: Prove all critical routes with DryRun
+        shell: pwsh
+        run: |
+          $choices = @('1','2','3','4.1','4.2','4.3','5.1','5.2','5.3','6','7','8.1','8.2','8.3','8.4','8.5','8.6','8.7','9.1','9.2','10')
+          foreach ($choice in $choices) {
+            Write-Host "--- Choice $choice ---"
+            $output = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) { throw "DryRun choice $choice failed." }
+            if ($choice -ne '10' -and -not $output.Contains('[DRY-RUN]')) {
+              throw "Choice $choice did not prove DryRun routing."
+            }
+          }
+
+      - name: Assert exact primary routes
+        shell: pwsh
+        run: |
+          $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not ($full.Contains('install.ps1') -and $full.Contains('-FullInstall'))) { throw 'Full install route incorrect.' }
+
+          $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not ($apps.Contains('03_apps.ps1') -and $apps.Contains("-Mode 'Apply'"))) { throw 'Apps-only route incorrect.' }
+
+          $updates = & ./menu.ps1 -Choice 3 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not ($updates.Contains('update.ps1') -and $updates.Contains("-Mode 'Apply'"))) { throw 'Update route incorrect.' }
+
+          $restore = & ./menu.ps1 -Choice 5.1 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not $restore.Contains('RestorePlan')) { throw 'Restore plan route incorrect.' }
+          if (-not $restore.Contains('ne restaure rien automatiquement')) { throw 'Restore safety message missing.' }
+
+          $hardware = & ./menu.ps1 -Choice 8.2 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not $hardware.Contains('ValidateHardware')) { throw 'Hardware qualification route incorrect.' }
+
+          $globalVerify = & ./menu.ps1 -Choice 7 -DryRun -NoPause -NoClear *>&1 | Out-String
+          foreach ($flag in @('ValidateHardware','ValidateWsl','ValidateDevOps')) {
+            if (-not $globalVerify.Contains($flag)) { throw "Global verify route missing $flag." }
+          }
+
+          $fingerprint = & ./menu.ps1 -Choice 8.5 -DryRun -NoPause -NoClear *>&1 | Out-String
+          if (-not ($fingerprint.Contains('90_workstation_fingerprint.ps1') -and $fingerprint.Contains('PHYSICAL') -and $fingerprint.Contains('ConfirmPhysicalEvidence'))) {
+            throw 'Physical fingerprint verification route incorrect.'
+          }
+
+          foreach ($choice in @('8.6','8.7')) {
+            $record = & ./menu.ps1 -Choice $choice -DryRun -NoPause -NoClear *>&1 | Out-String
+            foreach ($flag in @('PHYSICAL','ConfirmPhysicalEvidence','ConfirmHealthyState')) {
+              if (-not $record.Contains($flag)) { throw "Physical baseline route $choice missing $flag." }
+            }
+          }
+
+  launcher-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate launcher and safety wording
+        run: |
+          grep -Fq 'pwsh.exe' START_MENU.cmd
+          grep -Fq 'powershell.exe' START_MENU.cmd
+          grep -Fq 'menu.ps1' START_MENU.cmd
+          grep -Fq 'Installation complete' menu.ps1
+          grep -Fq 'Installation / reparation des logiciels' menu.ps1
+          grep -Fq 'Mises a jour completes' menu.ps1
+          grep -Fq 'Sauvegarde' menu.ps1
+          grep -Fq 'Restauration / rollback' menu.ps1
+          grep -Fq 'Audit et diagnostic complet' menu.ps1
+          grep -Fq 'Verification de conformite' menu.ps1
+          grep -Fq 'Composants specifiques' menu.ps1
+          grep -Fq 'Journaux et rapports' menu.ps1
+          grep -Fq 'La restauration complete destructive reste volontairement non automatique.' menu.ps1
+          grep -Fq 'OpenClaw / OpenRouter ne sont pas geres par ce depot.' menu.ps1

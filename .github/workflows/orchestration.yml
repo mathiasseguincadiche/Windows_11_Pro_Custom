@@ -1,0 +1,250 @@
+name: Orchestration and idempotence
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/orchestration.yml'
+      - 'VERSION'
+      - 'install.ps1'
+      - 'scripts/core/**'
+      - 'tests/powershell/generic_list_contract.tests.ps1'
+      - 'scripts/bootstrap/**'
+      - 'scripts/windows/**'
+      - 'scripts/defender/**'
+      - 'scripts/wsl/**'
+      - 'config/orchestration/**'
+      - 'logs/README.md'
+      - 'docs/14_ORCHESTRATION.md'
+      - '.gitignore'
+      - 'CHANGELOG.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/orchestration.yml'
+      - 'VERSION'
+      - 'install.ps1'
+      - 'scripts/core/**'
+      - 'tests/powershell/generic_list_contract.tests.ps1'
+      - 'scripts/bootstrap/**'
+      - 'scripts/windows/**'
+      - 'scripts/defender/**'
+      - 'scripts/wsl/**'
+      - 'config/orchestration/**'
+      - 'logs/README.md'
+      - 'docs/14_ORCHESTRATION.md'
+      - '.gitignore'
+      - 'CHANGELOG.md'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate machine-first orchestration contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          release=$(tr -d '\r\n' < VERSION)
+          printf '%s' "$release" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          jq -e '
+            (.schemaVersion == 1) and
+            (.releaseSource == "VERSION") and
+            (.evidencePolicy == "machine-first") and
+            (.stateFilesAreSourceOfTruth == false) and
+            (.verifyBeforeApply == true) and
+            (.reverifyAfterApply == true) and
+            (.persistentPerScriptLogs == true) and
+            (.redactSensitiveArguments == true) and
+            (.passwordsMayBeLogged == false) and
+            (.requireYesWhenNonInteractive == true)
+          ' config/orchestration/policy.json >/dev/null
+
+          test -f scripts/core/runtime.psm1
+          test -f scripts/core/native-process.psm1
+          test -f scripts/bootstrap/01_machine_state.ps1
+          test -f scripts/bootstrap/07_wsl_user.ps1
+          test -f scripts/windows/40_optimize.ps1
+          test -f logs/README.md
+          test -f docs/14_ORCHESTRATION.md
+
+          grep -Fq 'logs/*' .gitignore
+          grep -Fq '!logs/README.md' .gitignore
+          grep -Fq 'New-WpcRunContext' install.ps1
+          grep -Fq '01_machine_state.ps1' install.ps1
+          grep -Fq 'Test-WpcManagedScript' install.ps1
+          grep -Fq 'Invoke-WpcPlannedComponent' install.ps1
+          grep -Fq 'PlanOnly' install.ps1
+          grep -Fq 'NonInteractive' install.ps1
+          grep -Fq 'FullInstall' install.ps1
+          grep -Fq 'WslUser' install.ps1
+          grep -Fq 'Get-WpcProjectRelease' scripts/core/runtime.psm1
+          grep -Fq 'Release=$Context.Release' scripts/core/runtime.psm1
+          grep -Fq 'SchemaVersion=1' scripts/core/runtime.psm1
+          grep -Fq 'DÉJÀ OK' scripts/core/runtime.psm1
+          grep -Fq '<REDACTED>' scripts/core/runtime.psm1
+          grep -Fq 'state files are history/rollback data, never the source of truth' scripts/bootstrap/01_machine_state.ps1
+
+      - name: Enforce composable PowerShell failure semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '(^|[;{[:space:]])exit[[:space:]]+[1-9]' scripts --include='*.ps1' --include='*.psm1'; then
+            echo 'PowerShell child scripts must throw, not terminate the parent orchestrator with exit N.' >&2
+            exit 1
+          fi
+
+      - name: Enforce factual and idempotent component contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "ValidateSet('Audit', 'Apply', 'Verify')" scripts/bootstrap/03_apps.ps1
+          grep -Fq 'native-process.psm1' scripts/bootstrap/03_apps.ps1
+          grep -Fq 'Invoke-WpcNativeCapture' scripts/bootstrap/03_apps.ps1
+          grep -Fq "ArgumentList @('list', '--id', \$Id, '--exact'" scripts/bootstrap/03_apps.ps1
+          grep -Fq 'aucune installation relancée' scripts/bootstrap/03_apps.ps1
+
+          grep -Fq "ValidateSet('Audit', 'Apply', 'Verify')" scripts/bootstrap/06_wsl.ps1
+          grep -Fq 'Get-WslRelease' scripts/bootstrap/06_wsl.ps1
+          grep -Fq 'LocationMatches' scripts/bootstrap/06_wsl.ps1
+
+          grep -Fq 'adduser' scripts/bootstrap/07_wsl_user.ps1
+          grep -Fq 'nʼest jamais passée dans une variable, un argument ou un fichier log' scripts/bootstrap/07_wsl_user.ps1
+          grep -Fq -- '--user' scripts/bootstrap/08_devops.ps1
+          grep -Fq 'scripts/wsl/install-devops.sh' scripts/bootstrap/08_devops.ps1
+          grep -Fq 'scripts/wsl/validate-devops.sh' scripts/bootstrap/09_validate_devops.ps1
+
+          grep -Fq 'Get-PendingChanges' scripts/windows/40_optimize.ps1
+          grep -Fq 'Test-SettingsMatch' scripts/windows/30_vscode.ps1
+          grep -Fq "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')" scripts/windows/31_windows_terminal.ps1
+          grep -Fq 'Test-SettingsMatch' scripts/windows/31_windows_terminal.ps1
+          grep -Fq 'Save-InitialState' scripts/windows/31_windows_terminal.ps1
+          grep -Fq 'Restore-InitialState' scripts/windows/31_windows_terminal.ps1
+          test ! -e scripts/windows/31_wezterm.ps1
+          grep -Fq 'Get-OpenSshClientCapability' scripts/windows/32_openssh_client.ps1
+          grep -Fq 'Get-OneDriveState' scripts/windows/33_onedrive.ps1
+          grep -Fq "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')" scripts/defender/03_apply_approved_exclusions.ps1
+
+      - name: Enforce no credential persistence in executable code
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInEi '(Set-Content|Add-Content|Out-File).*(password|passwd|secret|token|api.?key)' scripts/core scripts/bootstrap/07_wsl_user.ps1 install.ps1; then
+            echo 'Potential credential persistence detected in orchestration code.' >&2
+            exit 1
+          fi
+          if grep -RInEi '(password|passwd)[[:space:]]*=' scripts/bootstrap/07_wsl_user.ps1; then
+            echo 'WSL password must never be held in a PowerShell variable.' >&2
+            exit 1
+          fi
+
+  powershell-runtime:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse every PowerShell script and module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failed = $false
+          Get-ChildItem -Recurse -File | Where-Object { $_.Extension -in @('.ps1', '.psm1') } | ForEach-Object {
+            $file = $_
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            foreach ($parseError in @($errors)) {
+              $failed = $true
+              Write-Host "PARSE $($file.FullName):$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
+            }
+          }
+          if ($failed) { throw 'PowerShell parse errors detected.' }
+
+      - name: Runtime idempotence and redaction self-test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\runtime.psm1 -Force
+          $fixture = Join-Path $PWD 'scripts\core\orchestration-ci-fixture.ps1'
+          @'
+          [CmdletBinding()]
+          param(
+            [ValidateSet('Apply','Verify')][string]$Mode,
+            [string]$ApiToken = ''
+          )
+          if ($Mode -eq 'Verify') {
+            if ($env:WPC_ORCHESTRATION_CI_STATE -ne 'ready') { throw 'fixture not ready' }
+            Write-Host '[OK] fixture ready'
+            return
+          }
+          if ($env:WPC_ORCHESTRATION_CI_STATE -eq 'ready') {
+            Write-Host '[DÉJÀ OK] fixture already ready'
+            return
+          }
+          $env:WPC_ORCHESTRATION_CI_STATE = 'ready'
+          Write-Host '[FAIT] fixture changed'
+          '@ | Set-Content -LiteralPath $fixture -Encoding utf8
+
+          $context = New-WpcRunContext -RepoRoot $PWD -Mode Apply -NonInteractive
+          if ($context.Release -ne (Get-Content -Raw .\VERSION).Trim()) { throw 'Runtime release does not match VERSION.' }
+          $first = Invoke-WpcPlannedComponent -Context $context -DisplayName 'CI fixture' `
+            -VerifyPath $fixture -VerifyArguments @{ Mode='Verify'; ApiToken='supersecret-value' } `
+            -ApplyPath $fixture -ApplyArguments @{ Mode='Apply'; ApiToken='supersecret-value' }
+          if (-not $first.Changed) { throw 'First pass should have changed the fixture.' }
+
+          $second = Invoke-WpcPlannedComponent -Context $context -DisplayName 'CI fixture rerun' `
+            -VerifyPath $fixture -VerifyArguments @{ Mode='Verify'; ApiToken='supersecret-value' } `
+            -ApplyPath $fixture -ApplyArguments @{ Mode='Apply'; ApiToken='supersecret-value' }
+          if ($second.Changed) { throw 'Second pass must be idempotent.' }
+
+          Complete-WpcRun -Context $context -Success $true
+          $log = Get-WpcLogPath -Context $context -Identity $fixture
+          if (-not (Test-Path $log)) { throw "Dedicated fixture log missing: $log" }
+          $logText = Get-Content -Raw $log
+          if ($logText -match 'supersecret-value') { throw 'Sensitive argument leaked into runtime log.' }
+          if ($logText -notmatch '<REDACTED>') { throw 'Sensitive argument redaction marker missing.' }
+          $summary = Get-Content -Raw (Join-Path $context.RunDir 'summary.json') | ConvertFrom-Json
+          if ($summary.Release -ne $context.Release) { throw 'Summary release does not match runtime release.' }
+          if ($summary.SchemaVersion -ne 1) { throw 'Unexpected run-summary schema version.' }
+          if ($summary.PSObject.Properties.Name -contains 'Version') { throw 'Legacy product Version field must not reappear in run summary.' }
+          if ($summary.Counts.FailedScripts -ne 0) { throw 'Expected probe failures polluted the final failure count.' }
+          if ($summary.Counts.Changed -lt 1 -or $summary.Counts.AlreadyOk -lt 1) { throw 'Component summary does not prove change then idempotent rerun.' }
+
+      - name: Runtime external-command failure contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module .\scripts\core\runtime.psm1 -Force
+          $context = New-WpcRunContext -RepoRoot $PWD -Mode Verify -NonInteractive
+
+          $success = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' -ArgumentList @('-NoProfile','-Command','exit 0') -LogIdentity 'ci/external-success' -Quiet
+          if (-not $success.Success -or $success.ExitCode -ne 0 -or $success.Outcome -ne 'OK') { throw 'External-command success result is incomplete.' }
+
+          $allowed = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' -ArgumentList @('-NoProfile','-Command','exit 23') -LogIdentity 'ci/external-allowed-failure' -AllowFailure -Quiet
+          if ($allowed.Success -or $allowed.ExitCode -ne 23 -or $allowed.Outcome -ne 'FAILED' -or [string]::IsNullOrWhiteSpace($allowed.Error)) { throw 'AllowFailure must return a structured failed result.' }
+
+          $thrown = $false
+          try {
+            [void](Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' -ArgumentList @('-NoProfile','-Command','exit 24') -LogIdentity 'ci/external-hard-failure' -Quiet)
+          } catch { $thrown = $_.Exception.Message -match 'code 24' }
+          if (-not $thrown) { throw 'A non-allowed external failure must throw.' }
+
+      - name: Reject unsafe generic List conversions
+        shell: pwsh
+        run: .\tests\powershell\generic_list_contract.tests.ps1
+
+      - name: Execute safe factual machine-state discovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\bootstrap\01_machine_state.ps1
+          $report = Get-Content -Raw .\reports\orchestration\machine-state.json | ConvertFrom-Json
+          $release = (Get-Content -Raw .\VERSION).Trim()
+          if ($report.Release -ne $release) { throw 'Machine-state release does not match VERSION.' }
+          if ($report.SchemaVersion -ne 1) { throw 'Unexpected machine-state schema version.' }
+          if ($report.PSObject.Properties.Name -contains 'Version') { throw 'Legacy product Version field must not reappear in machine-state report.' }
+          if ($report.EvidencePolicy -notmatch 're-read') { throw 'Machine-first evidence policy missing.' }
+          if ($null -eq $report.Windows.Build) { throw 'Windows build fact missing.' }
