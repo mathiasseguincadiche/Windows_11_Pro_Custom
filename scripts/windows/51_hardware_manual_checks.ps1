@@ -18,10 +18,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
-$targetPath = Join-Path $repoRoot 'config\hardware\target-v5.json'
+$versionPath = Join-Path $repoRoot 'VERSION'
+$release = (Get-Content -Raw -LiteralPath $versionPath).Trim()
+if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION invalide: $release" }
+$targetPath = Join-Path $repoRoot 'config\hardware\target.json'
 $stateDir = Join-Path $repoRoot 'state'
-$statePath = Join-Path $stateDir 'hardware-v5-manual.json'
+$statePath = Join-Path $stateDir 'hardware-manual.json'
+$legacyStatePath = Join-Path $stateDir 'hardware-v5-manual.json'
 $target = Get-Content -Raw $targetPath | ConvertFrom-Json
+if ([int]$target.schemaVersion -ne 1) { throw "SchemaVersion de cible matérielle non supporté: $($target.schemaVersion)" }
 
 $descriptions = [ordered]@{
     uefi_csm_disabled = 'UEFI démarré et CSM/Legacy désactivé.'
@@ -37,13 +42,23 @@ $descriptions = [ordered]@{
 function New-EmptyState {
     $checks = [ordered]@{}
     foreach ($name in @($target.manualChecks)) { $checks[$name] = $false }
-    return [ordered]@{ Version='V5'; UpdatedAt=$null; Checks=$checks; Notes='' }
+    return [ordered]@{ Release=$release; SchemaVersion=1; UpdatedAt=$null; Checks=$checks; Notes='' }
+}
+
+function Get-ReadableStatePath {
+    if (Test-Path -LiteralPath $statePath) { return $statePath }
+    if (Test-Path -LiteralPath $legacyStatePath) {
+        Write-Host "[COMPAT] Ancien état de preuves matérielles lu sans modification: $legacyStatePath" -ForegroundColor DarkGray
+        return $legacyStatePath
+    }
+    return $null
 }
 
 function Read-State {
     $state = New-EmptyState
-    if (-not (Test-Path $statePath)) { return $state }
-    $existing = Get-Content -Raw $statePath | ConvertFrom-Json
+    $readPath = Get-ReadableStatePath
+    if ([string]::IsNullOrWhiteSpace($readPath)) { return $state }
+    $existing = Get-Content -Raw -LiteralPath $readPath | ConvertFrom-Json
     foreach ($name in @($target.manualChecks)) {
         $property = $existing.Checks.PSObject.Properties[$name]
         if ($null -ne $property) { $state.Checks[$name] = [bool]$property.Value }
@@ -81,8 +96,11 @@ function Read-ManualConfirmation {
 }
 
 if ($Mode -eq 'Reset') {
-    if (Test-Path $statePath) { Remove-Item -LiteralPath $statePath -Force }
-    Write-Host '[FAIT] Preuves matérielles manuelles réinitialisées.' -ForegroundColor Green
+    if (Test-Path -LiteralPath $statePath) { Remove-Item -LiteralPath $statePath -Force }
+    Write-Host '[FAIT] Preuves matérielles manuelles canoniques réinitialisées.' -ForegroundColor Green
+    if (Test-Path -LiteralPath $legacyStatePath) {
+        Write-Host "[INFO] L'ancien état de compatibilité est conservé et n'a pas été supprimé: $legacyStatePath" -ForegroundColor DarkGray
+    }
     return
 }
 
@@ -119,6 +137,8 @@ if ($Mode -eq 'Record') {
         }
     }
     if ($Notes) { $state.Notes = $Notes }
+    $state.Release = $release
+    $state.SchemaVersion = 1
     $state.UpdatedAt = (Get-Date).ToString('o')
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
     $state | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $statePath
