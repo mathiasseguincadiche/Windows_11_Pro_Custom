@@ -57,7 +57,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $smoke = Join-Path $env:RUNNER_TEMP 'terminal-ux-smoke.ps1'
-          $slow = Join-Path $env:RUNNER_TEMP 'terminal-ux-slow.ps1'
+          $slow = Join-Path $env:GITHUB_WORKSPACE 'scripts\core\terminal-ux-ci-fixture.ps1'
           $output = Join-Path $env:RUNNER_TEMP 'terminal-ux-output.txt'
 
           @'
@@ -78,28 +78,33 @@ jobs:
           Complete-WpcRun -Context `$context -Success `$true
           "@ | Set-Content -LiteralPath $smoke -Encoding utf8
 
-          & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File $smoke *> $output
-          if ($LASTEXITCODE -ne 0) {
-            Get-Content -LiteralPath $output
-            throw "Terminal UX smoke failed with exit code $LASTEXITCODE"
-          }
-
-          $text = Get-Content -Raw -LiteralPath $output
-          foreach ($needle in @(
-            'Suivi interactif actif',
-            'Battement de vie',
-            'ETAPE 01 | Decouverte et preflight',
-            'SOUS-ETAPE 01 | Operation lente de test',
-            'Script  :',
-            'Journal :',
-            '[ACTIF] Operation lente de test est toujours en cours',
-            'Operation lente de test termine',
-            'Duree totale',
-            'VERDICT: execution terminee sans erreur.'
-          )) {
-            if (-not $text.Contains($needle)) {
+          try {
+            & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File $smoke *> $output
+            if ($LASTEXITCODE -ne 0) {
               Get-Content -LiteralPath $output
-              throw "Terminal UX output missing: $needle"
+              throw "Terminal UX smoke failed with exit code $LASTEXITCODE"
             }
+
+            $text = Get-Content -Raw -LiteralPath $output
+            foreach ($needle in @(
+              'Suivi interactif actif',
+              'Battement de vie',
+              'ETAPE 01 | Decouverte et preflight',
+              'SOUS-ETAPE 01 | Operation lente de test',
+              'Script  : scripts\core\terminal-ux-ci-fixture.ps1',
+              'Journal :',
+              '[ACTIF] Operation lente de test est toujours en cours',
+              'Operation lente de test termine',
+              'Duree totale',
+              'VERDICT: execution terminee sans erreur.'
+            )) {
+              if (-not $text.Contains($needle)) {
+                Get-Content -LiteralPath $output
+                throw "Terminal UX output missing: $needle"
+              }
+            }
+            Get-Content -LiteralPath $output
           }
-          Get-Content -LiteralPath $output
+          finally {
+            Remove-Item -LiteralPath $slow -Force -ErrorAction SilentlyContinue
+          }
