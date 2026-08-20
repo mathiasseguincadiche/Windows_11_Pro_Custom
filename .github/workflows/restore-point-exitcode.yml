@@ -29,6 +29,7 @@ jobs:
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
           restore='scripts/windows/41_restore_point.ps1'
+          workflow='.github/workflows/restore-point-exitcode.yml'
           grep -Fq "ClassName SystemRestore" "$readiness"
           grep -Fq "CreateRestorePoint" "$readiness"
           grep -Fq "MethodName 'Enable'" "$restore"
@@ -36,8 +37,14 @@ jobs:
           grep -Fq 'RestorePointType = [uint32]12' "$restore"
           grep -Fq 'EventType = [uint32]100' "$restore"
           grep -Fq 'Assert-WpcPowerShellRuntime' "$restore"
+          grep -Fq 'CimClassMethods |' "$readiness" "$restore"
+          grep -Fq 'ForEach-Object { [string]$_.Name }' "$readiness" "$restore"
           grep -Fq 'Release=$release' "$readiness"
           grep -Fq 'SchemaVersion=2' "$readiness"
+          if grep -Eq 'CimClassMethods[.]Keys' "$restore" "$readiness" "$workflow"; then
+            echo 'Invalid CimClassMethods key-property access is forbidden.' >&2
+            exit 1
+          fi
           if grep -Fq 'Checkpoint-Computer' "$restore" "$readiness"; then
             echo 'Checkpoint-Computer fallback is forbidden.' >&2
             exit 1
@@ -57,7 +64,10 @@ jobs:
             Write-Warning 'SystemRestore is not exposed by this hosted Windows Server runner; physical Windows 11 validation remains fail-closed.'
             return
           }
-          $methods = @($class.CimClassMethods.Keys)
+          $methods = @(
+            $class.CimClassMethods |
+              ForEach-Object { [string]$_.Name }
+          )
           foreach ($required in @('Enable','CreateRestorePoint')) {
             if ($methods -notcontains $required) { throw "SystemRestore method unavailable: $required" }
           }
