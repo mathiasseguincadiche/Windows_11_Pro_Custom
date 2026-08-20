@@ -24,7 +24,7 @@ function Get-WpcPowerShellRuntimeFact {
 function Assert-WpcPowerShellRuntime {
     [CmdletBinding()]
     param(
-        [version]$MinimumVersion = [version]'7.6.5',
+        [version]$MinimumVersion = [version]'7.6.4',
         [switch]$RequireWindows,
         [switch]$PassThru
     )
@@ -49,7 +49,7 @@ function Assert-WpcPowerShellRuntime {
     }
 
     if ($failures.Count -gt 0) {
-        throw "Runtime PowerShell non conforme: $($failures -join '; '). Ce depot exige PowerShell 7.6.5 ou ulterieur (Core, x64, pwsh.exe). Windows PowerShell 5.1 n'est ni supporte ni utilise comme fallback."
+        throw "Runtime PowerShell non conforme: $($failures -join '; '). Ce depot exige PowerShell 7.6.4 ou ulterieur (Core, x64, pwsh.exe). Windows PowerShell 5.1 n'est ni supporte ni utilise comme fallback."
     }
 
     if ($PassThru) { return $fact }
