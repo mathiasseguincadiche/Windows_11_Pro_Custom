@@ -78,7 +78,7 @@ jobs:
 
           $cmd = Get-WpcNativeApplication -Name 'cmd.exe'
           if (-not $cmd) { throw 'cmd.exe unavailable.' }
-          $result = Invoke-WpcNativeCapture -FilePath $cmd.Source -ArgumentList @('/d','/c','<nul set /p =strictmode-ok')
+          $result = Invoke-WpcNativeCapture -FilePath $cmd.Source -ArgumentList @('/d','/c','echo strictmode-ok')
           if ($result.ExitCode -ne 0 -or $result.Text.Trim() -ne 'strictmode-ok') {
             throw "Fresh-session native capture failed: exit=$($result.ExitCode) text=$($result.Text)"
           }
