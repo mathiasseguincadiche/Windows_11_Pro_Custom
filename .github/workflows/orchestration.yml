@@ -84,7 +84,8 @@ jobs:
           grep -Fq 'Get-WpcProjectRelease' scripts/core/runtime.psm1
           grep -Fq 'Release=$Context.Release' scripts/core/runtime.psm1
           grep -Fq 'SchemaVersion=1' scripts/core/runtime.psm1
-          grep -Fq 'DÉJÀ OK' scripts/core/runtime.psm1
+          grep -Fq "'DEJA_OK' { 'DEJA OK' }" scripts/core/runtime.psm1
+          grep -Fq 'D\u00c9J\u00c0 OK' scripts/core/runtime.psm1
           grep -Fq '<REDACTED>' scripts/core/runtime.psm1
           grep -Fq 'state files are history/rollback data, never the source of truth' scripts/bootstrap/01_machine_state.ps1
 
