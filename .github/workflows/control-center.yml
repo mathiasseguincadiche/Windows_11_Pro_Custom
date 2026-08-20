@@ -53,7 +53,7 @@ jobs:
           $menu = Get-Content -Raw menu.ps1
           foreach ($needle in @(
             "Assert-WpcPowerShellRuntime",
-            "[version]'7.6.5'",
+            "[version]'7.6.4'",
             "pwsh.exe",
             "FullInstall=[switch]::Present",
             "03_apps.ps1",
@@ -99,7 +99,7 @@ jobs:
         run: |
           $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($full.Contains('install.ps1') -and $full.Contains('-FullInstall'))) { throw 'Full install route incorrect.' }
-          if (-not $full.Contains('Runtime minimum : 7.6.5')) { throw 'PowerShell minimum runtime is not visible in menu output.' }
+          if (-not $full.Contains('Runtime minimum : 7.6.4')) { throw 'PowerShell minimum runtime is not visible in menu output.' }
 
           $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($apps.Contains('03_apps.ps1') -and $apps.Contains("-Mode 'Apply'"))) { throw 'Apps-only route incorrect.' }
@@ -129,7 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq 'where pwsh.exe' START_MENU.cmd
-          grep -Fq 'PowerShell 7.6.5 minimum' START_MENU.cmd
+          grep -Fq 'PowerShell 7.6.4 minimum' START_MENU.cmd
           grep -Fq 'menu.ps1' START_MENU.cmd
           if grep -Eiq 'where[[:space:]]+powershell\.exe|powershell\.exe[[:space:]]+-NoLogo' START_MENU.cmd; then
             echo 'START_MENU.cmd must never fall back to Windows PowerShell.' >&2
