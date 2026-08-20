@@ -15,7 +15,7 @@ function Get-WpcWindowsNativeModuleRoot {
     }
 
     # Windows conserve plusieurs modules système inbox sous ce répertoire historique.
-    # Le chemin ne signifie pas que powershell.exe est exécuté : les modules sont
+    # Ce chemin est seulement un emplacement de modules système ; ils sont
     # importés directement dans le processus PowerShell 7 courant.
     return (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules')
 }
