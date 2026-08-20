@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
       - name: Validate pinned DevOps version matrix
         shell: bash
         run: |
@@ -33,6 +34,7 @@ jobs:
             echo 'A rolling core-tool URL bypasses config/devops/tool-versions.env.' >&2
             exit 1
           fi
+
       - name: Validate upstream pinned artifacts exist
         shell: bash
         run: |
@@ -46,6 +48,7 @@ jobs:
           curl --retry 3 -fsIL "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64" >/dev/null
           curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" >/dev/null
           curl --retry 3 -fsIL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip.sig" >/dev/null
+
       - name: Enforce external-project boundary
         shell: bash
         run: |
@@ -58,32 +61,36 @@ jobs:
               exit 1
             fi
           done
-          if grep -Ei 'OpenClaw|openclaw|clawops|OPENCLAW_' config/wezterm/wezterm.lua; then
-            echo 'External OpenClaw project hook leaked into workstation WezTerm config.' >&2
+          if grep -REi 'OpenClaw|openclaw|clawops|OPENCLAW_' config/windows-terminal scripts/windows/31_windows_terminal.ps1; then
+            echo 'External OpenClaw project hook leaked into workstation terminal configuration.' >&2
             exit 1
           fi
           if grep -Fq 'InstallOpenClawAI' menu.ps1 || grep -Fq 'ValidateOpenClawAI' menu.ps1; then
             echo 'Control Center must not install or validate OpenClaw/OpenRouter.' >&2
             exit 1
           fi
+
       - name: Validate backup capacity policy wiring
         shell: bash
         run: |
           set -euo pipefail
           jq -e '
+            (.schemaVersion == 1) and
             (.minimumTargetFreeGB >= 100) and
             (.capacitySafetyMarginPercent >= 10) and
             (.capacitySafetyMarginPercent <= 50) and
             (.destructiveRestoreAutomation == false)
-          ' config/backup/v7-policy.json >/dev/null
-          grep -q 'capacity-preflight.json' scripts/backup/60_create_backup_v7.ps1
-          grep -q 'RequiredTargetFreeGB' scripts/backup/60_create_backup_v7.ps1
+          ' config/backup/policy.json >/dev/null
+          grep -q 'capacity-preflight.json' scripts/backup/60_create_backup.ps1
+          grep -q 'RequiredTargetFreeGB' scripts/backup/60_create_backup.ps1
+          grep -q 'SchemaVersion=1' scripts/backup/60_create_backup.ps1
+
       - name: Validate responsiveness wiring through orchestrator
         shell: bash
         run: |
           set -euo pipefail
           jq -e '
-            (.version == "V8") and
+            (.schemaVersion == 1) and
             (.memory.memoryCompression == true) and
             (.memory.applicationLaunchPrefetching == true) and
             (.memory.applicationPreLaunch == true) and
@@ -97,12 +104,12 @@ jobs:
             ((.forbiddenTweaks | index("force-best-performance-power-mode")) != null) and
             (.startup.automaticDisable == false) and
             (.backgroundApps.globalDisable == false)
-          ' config/windows/v8/responsiveness.json >/dev/null
+          ' config/windows/responsiveness.json >/dev/null
           grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
-          grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
-          grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness_v8.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
-          grep -Fq "acPowerModeManagement -eq 'enforce'" scripts/windows/53_responsiveness_v8.ps1
-          grep -Fq 'Mode de puissance secteur observé uniquement' scripts/windows/53_responsiveness_v8.ps1
+          grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness.ps1' -VerifyArguments @{ Mode='Verify' }" install.ps1
+          grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness.ps1' -ApplyArguments @{ Mode='Apply' }" install.ps1
+          grep -Fq "acPowerModeManagement -eq 'enforce'" scripts/windows/53_responsiveness.ps1
+          grep -Fq 'Mode de puissance secteur observé uniquement' scripts/windows/53_responsiveness.ps1
 
   windows-runtime:
     runs-on: windows-latest
@@ -114,22 +121,24 @@ jobs:
           $ErrorActionPreference = 'Stop'
           .\scripts\windows\20_system_audit.ps1
           .\scripts\windows\21_storage_trim.ps1 -Mode Audit
-          .\scripts\windows\53_responsiveness_v8.ps1 -Mode Audit
+          .\scripts\windows\53_responsiveness.ps1 -Mode Audit
           .\scripts\windows\42_benchmark.ps1 -Stage snapshot
           foreach ($profile in @('standard', 'privacy', 'gaming', 'optional')) {
-            .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile $profile
+            .\scripts\windows\40_optimize.ps1 -Mode Audit -Profile $profile
           }
+
       - name: Validate generated runtime reports
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $release = (Get-Content -Raw .\VERSION).Trim()
           $audit = Get-Content -Raw .\reports\windows\system-audit.json | ConvertFrom-Json
           if ([string]::IsNullOrWhiteSpace([string]$audit.Computer)) {
             throw 'system-audit.json does not contain a computer identity.'
           }
-          $responsiveness = Get-Content -Raw .\reports\windows\v8-responsiveness.json | ConvertFrom-Json
-          if ($responsiveness.Version -ne 'V8' -or $null -eq $responsiveness.State) {
-            throw 'Internal responsiveness report is incomplete.'
+          $responsiveness = Get-Content -Raw .\reports\windows\responsiveness.json | ConvertFrom-Json
+          if ($responsiveness.Release -ne $release -or [int]$responsiveness.SchemaVersion -ne 1 -or $null -eq $responsiveness.State) {
+            throw 'Canonical responsiveness report is incomplete.'
           }
           if ($responsiveness.AcPowerModeManagement -ne 'observe-only') {
             throw 'Responsiveness policy must preserve the current Windows AC power mode.'
@@ -137,7 +146,10 @@ jobs:
           if ($responsiveness.StartupAutomaticDisable -ne $false -or $responsiveness.BackgroundGlobalDisable -ne $false) {
             throw 'Responsiveness policy must not automatically disable startup or background apps.'
           }
-          $benchmark = Get-Content -Raw .\reports\windows\v4-benchmark-snapshot.json | ConvertFrom-Json
+          $benchmark = Get-Content -Raw .\reports\windows\benchmark-snapshot.json | ConvertFrom-Json
+          if ($benchmark.Release -ne $release -or [int]$benchmark.SchemaVersion -ne 1) {
+            throw 'Canonical runtime benchmark release/schema is incomplete.'
+          }
           if ($null -eq $benchmark.Timestamp -or $null -eq $benchmark.AutomaticManagedPagefile) {
             throw 'Runtime benchmark report is incomplete.'
           }
