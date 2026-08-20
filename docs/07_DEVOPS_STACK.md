@@ -69,7 +69,7 @@ minikube start --driver=docker
 
 - Terraform ;
 - Ansible Core ;
-- AWS CLI v2 ;
+- AWS CLI, version 2 ;
 - GitHub CLI.
 
 ### Qualité et sécurité
