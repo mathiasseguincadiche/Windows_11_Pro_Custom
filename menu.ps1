@@ -111,17 +111,10 @@ function Read-WpcFailureSummaryContext {
     param([Parameter(Mandatory)][string]$SummaryPath,[Parameter(Mandatory)][datetime]$NotBefore)
     try {
         $file=Get-Item -LiteralPath $SummaryPath -ErrorAction Stop
-        if ($file.LastWriteTimeUtc -lt $NotBefore.ToUniversalTime().AddSeconds(-5)) {return $null}
+        if ($file.LastWriteTimeUtc -lt $NotBefore.ToUniversalTime().AddSeconds(-10)) {return $null}
         $summary=Get-Content -Raw -LiteralPath $SummaryPath -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
         $successProperty=$summary.PSObject.Properties['Success']
         if ($null -ne $successProperty -and [bool]$successProperty.Value) {return $null}
-        $completedProperty=$summary.PSObject.Properties['CompletedAt']
-        if ($null -ne $completedProperty -and -not [string]::IsNullOrWhiteSpace([string]$completedProperty.Value)) {
-            $completed=$null
-            if ([datetimeoffset]::TryParse([string]$completedProperty.Value,[ref]$completed)) {
-                if ($completed.UtcDateTime -lt $NotBefore.ToUniversalTime().AddSeconds(-5)) {return $null}
-            }
-        }
         $states=@()
         $latestStateProperty=$summary.PSObject.Properties['LatestScriptState']
         if ($null -ne $latestStateProperty) {$states=@($latestStateProperty.Value)}
@@ -145,26 +138,48 @@ function Read-WpcFailureSummaryContext {
         return $null
     }
 }
+function Get-WpcOrchestratorFailureContext {
+    param([Parameter(Mandatory)][datetime]$NotBefore)
+    $logPath=Join-Path $RepoRoot 'logs\install.log'
+    try {
+        if (-not (Test-Path -LiteralPath $logPath)) {return $null}
+        $file=Get-Item -LiteralPath $logPath -ErrorAction Stop
+        if ($file.LastWriteTimeUtc -lt $NotBefore.ToUniversalTime().AddSeconds(-10)) {return $null}
+        $errorLines=@(Get-Content -LiteralPath $logPath -Tail 120 -ErrorAction Stop | Where-Object { $_ -match '\[(ERREUR|ERROR)\]' })
+        if ($errorLines.Count -eq 0) {return $null}
+        $last=[string]$errorLines[-1]
+        $cause=($last -replace '^\[[^\]]+\]\s+\[(?:ERREUR|ERROR)\]\s*','').Trim()
+        if ([string]::IsNullOrWhiteSpace($cause)) {$cause=$last}
+        return [pscustomobject]@{Step='Orchestration';Script='';Cause=$cause;LogPath=$logPath;SummaryPath='';RunId=''}
+    } catch {
+        return $null
+    }
+}
 function Get-WpcLatestFailureContext {
     param([Parameter(Mandatory)][datetime]$NotBefore)
     foreach ($summaryPath in @(Get-WpcFailureSummaryCandidates -NotBefore $NotBefore)) {
         $context=Read-WpcFailureSummaryContext -SummaryPath $summaryPath -NotBefore $NotBefore
         if ($null -ne $context) {return $context}
     }
-    return $null
+    return (Get-WpcOrchestratorFailureContext -NotBefore $NotBefore)
 }
 function Format-WpcProcessFailure {
     param([Parameter(Mandatory)][string]$DisplayName,[Parameter(Mandatory)][int]$ExitCode,[Parameter(Mandatory)][datetime]$StartedAt)
     $context=Get-WpcLatestFailureContext -NotBefore $StartedAt
-    if ($null -eq $context) {return "Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode. Consulte la sortie ci-dessus et les journaux du dépôt pour la cause détaillée."}
     $lines=New-Object System.Collections.Generic.List[string]
     $lines.Add("Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode.")
+    if ($null -eq $context) {
+        $fallbackLog=Join-Path $RepoRoot 'logs\install.log'
+        $lines.Add('  Cause   : contexte structuré indisponible; la dernière erreur n’a pas pu être relue automatiquement.')
+        $lines.Add("  Journal : $fallbackLog")
+        return ($lines -join [Environment]::NewLine)
+    }
     if ($context.RunId) {$lines.Add("  Run     : $($context.RunId)")}
     $lines.Add("  Étape   : $($context.Step)")
     if ($context.Script) {$lines.Add("  Script  : $($context.Script)")}
     if ($context.Cause) {$lines.Add("  Cause   : $($context.Cause)")}
     if ($context.LogPath) {$lines.Add("  Journal : $($context.LogPath)")}
-    $lines.Add("  Résumé  : $($context.SummaryPath)")
+    if ($context.SummaryPath) {$lines.Add("  Résumé  : $($context.SummaryPath)")}
     return ($lines -join [Environment]::NewLine)
 }
 function Invoke-WpcRepoScript {
@@ -219,7 +234,7 @@ function Show-Help {
     Write-Line 'Mises a jour' Cyan;Write-Line '  Gere Windows Update, WinGet, WSL, Ubuntu/APT, VS Code et les outils DevOps epingles.' DarkGray
     Write-Line 'Sauvegarde' Cyan;Write-Line '  Cree ou valide la sauvegarde de reference de la workstation.' DarkGray
     Write-Line 'Restauration' Cyan;Write-Line '  Genere un plan de restauration ou rollback les reglages geres. Pas de restauration destructive automatique.' DarkGray
-    Write-Line 'Audit / verification' Cyan;Write-Line '  Audit observe; Verify exige la conformite des composants verifies.' DarkGray;Write-Line ''
+    Write-Line 'Audit / verification' Cyan;Write-Line '  Audit observe; Verify exige les prérequis matériels critiques. Les écarts de pilotes sont affichés mais restent non bloquants.' DarkGray;Write-Line ''
     Write-Line 'OpenClaw / OpenRouter ne sont pas geres par ce depot.' Yellow;Write-Line 'Leur installation et leur configuration appartiennent au depot openclaw_openrouter.' DarkGray;Write-Line '';Write-Line 'Lancement direct possible pour automatisation/test:' White;Write-Line '  .\menu.ps1 -Choice 3 -DryRun' DarkGray;Write-Line '  .\menu.ps1 -Choice 8.1 -DryRun' DarkGray
 }
 function Show-MainMenu {while ($true) {Write-Header;Write-Line '  1. Installation complete' White;Write-Line '  2. Installation / reparation des logiciels' White;Write-Line '  3. Mises a jour completes' White;Write-Line '  4. Sauvegarde' White;Write-Line '  5. Restauration / rollback' White;Write-Line '  6. Audit et diagnostic complet' White;Write-Line '  7. Verification de conformite' White;Write-Line '  8. Composants specifiques' White;Write-Line '  9. Journaux et rapports' White;Write-Line ' 10. Aide' White;Write-Line '  0. Quitter' DarkGray;Write-Host '';Write-Line 'Les actions deja conformes restent idempotentes: elles ne sont pas refaites inutilement.' DarkGray;$selected=(Read-Host 'Que veux-tu faire ?').Trim();switch ($selected) {'0' {return};'4' {Show-BackupMenu};'5' {Show-RestoreMenu};'8' {Show-ComponentsMenu};'9' {Show-LogsMenu};default {Invoke-MainAction -Selected $selected;Pause-WpcMenu}}}}
