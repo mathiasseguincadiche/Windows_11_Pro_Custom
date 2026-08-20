@@ -109,7 +109,7 @@ function Get-WpcColor {
 function Get-WpcLabel {
     param([string]$Status)
     switch ($Status) {
-        'DEJA_OK' { 'DÉJÀ OK' } 'A_FAIRE' { 'À FAIRE' } 'ACTION_REQUISE' { 'ACTION REQUISE' }
+        'DEJA_OK' { 'DEJA OK' } 'A_FAIRE' { 'A FAIRE' } 'ACTION_REQUISE' { 'ACTION REQUISE' }
         'EN_COURS' { 'EN COURS' } 'AVERTISSEMENT' { 'AVERTISSEMENT' } 'ATTENTE' { 'EN ATTENTE' }
         default { $Status.Replace('_', ' ') }
     }
@@ -267,8 +267,8 @@ function Write-WpcChildLine {
     Add-WpcLogLine -Path $LogPath -Level 'OUTPUT' -Message (Protect-WpcCommandText -Text $Line)
     if ($Quiet) { return }
     $color = 'Gray'
-    if ($Line -match '^\s*\[(OK|DÉJÀ OK|DEJA OK|FAIT|READY)\]') { $color='Green' }
-    elseif ($Line -match '^\s*\[(WARN|WARNING|AVERTISSEMENT|À FAIRE|A FAIRE|TODO)\]') { $color='Yellow' }
+    if ($Line -match '^\s*\[(OK|DEJA OK|D\u00c9J\u00c0 OK|FAIT|READY)\]') { $color='Green' }
+    elseif ($Line -match '^\s*\[(WARN|WARNING|AVERTISSEMENT|A FAIRE|\u00c0 FAIRE|TODO)\]') { $color='Yellow' }
     elseif ($Line -match '^\s*\[(KO|ERROR|ERREUR|FAILED)\]') { $color='Red' }
     elseif ($Line -match '^\s*\[(ACTION|ACTION REQUISE|USER ACTION)\]') { $color='Magenta' }
     elseif ($Line -match '^\s*\[(INFO|ANALYSE|EN COURS|ATTENTE|ACTIF)\]') { $color='Cyan' }
@@ -307,7 +307,7 @@ function Invoke-WpcManagedScript {
         if ($Purpose -eq 'Probe') { $env:W11_CUSTOM_PARENT_PURPOSE='Probe' }
         & $Path @Arguments 2>&1 3>&1 4>&1 5>&1 6>&1 | ForEach-Object {
             foreach ($line in @(([string]$_) -split "`r?`n")) {
-                if ($line -match '\[(DÉJÀ OK|DEJA OK)\]') { $sawAlready=$true }
+                if ($line -match '\[(DEJA OK|D\u00c9J\u00c0 OK)\]') { $sawAlready=$true }
                 if ($line -match '\[(FAIT|CHANGED)\]') { $sawChanged=$true }
                 if ($line -match '\[(ACTION REQUISE|USER ACTION)\]') { $sawUserAction=$true }
                 $heartbeat.Touch()
@@ -332,17 +332,17 @@ function Invoke-WpcManagedScript {
         Write-WpcStatus -Status 'OK' -Message "$DisplayName termine" -Detail ("Duree: {0:n2}s | journal: {1}" -f $duration,$logPath) -Context $Context
     }
     $result=[pscustomobject]@{ Success=$success; Outcome=$outcome; Error=$errorText; LogPath=$logPath; DurationSeconds=$duration }
-    if (-not $success -and -not $AllowFailure) { throw "$DisplayName a échoué: $errorText" }
+    if (-not $success -and -not $AllowFailure) { throw "$DisplayName a echoue: $errorText" }
     return $result
 }
 
 function Test-WpcManagedScript {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Path,[hashtable]$Arguments=@{},[string]$DisplayName='')
     if ([string]::IsNullOrWhiteSpace($DisplayName)) { $DisplayName=[IO.Path]::GetFileName($Path) }
-    Write-WpcStatus -Status 'ANALYSE' -Message $DisplayName -Detail 'Lecture de lʼétat réel de la machine avant décision.' -Context $Context
+    Write-WpcStatus -Status 'ANALYSE' -Message $DisplayName -Detail 'Lecture de l etat reel de la machine avant decision.' -Context $Context
     $result=Invoke-WpcManagedScript -Context $Context -Path $Path -Arguments $Arguments -DisplayName $DisplayName -Phase 'Probe' -Purpose 'Probe' -AllowFailure -Quiet
-    if ($result.Success) { Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'La cible est déjà conforme; aucune modification nécessaire.' -Context $Context; return $true }
-    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'La cible nʼest pas conforme; cette étape est planifiée.' -Context $Context
+    if ($result.Success) { Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'La cible est deja conforme; aucune modification necessaire.' -Context $Context; return $true }
+    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'La cible n est pas conforme; cette etape est planifiee.' -Context $Context
     return $false
 }
 
@@ -366,16 +366,16 @@ function Invoke-WpcPlannedComponent {
     elseif ($KnownState -eq 'NeedsChange') { $compliant=$false }
     else { $compliant=Test-WpcManagedScript -Context $Context -Path $VerifyPath -Arguments $VerifyArguments -DisplayName $DisplayName }
     if ($compliant) {
-        Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'Composant déjà conforme: aucune modification ni réinstallation.' -Context $Context
+        Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'Composant deja conforme: aucune modification ni reinstallation.' -Context $Context
         Add-WpcComponentResult -Context $Context -DisplayName $DisplayName -Identity $VerifyPath -Outcome 'DEJA_OK'
         return [pscustomobject]@{ Changed=$false; Success=$true; Outcome='DEJA_OK' }
     }
     Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'Correction requise: application puis revalidation automatique.' -Context $Context
     Write-WpcStatus -Status 'EN_COURS' -Message "$DisplayName - application 1/2" -Detail 'Le script applique uniquement ce qui manque.' -Context $Context
     [void](Invoke-WpcManagedScript -Context $Context -Path $ApplyPath -Arguments $ApplyArguments -DisplayName $DisplayName -Phase 'Apply' -Purpose 'Apply')
-    Write-WpcStatus -Status 'EN_COURS' -Message "$DisplayName - revalidation 2/2" -Detail 'Le script prouve immédiatement le résultat après modification.' -Context $Context
+    Write-WpcStatus -Status 'EN_COURS' -Message "$DisplayName - revalidation 2/2" -Detail 'Le script prouve immediatement le resultat apres modification.' -Context $Context
     [void](Invoke-WpcManagedScript -Context $Context -Path $VerifyPath -Arguments $VerifyArguments -DisplayName $DisplayName -Phase 'VerifyAfterApply' -Purpose 'VerifyAfterApply')
-    Write-WpcStatus -Status 'FAIT' -Message $DisplayName -Detail 'Écart corrigé et état final vérifié.' -Context $Context
+    Write-WpcStatus -Status 'FAIT' -Message $DisplayName -Detail 'Ecart corrige et etat final verifie.' -Context $Context
     Add-WpcComponentResult -Context $Context -DisplayName $DisplayName -Identity $VerifyPath -Outcome 'FAIT'
     return [pscustomobject]@{ Changed=$true; Success=$true; Outcome='FAIT' }
 }
@@ -428,7 +428,7 @@ function Invoke-WpcExternalCommand {
     if ($exitCode -ne 0) {
         Add-WpcLogLine -Path $logPath -Level 'ERROR' -Message "ExitCode=$exitCode"
         Add-WpcEvent -Context $Context -Data @{ Kind='SCRIPT'; Purpose=$purpose; Phase='Run'; Script=$LogIdentity; DisplayName=$DisplayName; Outcome='FAILED'; Success=$false; DurationSeconds=$duration; LogPath=$logPath; Error="ExitCode=$exitCode" }
-        $errorText="$DisplayName a échoué avec le code $exitCode. Voir $logPath"
+        $errorText="$DisplayName a echoue avec le code $exitCode. Voir $logPath"
         $result=[pscustomobject]@{ Success=$false; Outcome='FAILED'; Error=$errorText; ExitCode=$exitCode; LogPath=$logPath; DurationSeconds=$duration }
         if (-not $AllowFailure) { throw $errorText }
         return $result
@@ -443,7 +443,7 @@ function Read-WpcRequiredValue {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Name,[string]$CurrentValue='',[Parameter(Mandatory)][string]$Prompt,[Parameter(Mandatory)][string]$Example,[string]$Pattern='.+')
     if (-not [string]::IsNullOrWhiteSpace($CurrentValue) -and $CurrentValue -match $Pattern) { return $CurrentValue }
     Write-WpcStatus -Status 'ACTION_REQUISE' -Message "Valeur requise: $Name" -Detail "$Prompt Exemple: $Example" -Context $Context
-    if ($Context.NonInteractive) { throw "Paramètre $Name requis. Exemple: $Example" }
+    if ($Context.NonInteractive) { throw "Parametre $Name requis. Exemple: $Example" }
     while ($true) {
         $value=Read-Host $Prompt
         if (-not [string]::IsNullOrWhiteSpace($value) -and $value -match $Pattern) { return $value }
@@ -454,14 +454,14 @@ function Read-WpcRequiredValue {
 function Confirm-WpcChanges {
     param([Parameter(Mandatory)]$Context,[switch]$Yes)
     if ($Yes) { return }
-    if ($Context.NonInteractive) { throw 'Mode Apply non interactif: ajoute -Yes pour autoriser les modifications après le plan factuel.' }
+    if ($Context.NonInteractive) { throw 'Mode Apply non interactif: ajoute -Yes pour autoriser les modifications apres le plan factuel.' }
     Write-Host ''
-    Write-Host 'Les étapes marquées À FAIRE vont maintenant être appliquées.' -ForegroundColor Yellow
+    Write-Host 'Les etapes marquees A FAIRE vont maintenant etre appliquees.' -ForegroundColor Yellow
     while ($true) {
         $answer=(Read-Host 'Continuer ? [O/N]').Trim().ToLowerInvariant()
         if ($answer -in @('o','oui','y','yes')) { return }
-        if ($answer -in @('n','non','no')) { throw 'Exécution annulée avant toute modification planifiée.' }
-        Write-Host 'Répondre O (oui) ou N (non).' -ForegroundColor Yellow
+        if ($answer -in @('n','non','no')) { throw 'Execution annulee avant toute modification planifiee.' }
+        Write-Host 'Repondre O (oui) ou N (non).' -ForegroundColor Yellow
     }
 }
 
@@ -497,18 +497,18 @@ function Complete-WpcRun {
     $summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $latestDir 'latest-run.json') -Encoding UTF8
     Write-Host ''
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
-    Write-Host "  SYNTHÈSE D’EXÉCUTION — RELEASE $($Context.Release)" -ForegroundColor Cyan
+    Write-Host "  SYNTHESE D EXECUTION - RELEASE $($Context.Release)" -ForegroundColor Cyan
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
     Write-Host ("  Duree totale       : {0}" -f (Get-WpcElapsedText -StartedAt $Context.StartedAt)) -ForegroundColor White
     Write-Host ("  Phases visibles    : {0}" -f $summary.VisiblePhases)
     Write-Host ("  Sous-etapes        : {0}" -f $summary.VisibleActions)
-    Write-Host ("  Déjà conformes : {0}" -f $summary.Counts.AlreadyOk) -ForegroundColor Green
-    Write-Host ("  Modifiés/validés : {0}" -f $summary.Counts.Changed) -ForegroundColor Green
-    Write-Host ("  Scripts exécutés : {0}" -f $summary.Counts.ExecutedScripts)
-    Write-Host ("  Échecs actuels    : {0}" -f $summary.Counts.FailedScripts) -ForegroundColor $(if ($summary.Counts.FailedScripts -gt 0) { 'Red' } else { 'Green' })
-    Write-Host ("  Résumé            : {0}" -f $summaryPath) -ForegroundColor DarkGray
-    if ($Success) { Write-Host '  VERDICT: exécution terminée sans erreur.' -ForegroundColor Green }
-    else { Write-Host ("  VERDICT: exécution interrompue - {0}" -f $FailureMessage) -ForegroundColor Red }
+    Write-Host ("  Deja conformes     : {0}" -f $summary.Counts.AlreadyOk) -ForegroundColor Green
+    Write-Host ("  Modifies/valides   : {0}" -f $summary.Counts.Changed) -ForegroundColor Green
+    Write-Host ("  Scripts executes   : {0}" -f $summary.Counts.ExecutedScripts)
+    Write-Host ("  Echecs actuels     : {0}" -f $summary.Counts.FailedScripts) -ForegroundColor $(if ($summary.Counts.FailedScripts -gt 0) { 'Red' } else { 'Green' })
+    Write-Host ("  Resume             : {0}" -f $summaryPath) -ForegroundColor DarkGray
+    if ($Success) { Write-Host '  VERDICT: execution terminee sans erreur.' -ForegroundColor Green }
+    else { Write-Host ("  VERDICT: execution interrompue - {0}" -f $FailureMessage) -ForegroundColor Red }
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
 }
 
