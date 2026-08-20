@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "edition": "Core",
-  "minimumVersion": "7.6.5",
+  "minimumVersion": "7.6.4",
   "architecture": "x64",
   "executable": "pwsh.exe",
   "windowsPowerShellSupported": false,
