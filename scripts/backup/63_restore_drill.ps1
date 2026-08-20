@@ -85,7 +85,7 @@ Write-Host '[OK] SHA-256 de la baseline identité stockage valide.' -ForegroundC
 Write-Host '[OK] wbadmin énumère une version récupérable.' -ForegroundColor Green
 if ($Mode -eq 'Verify') { Write-Host 'VERDICT: RESTORE DRILL VERIFY READY' -ForegroundColor Green; return }
 if (-not $ConfirmIsolatedRestoreDrill) { throw 'Le mode Sandbox exige -ConfirmIsolatedRestoreDrill.' }
-if ([string]::IsNullOrWhiteSpace($ScratchRoot)) { throw 'Le mode Sandbox exige -ScratchRoot sur un emplacement disposant de suffisamment d’espace libre.' }
+if ([string]::IsNullOrWhiteSpace($ScratchRoot)) { throw "Le mode Sandbox exige -ScratchRoot sur un emplacement disposant de suffisamment d'espace libre." }
 
 $ScratchRootFull=[IO.Path]::GetFullPath($ScratchRoot)
 New-Item -ItemType Directory -Force -Path $ScratchRootFull | Out-Null
