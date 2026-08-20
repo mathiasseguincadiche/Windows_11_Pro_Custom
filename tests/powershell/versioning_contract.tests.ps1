@@ -11,13 +11,32 @@ $release = (Get-Content -Raw -LiteralPath $versionPath).Trim()
 if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION must be SemVer x.y.z, observed=$release" }
 
 $canonicalPaths = @(
+    'config\backup\policy.json',
+    'config\hardware\target.json',
+    'config\hardware\symbiosis.json',
+    'config\updates\policy.json',
+    'config\windows\optimization\standard.json',
+    'config\windows\responsiveness.json',
+    'scripts\backup\60_create_backup.ps1',
+    'scripts\backup\61_validate_backup.ps1',
+    'scripts\backup\62_restore_plan.ps1',
+    'scripts\backup\63_restore_drill.ps1',
     'scripts\bootstrap\00_storage_identity.ps1',
     'scripts\bootstrap\00_storage_integrity.ps1',
+    'scripts\bootstrap\11_validate_windows.ps1',
+    'scripts\bootstrap\12_validate_optimization.ps1',
+    'scripts\bootstrap\13_validate_hardware.ps1',
+    'scripts\bootstrap\14_validate_wsl.ps1',
+    'scripts\windows\40_optimize.ps1',
+    'scripts\windows\53_responsiveness.ps1',
+    'scripts\windows\90_workstation_fingerprint.ps1',
     'tests\powershell\storage_contract.tests.ps1',
+    'tests\powershell\workstation_evidence_contract.tests.ps1',
     'tests\regression\menu_process_isolation.tests.ps1',
     '.github\workflows\storage-identity.yml',
     '.github\workflows\storage-safety.yml',
     '.github\workflows\menu-process-isolation.yml',
+    '.github\workflows\workstation-evidence.yml',
     '.github\workflows\orchestration.yml',
     'config\orchestration\policy.json'
 )
@@ -52,31 +71,61 @@ $policy = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'config\orchestrati
 if ([int]$policy.schemaVersion -ne 1) { throw 'Orchestration policy SchemaVersion must be 1.' }
 if ([string]$policy.releaseSource -ne 'VERSION') { throw 'Orchestration policy must use VERSION as release source.' }
 
-$legacyWrappers = @(
+$forbiddenLegacyPaths = @(
     'scripts\bootstrap\00_storage_integrity_v24.ps1',
-    'scripts\bootstrap\00_storage_identity_v25.ps1'
+    'scripts\bootstrap\00_storage_identity_v25.ps1',
+    'tests\powershell\v26_contract.tests.ps1',
+    'scripts\backup\60_create_backup_v7.ps1',
+    'scripts\backup\61_validate_backup_v7.ps1',
+    'scripts\backup\62_restore_plan_v7.ps1',
+    'scripts\backup\63_restore_drill_v26.ps1',
+    'scripts\bootstrap\11_validate_v3.ps1',
+    'scripts\bootstrap\12_validate_v4.ps1',
+    'scripts\bootstrap\13_validate_hardware_v5.ps1',
+    'scripts\bootstrap\14_validate_wsl_v6.ps1',
+    'scripts\windows\40_v4_optimize.ps1',
+    'scripts\windows\53_responsiveness_v8.ps1',
+    'scripts\windows\90_workstation_fingerprint_v26.ps1',
+    'config\backup\v7-policy.json',
+    'config\hardware\target-v5.json',
+    'config\hardware\symbiosis-v5.json',
+    'config\updates\v11.json',
+    'config\windows\v4',
+    'config\windows\v8'
 )
-foreach ($relative in $legacyWrappers) {
-    $path = Join-Path $repoRoot $relative
-    if (-not (Test-Path -LiteralPath $path)) { throw "Expected transition wrapper missing: $relative" }
-    $text = Get-Content -Raw -LiteralPath $path
-    if (-not $text.Contains('Chemin historique détecté')) { throw "Legacy path is not an explicit compatibility wrapper: $relative" }
+foreach ($relative in $forbiddenLegacyPaths) {
+    if (Test-Path -LiteralPath (Join-Path $repoRoot $relative)) {
+        throw "Legacy milestone path must not remain in the active tree: $relative"
+    }
 }
 
-$activeWorkflowNames = @(
-    'storage-identity.yml',
-    'storage-safety.yml',
-    'menu-process-isolation.yml',
-    'orchestration.yml'
+$activeRoots = @(
+    (Join-Path $repoRoot 'scripts'),
+    (Join-Path $repoRoot 'config'),
+    (Join-Path $repoRoot 'tests'),
+    (Join-Path $repoRoot '.github\workflows')
 )
-foreach ($name in $activeWorkflowNames) {
-    if ($name -match '-v\d+\.yml$') { throw "Active workflow name contains legacy milestone: $name" }
-    $text = Get-Content -Raw -LiteralPath (Join-Path $repoRoot ".github\workflows\$name")
-    $firstLine = ($text -split "`r?`n")[0]
-    if ($firstLine -match '\bV\d+\b') { throw "Active workflow display name contains legacy milestone: $firstLine" }
+$milestoneNamePattern = '(?i)(?:^|[_-])v\d+(?:[_\.-]|$)'
+$pathViolations = @(
+    foreach ($root in $activeRoots) {
+        Get-ChildItem -LiteralPath $root -Recurse -Force | Where-Object {
+            $_.Name -match $milestoneNamePattern
+        } | ForEach-Object { $_.FullName.Substring($repoRoot.Length + 1) }
+    }
+)
+if ($pathViolations.Count -gt 0) {
+    throw "Active file/directory names contain legacy milestones: $($pathViolations -join ', ')"
+}
+
+$workflowFiles = Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github\workflows') -Filter '*.yml' -File
+foreach ($workflow in $workflowFiles) {
+    $firstLine = (Get-Content -LiteralPath $workflow.FullName -TotalCount 1)
+    if ($firstLine -match '\bV\d+\b') {
+        throw "Active workflow display name contains legacy milestone: $($workflow.Name): $firstLine"
+    }
 }
 
 Write-Host "[OK] Version globale: $release" -ForegroundColor Green
 Write-Host '[OK] Release produit séparée des SchemaVersion de données.' -ForegroundColor Green
-Write-Host '[OK] Composants actifs migrés sans jalons Vxx.' -ForegroundColor Green
-Write-Host '[OK] Wrappers historiques explicitement isolés.' -ForegroundColor Green
+Write-Host '[OK] Composants actifs sans jalons Vxx dans leurs noms.' -ForegroundColor Green
+Write-Host '[OK] Workflows actifs sans jalons Vxx dans leurs noms affichés.' -ForegroundColor Green
