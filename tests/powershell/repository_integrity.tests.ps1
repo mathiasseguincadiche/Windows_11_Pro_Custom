@@ -5,12 +5,19 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$Backslash = [char]92
+$Slash = [char]47
 
 function Get-RelativeRepoPath {
     param([Parameter(Mandatory)][string]$Path)
     $full = [IO.Path]::GetFullPath($Path)
-    $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\','/')
-    return $full.Substring($root.Length).TrimStart('\','/') -replace '\\','/'
+    $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd([IO.Path]::DirectorySeparatorChar,[IO.Path]::AltDirectorySeparatorChar)
+    return $full.Substring($root.Length).TrimStart([IO.Path]::DirectorySeparatorChar,[IO.Path]::AltDirectorySeparatorChar).Replace($Backslash,$Slash)
+}
+
+function ConvertTo-ForwardSlashPath {
+    param([Parameter(Mandatory)][string]$Path)
+    return $Path.Replace($Backslash,$Slash)
 }
 
 # P0: le contrôle stockage doit consommer uniquement la politique matérielle canonique.
@@ -19,7 +26,8 @@ $canonicalPolicyPath = Join-Path $RepoRoot 'config\hardware\symbiosis.json'
 if (-not (Test-Path -LiteralPath $storageScriptPath)) { throw 'Storage integrity script missing.' }
 if (-not (Test-Path -LiteralPath $canonicalPolicyPath)) { throw 'Canonical hardware symbiosis policy missing: config/hardware/symbiosis.json' }
 $storageSource = Get-Content -Raw -LiteralPath $storageScriptPath
-$expectedStoragePolicyAssignment = '$storagePolicyPath = Join-Path $repoRoot ''config\hardware\symbiosis.json'''
+$quote = [char]39
+$expectedStoragePolicyAssignment = '$storagePolicyPath = Join-Path $repoRoot ' + $quote + 'config\hardware\symbiosis.json' + $quote
 if (-not $storageSource.Contains($expectedStoragePolicyAssignment)) {
     throw '00_storage_integrity.ps1 must assign storagePolicyPath to config\hardware\symbiosis.json.'
 }
@@ -68,22 +76,20 @@ Get-ChildItem -LiteralPath (Join-Path $RepoRoot '.github\workflows') -Filter '*.
 
 $legacyViolations = New-Object System.Collections.Generic.List[string]
 foreach ($file in $activeCodeFiles) {
-    $text = Get-Content -Raw -LiteralPath $file.FullName
-    $normalizedText = $text -replace '\\','/'
+    $normalizedText = ConvertTo-ForwardSlashPath -Path (Get-Content -Raw -LiteralPath $file.FullName)
     foreach ($legacy in $forbiddenLegacyPaths) {
-        $normalizedLegacy = $legacy -replace '\\','/'
+        $normalizedLegacy = ConvertTo-ForwardSlashPath -Path $legacy
         if ($normalizedText.Contains($normalizedLegacy)) {
             $legacyViolations.Add("$(Get-RelativeRepoPath -Path $file.FullName): référence obsolète: $legacy")
         }
     }
 }
 if ($legacyViolations.Count -gt 0) {
-    throw "Legacy active-path regression detected:`n$($legacyViolations -join "`n")"
+    throw ('Legacy active-path regression detected:' + [Environment]::NewLine + ($legacyViolations -join [Environment]::NewLine))
 }
 
 # P1: vérifier les dépendances statiques versionnées référencées par le code exécutable.
-# On inspecte les littéraux PowerShell pour config/, scripts/ et manifests/ ; les chemins dynamiques
-# contenant des variables sont validés par leurs contrats spécifiques.
+# Les chemins dynamiques contenant des variables restent couverts par leurs contrats spécifiques.
 $runtimePowerShellFiles = @(
     (Get-Item -LiteralPath (Join-Path $RepoRoot 'install.ps1')),
     (Get-Item -LiteralPath (Join-Path $RepoRoot 'menu.ps1')),
@@ -110,17 +116,17 @@ foreach ($file in $runtimePowerShellFiles) {
     foreach ($node in $stringNodes) {
         $value = if ($node.PSObject.Properties.Name -contains 'Value') { [string]$node.Value } else { [string]$node.Extent.Text }
         foreach ($match in [regex]::Matches($value,$dependencyPattern)) {
-            $relative = $match.Groups['path'].Value -replace '/','\'
+            $relative = $match.Groups['path'].Value.Replace($Slash,$Backslash)
             $candidate = Join-Path $RepoRoot $relative
             if (-not (Test-Path -LiteralPath $candidate)) {
-                $missingDependencies.Add("$(Get-RelativeRepoPath -Path $file.FullName) -> $($relative -replace '\\','/')")
+                $missingDependencies.Add("$(Get-RelativeRepoPath -Path $file.FullName) -> $(ConvertTo-ForwardSlashPath -Path $relative)")
             }
         }
     }
 }
 if ($missingDependencies.Count -gt 0) {
     $unique = @($missingDependencies | Sort-Object -Unique)
-    throw "Missing static repository dependencies detected:`n$($unique -join "`n")"
+    throw ('Missing static repository dependencies detected:' + [Environment]::NewLine + ($unique -join [Environment]::NewLine))
 }
 
 # P1: le centre de contrôle doit remonter le contexte d'échec produit par l'orchestrateur.
