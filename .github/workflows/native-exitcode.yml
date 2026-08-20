@@ -1,9 +1,9 @@
-name: Native Exit Code V19
+name: Native Exit Code
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/native-exitcode-v19.yml'
+      - '.github/workflows/native-exitcode.yml'
       - 'scripts/core/native-process.psm1'
       - 'scripts/bootstrap/**'
       - 'scripts/windows/**'
@@ -11,7 +11,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/native-exitcode-v19.yml'
+      - '.github/workflows/native-exitcode.yml'
       - 'scripts/core/native-process.psm1'
       - 'scripts/bootstrap/**'
       - 'scripts/windows/**'
