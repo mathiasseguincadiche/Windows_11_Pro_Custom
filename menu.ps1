@@ -92,25 +92,66 @@ function Format-WpcCommand {
     foreach ($key in $Arguments.Keys) {$value=$Arguments[$key];if ($value -is [System.Management.Automation.SwitchParameter]) {if ($value.IsPresent) {$parts.Add("-$key")}} elseif ($value -is [bool]) {if ($value) {$parts.Add("-$key")}} elseif ($value -is [Array]) {if ($value.Count -gt 0) {$quoted=@($value|ForEach-Object {"'$_'"}) -join ',';$parts.Add("-$key $quoted")}} elseif ($null -ne $value) {$parts.Add("-$key '$value'")}}
     return ($parts -join ' ')
 }
-function Get-WpcLatestFailureContext {
+function Get-WpcFailureSummaryCandidates {
     param([Parameter(Mandatory)][datetime]$NotBefore)
-    $summaryPath=Join-Path $RepoRoot 'reports\orchestration\latest-run.json'
-    if (-not (Test-Path -LiteralPath $summaryPath)) {return $null}
-    try {
-        $summary=Get-Content -Raw -LiteralPath $summaryPath | ConvertFrom-Json
-        if ([bool]$summary.Success) {return $null}
-        if ($summary.CompletedAt) {
-            $completed=[datetimeoffset]::Parse([string]$summary.CompletedAt)
-            if ($completed.UtcDateTime -lt $NotBefore.ToUniversalTime().AddSeconds(-2)) {return $null}
+    $paths=New-Object System.Collections.Generic.List[string]
+    $latest=Join-Path $RepoRoot 'reports\orchestration\latest-run.json'
+    if (Test-Path -LiteralPath $latest) {$paths.Add($latest)}
+    $runsRoot=Join-Path $RepoRoot 'logs\runs'
+    if (Test-Path -LiteralPath $runsRoot) {
+        foreach ($runDir in @(Get-ChildItem -LiteralPath $runsRoot -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 10)) {
+            $candidate=Join-Path $runDir.FullName 'summary.json'
+            if (-not (Test-Path -LiteralPath $candidate)) {continue}
+            if ($paths -notcontains $candidate) {$paths.Add($candidate)}
         }
-        $failed=@($summary.LatestScriptState | Where-Object {$_.Success -eq $false} | Sort-Object Timestamp | Select-Object -Last 1)
+    }
+    return $paths.ToArray()
+}
+function Read-WpcFailureSummaryContext {
+    param([Parameter(Mandatory)][string]$SummaryPath,[Parameter(Mandatory)][datetime]$NotBefore)
+    try {
+        $file=Get-Item -LiteralPath $SummaryPath -ErrorAction Stop
+        if ($file.LastWriteTimeUtc -lt $NotBefore.ToUniversalTime().AddSeconds(-5)) {return $null}
+        $summary=Get-Content -Raw -LiteralPath $SummaryPath -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        $successProperty=$summary.PSObject.Properties['Success']
+        if ($null -ne $successProperty -and [bool]$successProperty.Value) {return $null}
+        $completedProperty=$summary.PSObject.Properties['CompletedAt']
+        if ($null -ne $completedProperty -and -not [string]::IsNullOrWhiteSpace([string]$completedProperty.Value)) {
+            $completed=$null
+            if ([datetimeoffset]::TryParse([string]$completedProperty.Value,[ref]$completed)) {
+                if ($completed.UtcDateTime -lt $NotBefore.ToUniversalTime().AddSeconds(-5)) {return $null}
+            }
+        }
+        $states=@()
+        $latestStateProperty=$summary.PSObject.Properties['LatestScriptState']
+        if ($null -ne $latestStateProperty) {$states=@($latestStateProperty.Value)}
+        if ($states.Count -eq 0) {
+            $scriptExecutionsProperty=$summary.PSObject.Properties['ScriptExecutions']
+            if ($null -ne $scriptExecutionsProperty) {$states=@($scriptExecutionsProperty.Value)}
+        }
+        $failed=@($states | Where-Object { $_.Success -eq $false -or [string]$_.Outcome -eq 'FAILED' } | Sort-Object Timestamp | Select-Object -Last 1)
         $event=if ($failed.Count -gt 0) {$failed[0]} else {$null}
+        $failureProperty=$summary.PSObject.Properties['FailureMessage']
+        $failureMessage=if ($null -ne $failureProperty) {[string]$failureProperty.Value} else {''}
         $step=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.DisplayName)) {[string]$event.DisplayName} else {'Orchestration'}
         $script=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.Script)) {[string]$event.Script} else {''}
-        $cause=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.Error)) {[string]$event.Error} else {[string]$summary.FailureMessage}
+        $cause=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.Error)) {[string]$event.Error} else {$failureMessage}
         $log=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.LogPath)) {[string]$event.LogPath} else {''}
-        return [pscustomobject]@{Step=$step;Script=$script;Cause=$cause;LogPath=$log;SummaryPath=$summaryPath}
-    } catch {return $null}
+        $runIdProperty=$summary.PSObject.Properties['RunId']
+        $runId=if ($null -ne $runIdProperty) {[string]$runIdProperty.Value} else {''}
+        if ([string]::IsNullOrWhiteSpace($cause) -and $null -eq $event) {return $null}
+        return [pscustomobject]@{Step=$step;Script=$script;Cause=$cause;LogPath=$log;SummaryPath=$SummaryPath;RunId=$runId}
+    } catch {
+        return $null
+    }
+}
+function Get-WpcLatestFailureContext {
+    param([Parameter(Mandatory)][datetime]$NotBefore)
+    foreach ($summaryPath in @(Get-WpcFailureSummaryCandidates -NotBefore $NotBefore)) {
+        $context=Read-WpcFailureSummaryContext -SummaryPath $summaryPath -NotBefore $NotBefore
+        if ($null -ne $context) {return $context}
+    }
+    return $null
 }
 function Format-WpcProcessFailure {
     param([Parameter(Mandatory)][string]$DisplayName,[Parameter(Mandatory)][int]$ExitCode,[Parameter(Mandatory)][datetime]$StartedAt)
@@ -118,6 +159,7 @@ function Format-WpcProcessFailure {
     if ($null -eq $context) {return "Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode. Consulte la sortie ci-dessus et les journaux du dépôt pour la cause détaillée."}
     $lines=New-Object System.Collections.Generic.List[string]
     $lines.Add("Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode.")
+    if ($context.RunId) {$lines.Add("  Run     : $($context.RunId)")}
     $lines.Add("  Étape   : $($context.Step)")
     if ($context.Script) {$lines.Add("  Script  : $($context.Script)")}
     if ($context.Cause) {$lines.Add("  Cause   : $($context.Cause)")}
