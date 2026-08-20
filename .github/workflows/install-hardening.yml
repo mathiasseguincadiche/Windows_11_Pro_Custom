@@ -10,7 +10,7 @@ on:
       - 'scripts/bootstrap/07_wsl_user.ps1'
       - 'scripts/bootstrap/09_validate_devops.ps1'
       - 'scripts/windows/20_system_audit.ps1'
-      - 'scripts/windows/40_v4_optimize.ps1'
+      - 'scripts/windows/40_optimize.ps1'
       - 'scripts/windows/41_restore_point.ps1'
       - 'scripts/windows/50_hardware_inventory.ps1'
   push:
@@ -23,7 +23,7 @@ on:
       - 'scripts/bootstrap/07_wsl_user.ps1'
       - 'scripts/bootstrap/09_validate_devops.ps1'
       - 'scripts/windows/20_system_audit.ps1'
-      - 'scripts/windows/40_v4_optimize.ps1'
+      - 'scripts/windows/40_optimize.ps1'
       - 'scripts/windows/41_restore_point.ps1'
       - 'scripts/windows/50_hardware_inventory.ps1'
 
@@ -40,12 +40,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          optimize='scripts/windows/40_v4_optimize.ps1'
+          optimize='scripts/windows/40_optimize.ps1'
           grep -Fq 'function Set-ManagedRegistryValue' "$optimize"
           grep -Fq "New-ItemProperty -LiteralPath \$Path" "$optimize"
           grep -Fq "Écriture registre impossible pour" "$optimize"
           if grep -Fq "New-Item -Force -Path \$entry.path" "$optimize"; then
-            echo 'V4 optimization must not recreate registry keys before every value write.' >&2
+            echo 'Optimization must not recreate registry keys before every value write.' >&2
             exit 1
           fi
 
@@ -84,7 +84,7 @@ jobs:
             '.\scripts\bootstrap\07_wsl_user.ps1',
             '.\scripts\bootstrap\09_validate_devops.ps1',
             '.\scripts\windows\20_system_audit.ps1',
-            '.\scripts\windows\40_v4_optimize.ps1',
+            '.\scripts\windows\40_optimize.ps1',
             '.\scripts\windows\41_restore_point.ps1',
             '.\scripts\windows\50_hardware_inventory.ps1'
           )
@@ -95,20 +95,20 @@ jobs:
             if ($errors.Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
           }
 
-      - name: Validate safe V4 registry writes
+      - name: Validate safe optimization registry writes
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          . .\scripts\windows\40_v4_optimize.ps1 -Mode Audit -Profile standard
-          $root = 'HKCU:\Software\Windows11ProCustom\CI\V4'
+          . .\scripts\windows\40_optimize.ps1 -Mode Audit -Profile standard
+          $root = 'HKCU:\Software\Windows11ProCustom\CI\Optimization'
           try {
             New-Item -Path $root -Force -ErrorAction Stop | Out-Null
-            Set-ManagedRegistryValue -Name 'CI existing V4 key' -Path $root -Property 'Existing' -Type 'DWord' -Value 1
-            if ((Get-ItemPropertyValue -LiteralPath $root -Name 'Existing') -ne 1) { throw 'Existing-key V4 write failed.' }
+            Set-ManagedRegistryValue -Name 'CI existing optimization key' -Path $root -Property 'Existing' -Type 'DWord' -Value 1
+            if ((Get-ItemPropertyValue -LiteralPath $root -Name 'Existing') -ne 1) { throw 'Existing-key optimization write failed.' }
 
             $missing = Join-Path $root 'CreatedByHelper'
-            Set-ManagedRegistryValue -Name 'CI missing V4 key' -Path $missing -Property 'Created' -Type 'DWord' -Value 1
-            if ((Get-ItemPropertyValue -LiteralPath $missing -Name 'Created') -ne 1) { throw 'Missing-key V4 write failed.' }
+            Set-ManagedRegistryValue -Name 'CI missing optimization key' -Path $missing -Property 'Created' -Type 'DWord' -Value 1
+            if ((Get-ItemPropertyValue -LiteralPath $missing -Name 'Created') -ne 1) { throw 'Missing-key optimization write failed.' }
           }
           finally {
             if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
