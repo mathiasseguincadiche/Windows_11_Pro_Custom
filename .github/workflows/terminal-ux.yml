@@ -93,7 +93,7 @@ jobs:
             '[ACTIF] Operation lente de test est toujours en cours',
             'Operation lente de test termine',
             'Duree totale',
-            'VERDICT: exécution terminée sans erreur.'
+            'VERDICT: execution terminee sans erreur.'
           )) {
             if (-not $text.Contains($needle)) {
               Get-Content -LiteralPath $output
