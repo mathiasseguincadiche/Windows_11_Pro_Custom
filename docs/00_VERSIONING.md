@@ -17,6 +17,6 @@ La release courante est lue automatiquement depuis `VERSION` par le moteur d’o
 
 ## Compatibilité des données persistantes
 
-Une baseline historique déjà approuvée peut être lue depuis son ancien emplacement sous `ProgramData\Windows11ProCustom\storage-v25`. Les nouvelles baselines utilisent `SchemaVersion = 1` et le chemin canonique `ProgramData\Windows11ProCustom\storage-identity` lorsqu’aucune baseline historique n’existe.
+Une baseline issue d’une installation antérieure peut rester lisible depuis son emplacement historique afin de ne pas forcer le ré-enrôlement d’une machine déjà approuvée. Les nouvelles baselines utilisent `SchemaVersion = 1` et le chemin canonique `ProgramData\Windows11ProCustom\storage-identity` lorsqu’aucune baseline historique n’existe.
 
 Cette compatibilité est uniquement une **lecture de données existantes** : elle ne réintroduit pas d’ancien composant dans l’architecture active et ne déclenche jamais de remplacement automatique d’une baseline de confiance.

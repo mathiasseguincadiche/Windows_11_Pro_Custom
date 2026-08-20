@@ -1,4 +1,4 @@
-name: wsl-runtime-contract
+name: WSL runtime contract
 
 on:
   push:
@@ -9,7 +9,8 @@ on:
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/08_devops.ps1'
-      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/bootstrap/14_validate_wsl.ps1'
+      - 'scripts/backup/63_restore_drill.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
       - 'scripts/wsl/validate-devops.sh'
@@ -22,7 +23,8 @@ on:
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
       - 'scripts/bootstrap/08_devops.ps1'
-      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/bootstrap/14_validate_wsl.ps1'
+      - 'scripts/backup/63_restore_drill.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
       - 'scripts/wsl/validate-devops.sh'
@@ -56,11 +58,9 @@ jobs:
             (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
             (.forbiddenRoots == ["/mnt/c", "/mnt/e"])
           ' "$contract" >/dev/null
-
           test -f "$validator"
           grep -Fq 'config/wsl/runtime-contract.json' "$validator"
           grep -Fq '.forbiddenRoots' "$validator"
-
           if grep -Fq '/mnt/d' "$validator" "$devops_doc"; then
             echo 'Stale /mnt/d DATA/WSL reference detected.' >&2
             exit 1
@@ -72,31 +72,24 @@ jobs:
           set -euo pipefail
           wsl='scripts/bootstrap/06_wsl.ps1'
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
+          validator='scripts/bootstrap/14_validate_wsl.ps1'
+          restore_drill='scripts/backup/63_restore_drill.ps1'
           grep -Fq 'config\wsl\runtime-contract.json' "$wsl"
-          grep -Fq 'config\wsl\runtime-contract.json' scripts/bootstrap/14_validate_wsl_v6.ps1
+          grep -Fq 'config\wsl\runtime-contract.json' "$validator"
           grep -Fq 'sourceDistribution' "$wsl"
           grep -Fq 'sourceDistribution' "$readiness"
-          grep -Fq -- "--name \$Distribution" "$wsl"
-          grep -Fq -- "--location \$InstallLocation" "$wsl"
-          grep -Fq -- "--distribution \$sourceDistribution" "$wsl"
+          grep -Fq -- '--name $Distribution' "$wsl"
+          grep -Fq -- '--location $InstallLocation' "$wsl"
+          grep -Fq -- '--distribution $sourceDistribution' "$wsl"
           grep -Fq 'expectedVersionId' "$wsl"
-          grep -Fq 'expectedVersionId' scripts/bootstrap/14_validate_wsl_v6.ps1
+          grep -Fq 'expectedVersionId' "$validator"
           grep -Fq 'Aucune suppression automatique nʼest effectuée' "$wsl"
-          restore_drill='scripts/backup/63_restore_drill_v26.ps1'
-          # PowerShell variables are matched literally.
-          # shellcheck disable=SC2016
-          grep -Fq 'if (-not $ConfirmIsolatedRestoreDrill)' "$restore_drill"
-          # PowerShell variables are matched literally.
-          # shellcheck disable=SC2016
-          grep -Fq '$TemporaryDistribution = "W11PC-RestoreDrill-$DrillId"' "$restore_drill"
-          # PowerShell variables are matched literally.
-          # shellcheck disable=SC2016
+          grep -Fq 'ConfirmIsolatedRestoreDrill' "$restore_drill"
+          grep -Fq 'W11PC-RestoreDrill-' "$restore_drill"
           grep -Fq '$TemporaryDistribution -eq [string]$Manifest.wsl.distribution' "$restore_drill"
-          # PowerShell variables are matched literally.
-          # shellcheck disable=SC2016
-          grep -Fqx '        & wsl.exe --unregister $TemporaryDistribution 2>$null' "$restore_drill"
+          grep -Fq 'wsl.exe --unregister $TemporaryDistribution' "$restore_drill"
           test "$(grep -cE 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' "$restore_drill")" -eq 1
-          if grep -RInE --exclude='63_restore_drill_v26.ps1' 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
+          if grep -RInE --exclude='63_restore_drill.ps1' 'wsl(\.exe)?[[:space:]]+--unregister|Remove-Item.+Ubuntu-DevOps' scripts config; then
             echo 'Destructive WSL automation detected.' >&2
             exit 1
           fi
@@ -109,8 +102,8 @@ jobs:
           install_line="$(grep -nF "LogIdentity 'scripts/wsl/install-devops.sh'" "$script" | head -n1 | cut -d: -f1)"
           restart_line="$(grep -nF 'Restart-WslSessionAfterDockerGroupChange' "$script" | tail -n1 | cut -d: -f1)"
           terminal_line="$(grep -nF "Write-Host '[3/4] Terminal Bash DevOps'" "$script" | head -n1 | cut -d: -f1)"
-          grep -Fq "wsl.exe --terminate \$Distribution" "$script"
-          grep -Fq "Command 'id -nG'" "$script" || grep -Fq -- "-Command 'id -nG'" "$script"
+          grep -Fq 'wsl.exe --terminate $Distribution' "$script"
+          grep -Fq -- "-Command 'id -nG'" "$script"
           grep -Fq 'docker info >/dev/null 2>&1' "$script"
           if [[ -z "$install_line" || -z "$restart_line" || -z "$terminal_line" || "$restart_line" -le "$install_line" || "$restart_line" -ge "$terminal_line" ]]; then
             echo 'Docker group-session refresh must happen after install-devops.sh and before terminal/Verify work.' >&2
@@ -125,9 +118,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --retry 5 --retry-all-errors -fsSL \
-            https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json \
-            -o DistributionInfo.json
+          curl --retry 5 --retry-all-errors -fsSL https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json -o DistributionInfo.json
           source_name="$(jq -r '.ModernDistributions.Ubuntu[] | select(.Name == "Ubuntu-26.04") | .Name' DistributionInfo.json)"
           source_url="$(jq -r '.ModernDistributions.Ubuntu[] | select(.Name == "Ubuntu-26.04") | .Amd64Url.Url' DistributionInfo.json)"
           test "$source_name" = 'Ubuntu-26.04'
@@ -153,10 +144,7 @@ jobs:
           test "$VERSION_ID" = 26.04
           test "$VERSION_CODENAME" = resolute
           apt-get update
-          apt-get install -y --no-install-recommends \
-            sudo ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client \
-            rsync tar gzip python3 python3-pip python3-venv pipx shellcheck shfmt \
-            ansible-core bash-completion yamllint
+          apt-get install -y --no-install-recommends sudo ca-certificates curl wget gnupg lsb-release unzip jq git openssh-client rsync tar gzip python3 python3-pip python3-venv pipx shellcheck shfmt ansible-core bash-completion yamllint
           ansible-playbook --version | head -n 1 | grep -F 'core 2.20.1'
           python3 --version
 
@@ -165,8 +153,7 @@ jobs:
         run: |
           set -euo pipefail
           install -m 0755 -d /etc/apt/keyrings
-          curl --retry 5 --retry-all-errors -fsSL https://download.docker.com/linux/ubuntu/gpg \
-            -o /etc/apt/keyrings/docker.asc
+          curl --retry 5 --retry-all-errors -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
           chmod a+r /etc/apt/keyrings/docker.asc
           cat >/etc/apt/sources.list.d/docker.sources <<'EOF'
           Types: deb
@@ -187,15 +174,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --retry 5 --retry-all-errors -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          curl --retry 5 --retry-all-errors -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
           chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' \
-            >/etc/apt/sources.list.d/github-cli.list
-          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key \
-            | gpg --dearmor >/usr/share/keyrings/trivy.gpg
-          echo 'deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main' \
-            >/etc/apt/sources.list.d/trivy.list
+          echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main' >/etc/apt/sources.list.d/github-cli.list
+          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor >/usr/share/keyrings/trivy.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main' >/etc/apt/sources.list.d/trivy.list
           apt-get update
           apt-get install -y --no-install-recommends gh trivy
           gh --version
@@ -205,19 +188,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # shellcheck disable=SC1091
           source config/devops/tool-versions.env
           tmpdir="$(mktemp -d)"
           trap 'rm -rf "$tmpdir"' EXIT
-
-          curl --retry 5 --retry-all-errors -fsSL \
-            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
-          kubectl_sha="$(curl --retry 5 --retry-all-errors -fsSL \
-            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256")"
+          curl --retry 5 --retry-all-errors -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
+          kubectl_sha="$(curl --retry 5 --retry-all-errors -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256")"
           echo "$kubectl_sha  $tmpdir/kubectl" | sha256sum -c -
           chmod +x "$tmpdir/kubectl"
-          "$tmpdir/kubectl" version --client --output=json \
-            | jq -e --arg expected "$KUBECTL_VERSION" '.clientVersion.gitVersion == $expected' >/dev/null
+          "$tmpdir/kubectl" version --client --output=json | jq -e --arg expected "$KUBECTL_VERSION" '.clientVersion.gitVersion == $expected' >/dev/null
 
           helm_archive="helm-${HELM_VERSION}-linux-amd64.tar.gz"
           curl --retry 5 --retry-all-errors -fsSL "https://get.helm.sh/${helm_archive}" -o "$tmpdir/$helm_archive"
@@ -227,12 +205,8 @@ jobs:
           "$tmpdir/linux-amd64/helm" version --short | grep -F "$HELM_VERSION"
 
           terraform_archive="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-          curl --retry 5 --retry-all-errors -fsSL \
-            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${terraform_archive}" \
-            -o "$tmpdir/$terraform_archive"
-          curl --retry 5 --retry-all-errors -fsSL \
-            "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" \
-            -o "$tmpdir/terraform_SHA256SUMS"
+          curl --retry 5 --retry-all-errors -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${terraform_archive}" -o "$tmpdir/$terraform_archive"
+          curl --retry 5 --retry-all-errors -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" -o "$tmpdir/terraform_SHA256SUMS"
           (cd "$tmpdir" && grep " ${terraform_archive}$" terraform_SHA256SUMS | sha256sum -c - && unzip -qo "$terraform_archive")
           "$tmpdir/terraform" version -json | jq -e --arg expected "$TERRAFORM_VERSION" '.terraform_version == $expected' >/dev/null
 
@@ -264,5 +238,4 @@ jobs:
           echo 'ci-wsl ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/ci-wsl
           chmod 0440 /etc/sudoers.d/ci-wsl
           chown -R ci-wsl:ci-wsl "$GITHUB_WORKSPACE"
-          sudo -u ci-wsl -H env GH_TOKEN="$GH_TOKEN" \
-            bash -lc "cd '$GITHUB_WORKSPACE' && bash scripts/wsl/install-quality-tools.sh"
+          sudo -u ci-wsl -H env GH_TOKEN="$GH_TOKEN" bash -lc "cd '$GITHUB_WORKSPACE' && bash scripts/wsl/install-quality-tools.sh"
