@@ -6,8 +6,11 @@ on:
     paths:
       - 'config/wsl/**'
       - 'config/devops/**'
+      - 'scripts/core/wsl-release.psm1'
+      - 'scripts/bootstrap/01_machine_state.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/07_wsl_user.ps1'
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/bootstrap/14_validate_wsl.ps1'
       - 'scripts/backup/63_restore_drill.ps1'
@@ -20,8 +23,11 @@ on:
     paths:
       - 'config/wsl/**'
       - 'config/devops/**'
+      - 'scripts/core/wsl-release.psm1'
+      - 'scripts/bootstrap/01_machine_state.ps1'
       - 'scripts/bootstrap/02_physical_readiness.ps1'
       - 'scripts/bootstrap/06_wsl.ps1'
+      - 'scripts/bootstrap/07_wsl_user.ps1'
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/bootstrap/14_validate_wsl.ps1'
       - 'scripts/backup/63_restore_drill.ps1'
@@ -53,6 +59,7 @@ jobs:
             (.sourceDistribution == "Ubuntu-26.04") and
             (.expectedVersionId == "26.04") and
             (.expectedCodename == "resolute") and
+            (.expectedLinuxUser == "mathias") and
             (.installLocation == "E:\\WSL\\Ubuntu-DevOps") and
             (.homeFilesystem == "ext4") and
             (.workingRoots == ["~/projects", "~/labs", "~/repositories"]) and
@@ -71,11 +78,19 @@ jobs:
         run: |
           set -euo pipefail
           wsl='scripts/bootstrap/06_wsl.ps1'
+          user_script='scripts/bootstrap/07_wsl_user.ps1'
+          release_parser='scripts/core/wsl-release.psm1'
+          machine_state='scripts/bootstrap/01_machine_state.ps1'
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
           validator='scripts/bootstrap/14_validate_wsl.ps1'
           restore_drill='scripts/backup/63_restore_drill.ps1'
           grep -Fq 'config\wsl\runtime-contract.json' "$wsl"
           grep -Fq 'config\wsl\runtime-contract.json' "$validator"
+          grep -Fq 'scripts\core\wsl-release.psm1' "$wsl"
+          grep -Fq 'ConvertFrom-WpcOsRelease' "$wsl"
+          grep -Fq -- '-- cat /etc/os-release' "$wsl"
+          grep -Fq 'expectedLinuxUser' "$user_script"
+          grep -Fq 'config\wsl\runtime-contract.json' "$user_script"
           grep -Fq 'sourceDistribution' "$wsl"
           grep -Fq 'sourceDistribution' "$readiness"
           grep -Fq -- '--name $Distribution' "$wsl"
@@ -84,6 +99,13 @@ jobs:
           grep -Fq 'expectedVersionId' "$wsl"
           grep -Fq 'expectedVersionId' "$validator"
           grep -Fq 'Aucune suppression automatique nʼest effectuée' "$wsl"
+          grep -Fq "@('list', '--id', \$Id, '--exact'" "$machine_state"
+          grep -Fq 'Exact WinGet IDs only' "$machine_state"
+          test -f "$release_parser"
+          if grep -Eq '(/etc/os-release;|VERSION_ID.*VERSION_CODENAME).*bash -lc|bash -lc.*(/etc/os-release|VERSION_ID|VERSION_CODENAME)' "$wsl"; then
+            echo 'Fragile shell interpolation for /etc/os-release is forbidden.' >&2
+            exit 1
+          fi
           grep -Fq 'ConfirmIsolatedRestoreDrill' "$restore_drill"
           grep -Fq 'W11PC-RestoreDrill-' "$restore_drill"
           grep -Fq '$TemporaryDistribution -eq [string]$Manifest.wsl.distribution' "$restore_drill"
@@ -93,6 +115,37 @@ jobs:
             echo 'Destructive WSL automation detected.' >&2
             exit 1
           fi
+
+      - name: Test os-release parser on PowerShell 7
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/core/wsl-release.psm1 -Force
+
+          $release = ConvertFrom-WpcOsRelease -Lines @(
+            'NAME="Ubuntu"',
+            'VERSION_ID="26.04"',
+            'VERSION_CODENAME=resolute'
+          )
+          if ($release.VersionId -ne '26.04' -or $release.Codename -ne 'resolute') {
+              throw "Quoted os-release fixture parsed incorrectly: $($release | ConvertTo-Json -Compress)"
+          }
+
+          $releaseSingle = ConvertFrom-WpcOsRelease -Lines @(
+            "VERSION_ID='26.04'",
+            "VERSION_CODENAME='resolute'"
+          )
+          if ($releaseSingle.VersionId -ne '26.04' -or $releaseSingle.Codename -ne 'resolute') {
+              throw 'Single-quoted os-release fixture parsed incorrectly.'
+          }
+
+          $missingRejected = $false
+          try {
+              [void](ConvertFrom-WpcOsRelease -Lines @('VERSION_ID="26.04"'))
+          } catch {
+              $missingRejected = $true
+          }
+          if (-not $missingRejected) { throw 'Incomplete os-release input must fail closed.' }
 
       - name: Enforce Docker session refresh before immediate revalidation
         shell: bash
