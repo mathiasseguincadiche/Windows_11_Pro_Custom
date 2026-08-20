@@ -27,16 +27,17 @@ $statePath = Join-Path $stateDir 'hardware-manual.json'
 $legacyStatePath = Join-Path $stateDir 'hardware-v5-manual.json'
 $target = Get-Content -Raw $targetPath | ConvertFrom-Json
 if ([int]$target.schemaVersion -ne 1) { throw "SchemaVersion de cible matérielle non supporté: $($target.schemaVersion)" }
+$advisoryManualChecks = @('current_vendor_drivers_reviewed')
 
 $descriptions = [ordered]@{
-    uefi_csm_disabled = 'UEFI démarré et CSM/Legacy désactivé.'
-    above_4g_enabled = 'Above 4G Decoding activé dans lʼUEFI.'
-    resizable_bar_enabled = 'Resizable BAR activé et confirmé dans Intel Graphics Software ou Intel DSA.'
-    t705_in_m2_1_and_m2_2 = 'Les deux Crucial T705 sont physiquement installés dans M2_1 et M2_2.'
-    t705_heatsinks_and_airflow_verified = 'Les deux T705 disposent dʼun dissipateur et dʼun flux dʼair correct.'
-    memory_6000_stability_verified = 'La DDR5 6000 MT/s a passé un vrai test de stabilité mémoire sans erreur.'
-    latest_stable_bios_reviewed = 'La version BIOS MSI stable actuelle a été vérifiée avant qualification.'
-    current_vendor_drivers_reviewed = 'Les pilotes AMD chipset, Intel Arc et MSI ont été vérifiés depuis les sources constructeur.'
+    uefi_csm_disabled = "UEFI demarre et CSM/Legacy desactive."
+    above_4g_enabled = "Above 4G Decoding active dans l'UEFI."
+    resizable_bar_enabled = "Resizable BAR active et confirme dans Intel Graphics Software ou Intel DSA."
+    t705_in_m2_1_and_m2_2 = "Les deux Crucial T705 sont physiquement installes dans M2_1 et M2_2."
+    t705_heatsinks_and_airflow_verified = "Les deux T705 disposent d'un dissipateur et d'un flux d'air correct."
+    memory_6000_stability_verified = "La DDR5 6000 MT/s a passe un vrai test de stabilite memoire sans erreur."
+    latest_stable_bios_reviewed = "La version BIOS MSI stable actuelle a ete verifiee avant qualification."
+    current_vendor_drivers_reviewed = "Les pilotes AMD chipset, Intel Arc et MSI ont ete verifies depuis les sources constructeur. Ce point est informatif et ne bloque pas l'installation."
 }
 
 function New-EmptyState {
@@ -48,7 +49,7 @@ function New-EmptyState {
 function Get-ReadableStatePath {
     if (Test-Path -LiteralPath $statePath) { return $statePath }
     if (Test-Path -LiteralPath $legacyStatePath) {
-        Write-Host "[COMPAT] Ancien état de preuves matérielles lu sans modification: $legacyStatePath" -ForegroundColor DarkGray
+        Write-Host "[COMPAT] Ancien etat de preuves materielles lu sans modification: $legacyStatePath" -ForegroundColor DarkGray
         return $legacyStatePath
     }
     return $null
@@ -72,8 +73,11 @@ function Show-State {
     param([Parameter(Mandatory)]$State)
     foreach ($name in @($target.manualChecks)) {
         $value = [bool]$State.Checks[$name]
+        $isAdvisory = $name -in $advisoryManualChecks
         if ($value) {
-            Write-Host "[DÉJÀ OK] $name - $($descriptions[$name])" -ForegroundColor Green
+            Write-Host "[DEJA OK] $name - $($descriptions[$name])" -ForegroundColor Green
+        } elseif ($isAdvisory) {
+            Write-Host "[AVERTISSEMENT] $name - $($descriptions[$name])" -ForegroundColor Yellow
         } else {
             Write-Host "[ACTION REQUISE] $name - $($descriptions[$name])" -ForegroundColor Magenta
         }
@@ -84,22 +88,22 @@ function Show-State {
 function Read-ManualConfirmation {
     param([Parameter(Mandatory)][string]$Name,[Parameter(Mandatory)][string]$Description)
     Write-Host ''
-    Write-Host "Vérification: $Name" -ForegroundColor Cyan
+    Write-Host "Verification: $Name" -ForegroundColor Cyan
     Write-Host $Description
-    Write-Host 'Réponds O uniquement si tu as réellement contrôlé ce point. Le script ne peut pas le deviner.' -ForegroundColor Yellow
+    Write-Host 'Reponds O uniquement si tu as reellement controle ce point. Le script ne peut pas le deviner.' -ForegroundColor Yellow
     while ($true) {
-        $answer = (Read-Host 'Confirmé ? [O/N]').Trim().ToLowerInvariant()
+        $answer = (Read-Host 'Confirme ? [O/N]').Trim().ToLowerInvariant()
         if ($answer -in @('o','oui','y','yes')) { return $true }
         if ($answer -in @('n','non','no')) { return $false }
-        Write-Host 'Répondre O (oui, réellement vérifié) ou N (pas encore vérifié).' -ForegroundColor Yellow
+        Write-Host 'Repondre O (oui, reellement verifie) ou N (pas encore verifie).' -ForegroundColor Yellow
     }
 }
 
 if ($Mode -eq 'Reset') {
     if (Test-Path -LiteralPath $statePath) { Remove-Item -LiteralPath $statePath -Force }
-    Write-Host '[FAIT] Preuves matérielles manuelles canoniques réinitialisées.' -ForegroundColor Green
+    Write-Host '[FAIT] Preuves materielles manuelles canoniques reinitialisees.' -ForegroundColor Green
     if (Test-Path -LiteralPath $legacyStatePath) {
-        Write-Host "[INFO] L'ancien état de compatibilité est conservé et n'a pas été supprimé: $legacyStatePath" -ForegroundColor DarkGray
+        Write-Host "[INFO] L'ancien etat de compatibilite est conserve et n'a pas ete supprime: $legacyStatePath" -ForegroundColor DarkGray
     }
     return
 }
@@ -122,7 +126,7 @@ if ($Mode -eq 'Record') {
     if ($Interactive) {
         foreach ($name in @($target.manualChecks)) {
             if ([bool]$state.Checks[$name]) {
-                Write-Host "[DÉJÀ OK] $name déjà confirmé précédemment; aucune nouvelle saisie." -ForegroundColor Green
+                Write-Host "[DEJA OK] $name deja confirme precedemment; aucune nouvelle saisie." -ForegroundColor Green
                 continue
             }
             if (Read-ManualConfirmation -Name $name -Description $descriptions[$name]) { $map[$name] = $true }
@@ -142,16 +146,24 @@ if ($Mode -eq 'Record') {
     $state.UpdatedAt = (Get-Date).ToString('o')
     New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
     $state | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $statePath
-    if ($changed -gt 0) { Write-Host "[FAIT] $changed preuve(s) manuelle(s) ajoutée(s): $statePath" -ForegroundColor Green }
-    else { Write-Host '[DÉJÀ OK] Aucune nouvelle preuve manuelle confirmée.' -ForegroundColor Green }
+    if ($changed -gt 0) { Write-Host "[FAIT] $changed preuve(s) manuelle(s) ajoutee(s): $statePath" -ForegroundColor Green }
+    else { Write-Host '[DEJA OK] Aucune nouvelle preuve manuelle confirmee.' -ForegroundColor Green }
     Show-State -State $state
     return
 }
 
-$missing = @()
-foreach ($name in @($target.manualChecks)) { if (-not [bool]$state.Checks[$name]) { $missing += $name } }
-Show-State -State $state
-if ($missing.Count -gt 0) {
-    throw "Qualification matérielle manuelle incomplète: $($missing -join ', '). Pour une saisie guidée: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
+$missingBlocking = @()
+$missingAdvisory = @()
+foreach ($name in @($target.manualChecks)) {
+    if ([bool]$state.Checks[$name]) { continue }
+    if ($name -in $advisoryManualChecks) { $missingAdvisory += $name } else { $missingBlocking += $name }
 }
-Write-Host 'VERDICT: HARDWARE MANUAL CHECKS READY' -ForegroundColor Green
+Show-State -State $state
+if ($missingBlocking.Count -gt 0) {
+    throw "Qualification materielle manuelle incomplete: $($missingBlocking -join ', '). Pour une saisie guidee: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
+}
+if ($missingAdvisory.Count -gt 0) {
+    Write-Host "VERDICT: HARDWARE MANUAL CHECKS READY - information(s) non bloquante(s): $($missingAdvisory -join ', ')" -ForegroundColor Yellow
+} else {
+    Write-Host 'VERDICT: HARDWARE MANUAL CHECKS READY' -ForegroundColor Green
+}

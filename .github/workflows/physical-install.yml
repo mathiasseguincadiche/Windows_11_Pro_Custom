@@ -73,20 +73,23 @@ jobs:
           grep -Fq 'TPM prêt' "$readiness"
           grep -Fq 'Virtualisation firmware active' "$readiness"
           grep -Fq 'Espace WSL sur E:' "$readiness"
-          grep -Fq 'Symbiose matériel/pilotes' "$readiness"
+          grep -Fq 'Symbiose matérielle critique' "$readiness"
+          grep -Fq 'Pilote à vérifier:' "$readiness"
+          grep -Fq 'Installation non bloquée' "$readiness"
           grep -Fq 'Microsoft-Windows-Subsystem-Linux' "$readiness"
           grep -Fq 'VirtualMachinePlatform' "$readiness"
           grep -Fq 'Garde-fou point de restauration disponible' "$readiness"
           grep -Fq "Get-WpcNativeApplication -Name 'winget.exe'" "$readiness"
           grep -Fq 'sourceDistribution' "$readiness"
           grep -Fq 'VERDICT: PHYSICAL INSTALL READY' "$readiness"
-          grep -Fq 'aucune convergence ne doit commencer avant un verdict READY' "$readiness"
+          grep -Fq 'Corrige uniquement les prérequis bloquants puis relance' "$readiness"
+          grep -Fq "les informations pilotes ne bloquent jamais l'installation" "$readiness"
           grep -Eq '\$pendingReboot[[:space:]]*=[[:space:]]*@\(Get-PendingRebootReasons\)' "$readiness"
           grep -Fq 'scripts\core\reboot-state.psm1' "$readiness"
           grep -Fq 'Get-WpcPendingRebootState' "$readiness"
           grep -Fq 'PendingFileRenameOperations non bloquant' "$readiness"
           grep -Fq 'Release=$release' "$readiness"
-          grep -Fq 'SchemaVersion=1' "$readiness"
+          grep -Fq 'SchemaVersion=2' "$readiness"
           grep -Fq 'CantActivateDocumentInPipeline' "$native"
 
           if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$readiness"; then
@@ -146,7 +149,7 @@ jobs:
           $release = (Get-Content -Raw .\VERSION).Trim()
           if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid release: $release" }
           $source = Get-Content -Raw .\scripts\bootstrap\02_physical_readiness.ps1
-          foreach ($fragment in @('Release=$release','SchemaVersion=1')) {
+          foreach ($fragment in @('Release=$release','SchemaVersion=2')) {
             if (-not $source.Contains($fragment)) { throw "Readiness report contract missing: $fragment" }
           }
 

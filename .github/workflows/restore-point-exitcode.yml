@@ -31,7 +31,7 @@ jobs:
           grep -Fq '[Environment]::Exit(3)' "$readiness"
           grep -Fq 'ProbeExitCode=' "$readiness"
           grep -Fq 'Release=$release' "$readiness"
-          grep -Fq 'SchemaVersion=1' "$readiness"
+          grep -Fq 'SchemaVersion=2' "$readiness"
           if grep -Fq 'checkpointName -eq' "$readiness"; then
             echo 'Text comparison is forbidden for Checkpoint-Computer capability.' >&2
             exit 1

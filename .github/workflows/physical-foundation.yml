@@ -48,7 +48,7 @@ jobs:
           grep -Fq -- '-RequireFoundation:$RequireFoundation' "$preflight"
           grep -Fq 'RequireFoundation' "$readiness"
           grep -Fq 'Release=$release' "$readiness"
-          grep -Fq 'SchemaVersion=1' "$readiness"
+          grep -Fq 'SchemaVersion=2' "$readiness"
           grep -Fq 'Matériel cible essentiel détecté' "$readiness"
           grep -Fq 'Affichage cible 1440p240' "$readiness"
           grep -Fq -- '-Blocking $false' "$readiness"
@@ -58,6 +58,8 @@ jobs:
           grep -Fq 'WinGet opérationnel' "$readiness"
           grep -Fq 'Runtime WSL Store opérationnel' "$readiness"
           grep -Fq 'READY FOR FOUNDATION BOOTSTRAP' "$readiness"
+          grep -Fq 'Pilote à vérifier:' "$readiness"
+          grep -Fq 'Installation non bloquée' "$readiness"
 
           grep -Fq '02_foundation.ps1' "$install"
           grep -Fq "Mode='Verify'" "$install"
@@ -101,14 +103,19 @@ jobs:
             exit 1
           fi
 
-      - name: Preserve final display qualification
+      - name: Preserve final display qualification as advisory
         shell: bash
         run: |
           set -euo pipefail
           final='scripts/bootstrap/13_validate_hardware.ps1'
-          grep -Fq 'Display1440p240' "$final"
+          grep -Fq '$advisoryChecks.Display1440p240' "$final"
           grep -Fq 'CurrentRefreshRate' "$final"
-          grep -Fq 'Qualification matérielle échouée' "$final"
+          grep -Fq 'non bloquant' "$final"
+          grep -Fq 'Qualification matérielle critique échouée' "$final"
+          if grep -Fq '$checks.Display1440p240' "$final"; then
+            echo 'Display1440p240 must remain advisory and must not block FullInstall.' >&2
+            exit 1
+          fi
 
   windows-host-smoke:
     runs-on: windows-latest

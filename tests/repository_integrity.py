@@ -41,7 +41,6 @@ if "symbiosis-v5.json" in storage_source:
 
 
 # P0 — aucun ancien chemin de composant ne doit rester dans le code actif.
-# Les fichiers qui maintiennent volontairement la liste noire sont exclus.
 forbidden_legacy_paths = (
     "00_storage_identity_v25.ps1",
     "00_storage_integrity_v24.ps1",
@@ -101,9 +100,7 @@ if legacy_violations:
 
 
 # P1 — toutes les dépendances statiques versionnées référencées par le code
-# PowerShell exécutable doivent exister dans le dépôt. Les chemins construits avec
-# des variables restent couverts par leurs contrats spécifiques. La frontière négative
-# évite de prendre un chemin utilisateur comme .config/... pour un chemin racine repo.
+# PowerShell exécutable doivent exister dans le dépôt.
 runtime_powershell_files = [
     REPO_ROOT / "install.ps1",
     REPO_ROOT / "menu.ps1",
@@ -139,16 +136,18 @@ if missing_dependencies:
     )
 
 
-# P1 — le centre de contrôle doit remonter le contexte d'échec courant et disposer
-# d'un fallback sur le résumé du RunId, pas uniquement latest-run.json.
+# P1 — le centre de contrôle doit remonter une cause exploitable et disposer d'un
+# fallback texte sur logs/install.log si les résumés JSON ne peuvent pas être relus.
 menu_source = (REPO_ROOT / "menu.ps1").read_text(encoding="utf-8")
 required_menu_fragments = (
     "Get-WpcFailureSummaryCandidates",
     "Read-WpcFailureSummaryContext",
+    "Get-WpcOrchestratorFailureContext",
     "Get-WpcLatestFailureContext",
     "Format-WpcProcessFailure",
     "reports\\orchestration\\latest-run.json",
     "logs\\runs",
+    "logs\\install.log",
     "summary.json",
     "LatestScriptState",
     "ScriptExecutions",
@@ -166,54 +165,103 @@ if missing_menu_fragments:
         "Control-center detailed failure contract incomplete: "
         + ", ".join(missing_menu_fragments)
     )
+if "[datetimeoffset]::TryParse" in menu_source:
+    fail("Control-center failure parsing must not depend on DateTimeOffset TryParse.")
 
 
-# P1 — une qualification matérielle KO doit exposer le nom du HardCheck et son détail,
-# puis le préflight doit propager cette information jusqu'au résumé d'orchestration.
+# P1 — seuls les contrôles matériels critiques sont bloquants. Les pilotes et leurs
+# baselines doivent être explicitement séparés et signalés en advisory.
 hardware_source = (
     REPO_ROOT / "scripts/windows/52_hardware_symbiosis.ps1"
 ).read_text(encoding="utf-8")
 required_hardware_fragments = (
-    "Get-HardCheckDetail",
-    "HardCheckFailures",
+    "$hardChecks = [ordered]@{",
+    "$driverChecks = [ordered]@{",
+    "DriverFindings",
+    "Category='DriverAdvisory'",
+    "PILOTE À VÉRIFIER",
+    "non bloquant",
     "ArcDriverAtLeastApproved",
     "Realtek8126Present",
     "WifiAdapterPresent",
-    "AmdChipsetNotBelowApprovedBaseline",
-    "versionDétectée=",
-    "minimum=",
+    "AmdChipsetAtLeastApprovedBaseline",
+    "DeviceID",
+    "Get-NetAdapter -Physical",
 )
 missing_hardware_fragments = [
     fragment for fragment in required_hardware_fragments if fragment not in hardware_source
 ]
 if missing_hardware_fragments:
     fail(
-        "Hardware-symbiosis diagnostics contract incomplete: "
+        "Driver advisory contract incomplete: "
         + ", ".join(missing_hardware_fragments)
     )
 
-preflight_source = (
-    REPO_ROOT / "scripts/bootstrap/00_preflight.ps1"
+hard_block = hardware_source.split("$hardChecks = [ordered]@{", 1)[1].split("}", 1)[0]
+for driver_check in (
+    "ArcDriverAtLeastApproved",
+    "Realtek8126Present",
+    "WifiAdapterPresent",
+    "AmdChipsetAtLeastApprovedBaseline",
+):
+    if driver_check in hard_block:
+        fail(f"Driver check must not be blocking: {driver_check}")
+
+physical_source = (
+    REPO_ROOT / "scripts/bootstrap/02_physical_readiness.ps1"
 ).read_text(encoding="utf-8")
-required_preflight_fragments = (
-    "hardware-symbiosis.json",
-    "Get-WpcHardwareSymbiosisFailureDetail",
-    "HardCheckFailures",
-    "Détail matériel/pilotes:",
+required_physical_fragments = (
+    "52_hardware_symbiosis.ps1",
+    "-Mode Audit",
+    "DriverFindings",
+    "Pilote à vérifier:",
+    "Installation non bloquée",
+    "Symbiose matérielle critique",
 )
-missing_preflight_fragments = [
-    fragment for fragment in required_preflight_fragments if fragment not in preflight_source
+missing_physical_fragments = [
+    fragment for fragment in required_physical_fragments if fragment not in physical_source
 ]
-if missing_preflight_fragments:
+if missing_physical_fragments:
     fail(
-        "Physical preflight failure-propagation contract incomplete: "
-        + ", ".join(missing_preflight_fragments)
+        "Physical-readiness driver advisory propagation incomplete: "
+        + ", ".join(missing_physical_fragments)
     )
+
+# P1 — la revue manuelle des pilotes et l'état 1440p240 ne doivent pas re-bloquer
+# FullInstall plus loin dans la qualification finale.
+manual_source = (
+    REPO_ROOT / "scripts/windows/51_hardware_manual_checks.ps1"
+).read_text(encoding="utf-8")
+for fragment in (
+    "$advisoryManualChecks = @('current_vendor_drivers_reviewed')",
+    "$missingBlocking",
+    "$missingAdvisory",
+    "AVERTISSEMENT",
+):
+    if fragment not in manual_source:
+        fail(f"Manual hardware advisory contract incomplete: {fragment}")
+
+final_hardware_source = (
+    REPO_ROOT / "scripts/bootstrap/13_validate_hardware.ps1"
+).read_text(encoding="utf-8")
+for fragment in (
+    "$advisoryChecks = [ordered]@{}",
+    "$advisoryChecks.ArcDriver",
+    "$advisoryChecks.Display1440p240",
+    "non bloquant",
+):
+    if fragment not in final_hardware_source:
+        fail(f"Final hardware advisory contract incomplete: {fragment}")
+checks_prefix = final_hardware_source.split("$report =", 1)[0]
+if "$checks.ArcDriver" in checks_prefix or "$checks.Display1440p240" in checks_prefix:
+    fail("ArcDriver and Display1440p240 must not be final blocking checks.")
+
 
 print("[OK] storagePolicyPath -> config/hardware/symbiosis.json")
 print("[OK] no legacy component path in active code")
 print("[OK] all detected static repository dependencies exist")
-print("[OK] resilient current-run failure context available in control center")
-print("[OK] hardware HardCheck failures expose detected and expected values")
-print("[OK] physical preflight propagates hardware details to orchestration")
+print("[OK] control center has JSON and orchestrator-log failure fallbacks")
+print("[OK] driver presence/version checks are advisory and non blocking")
+print("[OK] physical preflight surfaces driver findings without blocking install")
+print("[OK] manual driver review and display refresh are non blocking")
 print("VERDICT: REPOSITORY INTEGRITY READY")
