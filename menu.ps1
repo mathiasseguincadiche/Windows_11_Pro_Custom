@@ -28,7 +28,7 @@ foreach ($required in @($InstallScript,$UpdateScript,$AppsScript,$FingerprintScr
     if (-not (Test-Path -LiteralPath $required)) { throw "Point d'entree introuvable: $required" }
 }
 Import-Module $PowerShellRuntimeModule -Force
-$PowerShellRuntimeFact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru
+$PowerShellRuntimeFact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru
 Import-Module $RebootStateModule -Force
 
 function Test-IsAdministrator {
@@ -62,7 +62,7 @@ function Write-Header {
     Write-Line ('='*78) DarkCyan;Write-Line ' WINDOWS 11 PRO CUSTOM - CENTRE DE CONTROLE' Cyan;Write-Line ('='*78) DarkCyan
     Write-Host ' Release : ' -NoNewline -ForegroundColor DarkGray;Write-Host $ProjectRelease -ForegroundColor White
     Write-Host ' PowerShell : ' -NoNewline -ForegroundColor DarkGray;Write-Host ("{0} | Core | x64 | pwsh.exe" -f $PowerShellRuntimeFact.Version) -ForegroundColor White
-    Write-Host ' Runtime minimum : ' -NoNewline -ForegroundColor DarkGray;Write-Host '7.6.5' -ForegroundColor Green
+    Write-Host ' Runtime minimum : ' -NoNewline -ForegroundColor DarkGray;Write-Host '7.6.4' -ForegroundColor Green
     Write-Host ' Administrateur : ' -NoNewline -ForegroundColor DarkGray;Write-Host $adminText -ForegroundColor $adminColor
     Write-Host ' Depot : ' -NoNewline -ForegroundColor DarkGray;Write-Host $RepoRoot -ForegroundColor White
     Write-Line ('-'*78) DarkCyan
@@ -239,7 +239,7 @@ function Show-ComponentsMenu {while ($true) {Write-Header;Write-Line ' COMPOSANT
 function Show-LogsMenu {while ($true) {Write-Header;Write-Line ' JOURNAUX ET RAPPORTS' White;Write-Line '';Write-Line '  1. Ouvrir logs\' White;Write-Line '  2. Ouvrir reports\' White;Write-Line '  0. Retour' DarkGray;Write-Host '';$value=(Read-Host 'Ton choix').Trim();if ($value -eq '0') {return};if ($value -in @('1','2')) {Invoke-MainAction -Selected "9.$value";Pause-WpcMenu}}}
 function Show-Help {
     Write-Header;Write-Line ' AIDE RAPIDE' White;Write-Line ''
-    Write-Line 'PowerShell' Cyan;Write-Line '  Runtime unique: PowerShell 7.6.5 minimum, edition Core, processus x64, executable pwsh.exe.' DarkGray;Write-Line '  Windows PowerShell 5.1 peut rester installe dans Windows mais ce depot ne l execute jamais et ne l utilise pas comme fallback.' DarkGray
+    Write-Line 'PowerShell' Cyan;Write-Line '  Runtime unique: PowerShell 7.6.4 minimum, edition Core, processus x64, executable pwsh.exe.' DarkGray;Write-Line '  Windows PowerShell 5.1 peut rester installe dans Windows mais ce depot ne l execute jamais et ne l utilise pas comme fallback.' DarkGray
     Write-Line 'Installation complete' Cyan;Write-Line '  Converge toute la workstation avec install.ps1 -FullInstall.' DarkGray;Write-Line '  Si Windows exige un reboot, le menu bloque proprement puis propose le redemarrage; relancer ensuite la meme option reprend idempotemment.' DarkGray
     Write-Line 'Logiciels' Cyan;Write-Line '  Installe uniquement les applications WinGet manquantes ou non conformes.' DarkGray
     Write-Line 'Mises a jour' Cyan;Write-Line '  Gere Windows Update, WinGet, WSL, Ubuntu/APT, VS Code et les outils DevOps epingles.' DarkGray
