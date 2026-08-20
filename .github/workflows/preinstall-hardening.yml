@@ -22,11 +22,13 @@ jobs:
             'scripts/core/powershell-runtime.psm1',
             'scripts/core/native-process.psm1',
             'scripts/core/reboot-state.psm1',
+            'scripts/core/wsl-release.psm1',
             'scripts/bootstrap/00_preflight.ps1',
             'scripts/bootstrap/01_machine_state.ps1',
             'scripts/bootstrap/02_physical_readiness.ps1',
             'scripts/bootstrap/02_foundation.ps1',
             'scripts/bootstrap/03_apps.ps1',
+            'scripts/bootstrap/06_wsl.ps1',
             'scripts/bootstrap/07_wsl_user.ps1',
             'scripts/bootstrap/08_devops.ps1',
             'scripts/bootstrap/09_validate_devops.ps1',
@@ -54,24 +56,22 @@ jobs:
             exit 1
           fi
 
-      - name: Enforce global WinGet inventory with targeted exact fallback
+      - name: Enforce exact WinGet inventory with bounded retries
         shell: bash
         run: |
           set -euo pipefail
           script='scripts/bootstrap/01_machine_state.ps1'
-          grep -Fq 'Get-WingetInventory' "$script"
-          grep -Fq "Invoke-WpcNativeCapture -FilePath \$wingetCommand.Source -ArgumentList @('list', '--accept-source-agreements', '--disable-interactivity')" "$script"
-          grep -Fq 'Exact fallback:' "$script"
+          grep -Fq '$wingetRetryCount = 3' "$script"
+          grep -Fq "ArgumentList @('list', '--id', \$Id, '--exact', '--accept-source-agreements', '--disable-interactivity')" "$script"
+          grep -Fq 'Exact WinGet IDs only' "$script"
           # shellcheck disable=SC2016
           exact_calls="$(grep -Fc "ArgumentList @('list', '--id', \$Id, '--exact', '--accept-source-agreements', '--disable-interactivity')" "$script")"
           if [[ "$exact_calls" -ne 1 ]]; then
-            echo "Machine-state must contain exactly one targeted WinGet exact-fallback command location; found ${exact_calls}." >&2
+            echo "Machine-state must contain exactly one exact WinGet command location; found ${exact_calls}." >&2
             exit 1
           fi
-          global_hit_line="$(grep -nF "State='INSTALLED'; Evidence=[string]\$line[0]" "$script" | head -n1 | cut -d: -f1)"
-          exact_line="$(grep -nF "ArgumentList @('list', '--id', \$Id, '--exact'" "$script" | head -n1 | cut -d: -f1)"
-          if [[ -z "$global_hit_line" || -z "$exact_line" || "$exact_line" -le "$global_hit_line" ]]; then
-            echo 'Targeted exact WinGet fallback must execute only after the global inventory lookup misses.' >&2
+          if grep -Fq 'Get-WingetInventory' "$script"; then
+            echo 'Legacy global WinGet inventory heuristic must not be used for package compliance.' >&2
             exit 1
           fi
           if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$script"; then
