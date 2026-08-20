@@ -21,12 +21,12 @@ jobs:
           jq -e '
             (.schemaVersion == 1) and
             (.edition == "Core") and
-            (.minimumVersion == "7.6.5") and
+            (.minimumVersion == "7.6.4") and
             (.architecture == "x64") and
             (.executable == "pwsh.exe") and
             (.windowsPowerShellSupported == false)
           ' config/powershell/runtime.json >/dev/null
-          grep -Fq "MinimumVersion = [version]'7.6.5'" scripts/core/powershell-runtime.psm1
+          grep -Fq "MinimumVersion = [version]'7.6.4'" scripts/core/powershell-runtime.psm1
           grep -Fq "ExecutableName -ine 'pwsh.exe'" scripts/core/powershell-runtime.psm1
 
       - name: Reject Windows PowerShell execution fallbacks
@@ -59,7 +59,7 @@ jobs:
           grep -Fq 'where pwsh.exe' START_MENU.cmd
           ! grep -Fiq 'where powershell.exe' START_MENU.cmd
           grep -Fq 'Assert-WpcPowerShellRuntime' menu.ps1
-          grep -Fq "[version]'7.6.5'" menu.ps1
+          grep -Fq "[version]'7.6.4'" menu.ps1
           grep -Fq 'Repair-WpcWinGetPowerShell7' scripts/bootstrap/02_foundation.ps1
           grep -Fq 'Repair-WinGetPackageManager -Force -Latest' scripts/bootstrap/02_foundation.ps1
           grep -Fq "ClassName 'SystemRestore'" scripts/windows/41_restore_point.ps1
