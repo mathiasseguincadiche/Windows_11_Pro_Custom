@@ -15,7 +15,7 @@ foreach ($required in @($nativeProcessModule,$powerShellRuntimeModule)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Helper requis introuvable: $required" }
 }
 Import-Module $powerShellRuntimeModule -Force
-[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru)
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 Import-Module $nativeProcessModule -Force
 
 function Get-OptionalFeatureStateSafe {
