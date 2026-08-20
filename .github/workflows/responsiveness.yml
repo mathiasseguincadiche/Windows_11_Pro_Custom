@@ -79,8 +79,8 @@ jobs:
           grep -Fq 'Set-UiAnimationState' "$script"
           grep -Fq 'Les applications de démarrage sont uniquement inventoriées' "$script"
           grep -Fq "Add-PlanItem -Name 'Réactivité Windows'" install.ps1
-          grep -Fq "-VerifyRelativePath 'scripts\\windows\\53_responsiveness.ps1'" install.ps1
-          grep -Fq "-ApplyRelativePath 'scripts\\windows\\53_responsiveness.ps1'" install.ps1
+          grep -Fq -- "-VerifyRelativePath 'scripts\\windows\\53_responsiveness.ps1'" install.ps1
+          grep -Fq -- "-ApplyRelativePath 'scripts\\windows\\53_responsiveness.ps1'" install.ps1
           grep -Fq 'Release=$release; SchemaVersion=1' "$script"
 
       - name: Protect benchmark methodology
