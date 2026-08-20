@@ -85,7 +85,7 @@ jobs:
           import re
 
           files = [Path('README.md'), *sorted(Path('docs').glob('*.md'))]
-          milestone = re.compile(r'\bV\d+\b', re.I)
+          milestone = re.compile(r'\bV\d+\b')
           legacy_paths = (
               '00_storage_identity_v25.ps1',
               '00_storage_integrity_v24.ps1',
@@ -150,6 +150,9 @@ jobs:
           )
           errors = []
           for path in sorted(Path('.github/workflows').glob('*.yml')):
+              # Ce workflow contient la liste noire elle-même : il ne doit pas s'auto-signaler.
+              if path.name == 'documentation.yml':
+                  continue
               text = path.read_text(encoding='utf-8')
               first = text.splitlines()[0] if text.splitlines() else ''
               if re.search(r'\bV\d+\b', first):
