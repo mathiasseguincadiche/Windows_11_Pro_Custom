@@ -108,7 +108,7 @@ function Get-WslRelease {
         return ConvertFrom-WpcOsRelease -Lines $cleanLines
     } catch {
         $detail = ($cleanLines -join ' | ').Trim()
-        throw "Impossible de parser /etc/os-release dans $Distribution: $($_.Exception.Message) Sortie: $detail"
+        throw "Impossible de parser /etc/os-release dans ${Distribution}: $($_.Exception.Message) Sortie: $detail"
     }
 }
 
