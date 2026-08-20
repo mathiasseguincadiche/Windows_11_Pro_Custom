@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "edition": "Core",
+  "minimumVersion": "7.6.5",
+  "architecture": "x64",
+  "executable": "pwsh.exe",
+  "windowsPowerShellSupported": false,
+  "policy": "PowerShell 7 only. Windows PowerShell 5.1 may remain installed as a Windows component but is never an execution target or fallback for this repository."
+}
