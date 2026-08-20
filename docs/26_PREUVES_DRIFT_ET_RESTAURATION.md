@@ -1,16 +1,16 @@
-# preuves workstation — Niveaux de preuve, dérive et restauration contrôlée
+# Preuves workstation — niveaux de preuve, dérive et restauration contrôlée
 
-preuves workstation renforce la preuve de conformité sans modifier l'architecture de la workstation ni affaiblir les garde-fous jalon historique/identité stockage.
+Ce dispositif renforce la preuve de conformité sans modifier l'architecture de la workstation ni affaiblir les garde-fous d’identité et d’intégrité du stockage.
 
 ## Niveaux de preuve
 
-Le projet distingue désormais trois niveaux. Ils ne sont pas interchangeables.
+Le projet distingue trois niveaux non interchangeables :
 
 | Niveau | Signification | Exemples |
 | --- | --- | --- |
 | `STATIC` | contrat vérifiable sans workstation physique | parsing PowerShell, JSON/YAML, cohérence documentation/manifeste, interdictions de sécurité |
 | `SIMULATED` | comportement vérifié sur un runner Windows ou un environnement isolé | PowerShell natif, aliases WindowsApps, codes de sortie, contrats d'orchestration |
-| `PHYSICAL` | preuve produite uniquement sur la workstation réelle | identité identité stockage, intégrité jalon historique, GPU/pilotes, WSL réel, réseau, backup et restauration isolée |
+| `PHYSICAL` | preuve produite uniquement sur la workstation réelle | identité et intégrité stockage, GPU/pilotes, WSL réel, réseau, backup et restauration isolée |
 
 Une CI verte prouve les niveaux `STATIC` et une partie de `SIMULATED`. Elle ne remplace jamais un `Verify` réussi sur la machine physique.
 
@@ -26,15 +26,13 @@ Une CI verte prouve les niveaux `STATIC` et une partie de `SIMULATED`. Elle ne r
 
 La sortie est écrite sous `reports/workstation/` et accompagnée d'un SHA-256.
 
-Un audit sans confirmation explicite produit une preuve `SIMULATED`, y compris
-sur un runner Windows :
+Audit non physique :
 
 ```powershell
 .\scripts\windows\90_workstation_fingerprint.ps1 -Mode Audit
 ```
 
-Sur la workstation réelle uniquement, la preuve physique est demandée
-explicitement :
+Sur la workstation réelle uniquement :
 
 ```powershell
 .\scripts\windows\90_workstation_fingerprint.ps1 `
@@ -43,7 +41,7 @@ explicitement :
   -ConfirmPhysicalEvidence
 ```
 
-Après une validation physique complète et uniquement sur un état sain, une baseline locale peut être enregistrée :
+Après une validation physique complète et uniquement sur un état sain, enregistrer la baseline :
 
 ```powershell
 .\scripts\windows\90_workstation_fingerprint.ps1 `
@@ -53,7 +51,7 @@ Après une validation physique complète et uniquement sur un état sain, une ba
   -ConfirmHealthyState
 ```
 
-Puis comparée après maintenance ou Windows Update :
+Puis vérifier la dérive après maintenance ou Windows Update :
 
 ```powershell
 .\scripts\windows\90_workstation_fingerprint.ps1 `
@@ -62,9 +60,7 @@ Puis comparée après maintenance ou Windows Update :
   -ConfirmPhysicalEvidence
 ```
 
-Une maintenance intentionnelle peut nécessiter un nouvel enrôlement. Le
-remplacement reste explicite, exige une raison et archive la baseline précédente
-avec le diff complet :
+Une maintenance intentionnelle peut nécessiter un nouvel enrôlement. Le remplacement reste explicite, exige une raison et archive la baseline précédente avec le diff complet :
 
 ```powershell
 .\scripts\windows\90_workstation_fingerprint.ps1 `
@@ -76,23 +72,15 @@ avec le diff complet :
   -ReplacementReason 'Windows Update validé et requalification complète réussie'
 ```
 
-La baseline locale est conservée sous :
+La baseline courante est conservée sous le répertoire canonique :
 
 ```text
-%ProgramData%\Windows11ProCustom\workstation-v26\workstation-fingerprint.json
-%ProgramData%\Windows11ProCustom\workstation-v26\workstation-fingerprint.json.sha256
+%ProgramData%\Windows11ProCustom\workstation\
 ```
 
-Toute nouvelle baseline reçoit un sidecar SHA-256, vérifié avant comparaison ou
-remplacement. Une baseline créée avant ce durcissement reste lisible avec le
-statut `LEGACY_UNVERIFIED`; un remplacement contrôlé après requalification est
-alors recommandé. Le sidecar rend les corruptions accidentelles détectables,
-mais ne remplace pas une signature cryptographique protégée hors de la machine.
+Une baseline issue d’une ancienne installation peut rester lisible par compatibilité, sans être déplacée ni remplacée automatiquement. Toute nouvelle baseline reçoit un sidecar SHA-256 vérifié avant comparaison ou remplacement. Une ancienne baseline dépourvue de sidecar reste identifiable comme preuve historique non vérifiée ; un remplacement contrôlé après requalification est alors recommandé.
 
-Elle ne remplace aucune source de vérité. Une différence est un signal de dérive
-à expliquer, pas une autorisation de forcer la convergence. Le rapport de dérive
-indique les champs attendus et actuels ; l'empreinte contient également le commit
-Git du dépôt lorsqu'il est disponible.
+Le sidecar rend les corruptions accidentelles détectables mais ne remplace pas une signature cryptographique protégée hors de la machine. Une différence d’empreinte est un signal de dérive à expliquer, jamais une autorisation de forcer la convergence.
 
 ## Test de restauration WSL isolé
 
@@ -106,10 +94,7 @@ Mode lecture seule :
   -Mode Verify
 ```
 
-Le mode `Verify` contrôle le manifeste, le VHDX et son SHA-256, la copie de
-baseline d’identité stockage et la présence de la version `wbadmin` exacte liée au manifeste.
-Une session créée avant l'ajout de cet identifiant reste vérifiable, mais reçoit
-un avertissement indiquant que seule l'énumérabilité globale est prouvée.
+Le mode `Verify` contrôle le manifeste, le VHDX et son SHA-256, la copie de baseline d’identité stockage et la présence de la version `wbadmin` exacte liée au manifeste. Une session ancienne sans cet identifiant exact peut rester vérifiable avec un avertissement indiquant la limite de la preuve.
 
 Pour prouver qu'un VHDX WSL est réellement amorçable, le mode `Sandbox` :
 
@@ -120,11 +105,7 @@ Pour prouver qu'un VHDX WSL est réellement amorçable, le mode `Sandbox` :
 5. désenregistre uniquement la distribution temporaire dans un bloc `finally` et vérifie sa disparition ;
 6. supprime uniquement la copie temporaire créée par le drill, après confirmation du désenregistrement.
 
-Si le désenregistrement échoue ou ne peut pas être confirmé, le drill échoue et
-conserve volontairement la copie scratch afin de ne jamais supprimer le VHDX
-d'une distribution encore enregistrée.
-
-Il exige une confirmation explicite :
+Si le désenregistrement échoue ou ne peut pas être confirmé, le drill échoue et conserve volontairement la copie scratch afin de ne jamais supprimer le VHDX d'une distribution encore enregistrée.
 
 ```powershell
 .\scripts\backup\63_restore_drill.ps1 `
@@ -134,11 +115,11 @@ Il exige une confirmation explicite :
   -ConfirmIsolatedRestoreDrill
 ```
 
-Le script refuse d'utiliser `Ubuntu` comme nom temporaire et ne contient aucun chemin qui désenregistre la distribution de production.
+Le script refuse d'utiliser `Ubuntu` comme nom temporaire et ne désenregistre jamais la distribution de production.
 
 ## Limite volontaire : restauration Windows
 
-Une image `wbadmin` de `C:`/`E:` ne peut pas être restaurée de manière sûre sur la workstation active uniquement pour « tester ». preuves workstation vérifie donc qu'une version est énumérable et conserve le test de restauration Windows complet comme exercice **WinRE/offline** planifié.
+Une image `wbadmin` de `C:`/`E:` ne peut pas être restaurée de manière sûre sur la workstation active uniquement pour « tester ». La validation vérifie donc qu'une version est énumérable et conserve le test de restauration Windows complet comme exercice **WinRE/offline** planifié.
 
 Une sauvegarde est considérée plus forte lorsqu'elle cumule :
 
@@ -152,4 +133,4 @@ création réussie
 
 ## Politique CI
 
-preuves workstation ajoute un workflow consolidé `workstation-evidence-v26.yml`. Il ne remplace ni ne supprime les workflows historiques existants dans cette évolution afin d'éviter une régression de couverture. La consolidation des noms Vxx pourra être effectuée séparément lorsque les protections de branche et références documentaires auront été inventoriées.
+Le workflow permanent `.github/workflows/workstation-evidence.yml` valide le contrat d’empreinte, l’intégrité SHA-256, la compatibilité de lecture des anciennes données, les parseurs `wbadmin`, la sécurité du drill WSL et l’absence d’opérations destructives. Les noms de composants actifs restent fonctionnels et indépendants des anciens jalons de développement.
