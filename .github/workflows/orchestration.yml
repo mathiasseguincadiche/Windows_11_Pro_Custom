@@ -67,6 +67,7 @@ jobs:
           test -f scripts/core/native-process.psm1
           test -f scripts/bootstrap/01_machine_state.ps1
           test -f scripts/bootstrap/07_wsl_user.ps1
+          test -f scripts/windows/40_optimize.ps1
           test -f logs/README.md
           test -f docs/14_ORCHESTRATION.md
 
@@ -81,7 +82,7 @@ jobs:
           grep -Fq 'FullInstall' install.ps1
           grep -Fq 'WslUser' install.ps1
           grep -Fq 'Get-WpcProjectRelease' scripts/core/runtime.psm1
-          grep -Fq "Release=\$Context.Release" scripts/core/runtime.psm1
+          grep -Fq 'Release=$Context.Release' scripts/core/runtime.psm1
           grep -Fq 'SchemaVersion=1' scripts/core/runtime.psm1
           grep -Fq 'DÉJÀ OK' scripts/core/runtime.psm1
           grep -Fq '<REDACTED>' scripts/core/runtime.psm1
@@ -91,8 +92,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE '(^|[;{[:space:]])exit[[:space:]]+[1-9]' scripts \
-              --include='*.ps1' --include='*.psm1'; then
+          if grep -RInE '(^|[;{[:space:]])exit[[:space:]]+[1-9]' scripts --include='*.ps1' --include='*.psm1'; then
             echo 'PowerShell child scripts must throw, not terminate the parent orchestrator with exit N.' >&2
             exit 1
           fi
@@ -117,7 +117,7 @@ jobs:
           grep -Fq 'scripts/wsl/install-devops.sh' scripts/bootstrap/08_devops.ps1
           grep -Fq 'scripts/wsl/validate-devops.sh' scripts/bootstrap/09_validate_devops.ps1
 
-          grep -Fq 'Get-PendingChanges' scripts/windows/40_v4_optimize.ps1
+          grep -Fq 'Get-PendingChanges' scripts/windows/40_optimize.ps1
           grep -Fq 'Test-SettingsMatch' scripts/windows/30_vscode.ps1
           grep -Fq "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')" scripts/windows/31_windows_terminal.ps1
           grep -Fq 'Test-SettingsMatch' scripts/windows/31_windows_terminal.ps1
@@ -132,8 +132,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInEi '(Set-Content|Add-Content|Out-File).*(password|passwd|secret|token|api.?key)' \
-              scripts/core scripts/bootstrap/07_wsl_user.ps1 install.ps1; then
+          if grep -RInEi '(Set-Content|Add-Content|Out-File).*(password|passwd|secret|token|api.?key)' scripts/core scripts/bootstrap/07_wsl_user.ps1 install.ps1; then
             echo 'Potential credential persistence detected in orchestration code.' >&2
             exit 1
           fi
@@ -221,25 +220,16 @@ jobs:
           Import-Module .\scripts\core\runtime.psm1 -Force
           $context = New-WpcRunContext -RepoRoot $PWD -Mode Verify -NonInteractive
 
-          $success = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' `
-            -ArgumentList @('-NoProfile','-Command','exit 0') -LogIdentity 'ci/external-success' -Quiet
-          if (-not $success.Success -or $success.ExitCode -ne 0 -or $success.Outcome -ne 'OK') {
-            throw 'External-command success result is incomplete.'
-          }
+          $success = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' -ArgumentList @('-NoProfile','-Command','exit 0') -LogIdentity 'ci/external-success' -Quiet
+          if (-not $success.Success -or $success.ExitCode -ne 0 -or $success.Outcome -ne 'OK') { throw 'External-command success result is incomplete.' }
 
-          $allowed = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' `
-            -ArgumentList @('-NoProfile','-Command','exit 23') -LogIdentity 'ci/external-allowed-failure' -AllowFailure -Quiet
-          if ($allowed.Success -or $allowed.ExitCode -ne 23 -or $allowed.Outcome -ne 'FAILED' -or [string]::IsNullOrWhiteSpace($allowed.Error)) {
-            throw 'AllowFailure must return a structured failed result.'
-          }
+          $allowed = Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' -ArgumentList @('-NoProfile','-Command','exit 23') -LogIdentity 'ci/external-allowed-failure' -AllowFailure -Quiet
+          if ($allowed.Success -or $allowed.ExitCode -ne 23 -or $allowed.Outcome -ne 'FAILED' -or [string]::IsNullOrWhiteSpace($allowed.Error)) { throw 'AllowFailure must return a structured failed result.' }
 
           $thrown = $false
           try {
-            [void](Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' `
-              -ArgumentList @('-NoProfile','-Command','exit 24') -LogIdentity 'ci/external-hard-failure' -Quiet)
-          } catch {
-            $thrown = $_.Exception.Message -match 'code 24'
-          }
+            [void](Invoke-WpcExternalCommand -Context $context -FilePath 'pwsh' -ArgumentList @('-NoProfile','-Command','exit 24') -LogIdentity 'ci/external-hard-failure' -Quiet)
+          } catch { $thrown = $_.Exception.Message -match 'code 24' }
           if (-not $thrown) { throw 'A non-allowed external failure must throw.' }
 
       - name: Reject unsafe generic List conversions
