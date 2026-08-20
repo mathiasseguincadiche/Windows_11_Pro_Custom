@@ -1,0 +1,110 @@
+name: Terminal UX
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/core/runtime.psm1'
+      - '.github/workflows/terminal-ux.yml'
+      - 'docs/15_TERMINAL_UX.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/core/runtime.psm1'
+      - '.github/workflows/terminal-ux.yml'
+      - 'docs/15_TERMINAL_UX.md'
+
+permissions:
+  contents: read
+
+jobs:
+  interactive-progress:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse runtime module with PowerShell 7
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\scripts\core\runtime.psm1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if (@($errors).Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+      - name: Parse runtime module with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\scripts\core\runtime.psm1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if (@($errors).Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+      - name: Prove visible phase, substep, heartbeat and duration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $smoke = Join-Path $env:RUNNER_TEMP 'terminal-ux-smoke.ps1'
+          $slow = Join-Path $env:GITHUB_WORKSPACE 'scripts\core\terminal-ux-ci-fixture.ps1'
+          $output = Join-Path $env:RUNNER_TEMP 'terminal-ux-output.txt'
+
+          @'
+          Write-Host '[INFO] Debut de la sous-etape lente.'
+          Start-Sleep -Seconds 4
+          Write-Host '[OK] Sous-etape lente terminee.'
+          '@ | Set-Content -LiteralPath $slow -Encoding utf8
+
+          @"
+          `$ErrorActionPreference = 'Stop'
+          `$env:WPC_HEARTBEAT_SECONDS = '2'
+          `$repoRoot = [Environment]::GetEnvironmentVariable('GITHUB_WORKSPACE')
+          if ([string]::IsNullOrWhiteSpace(`$repoRoot)) { throw 'GITHUB_WORKSPACE absent.' }
+          Import-Module (Join-Path `$repoRoot 'scripts\core\runtime.psm1') -Force
+          `$context = New-WpcRunContext -RepoRoot `$repoRoot -Mode 'Apply'
+          Write-WpcBanner -Context `$context -Title 'Terminal UX smoke'
+          [void](Invoke-WpcManagedScript -Context `$context -Path '$slow' -DisplayName 'Operation lente de test' -Phase 'Discovery')
+          Complete-WpcRun -Context `$context -Success `$true
+          "@ | Set-Content -LiteralPath $smoke -Encoding utf8
+
+          try {
+            & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File $smoke *> $output
+            if ($LASTEXITCODE -ne 0) {
+              Get-Content -LiteralPath $output
+              throw "Terminal UX smoke failed with exit code $LASTEXITCODE"
+            }
+
+            $text = Get-Content -Raw -LiteralPath $output
+            foreach ($needle in @(
+              'Suivi interactif actif',
+              'Battement de vie',
+              'ETAPE 01 | Decouverte et preflight',
+              'SOUS-ETAPE 01 | Operation lente de test',
+              'Script  : scripts\core\terminal-ux-ci-fixture.ps1',
+              'Journal :',
+              '[ACTIF] Operation lente de test est toujours en cours',
+              'Operation lente de test termine',
+              'Duree totale',
+              'VERDICT: execution terminee sans erreur.'
+            )) {
+              if (-not $text.Contains($needle)) {
+                Get-Content -LiteralPath $output
+                throw "Terminal UX output missing: $needle"
+              }
+            }
+            Get-Content -LiteralPath $output
+          }
+          finally {
+            Remove-Item -LiteralPath $slow -Force -ErrorAction SilentlyContinue
+          }

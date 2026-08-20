@@ -1,6 +1,58 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if (-not ('Windows11ProCustom.ConsoleHeartbeat' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Threading;
+namespace Windows11ProCustom {
+    public sealed class ConsoleHeartbeat : IDisposable {
+        private readonly object sync = new object();
+        private readonly string label;
+        private readonly int silenceSeconds;
+        private readonly DateTime startedAt;
+        private DateTime lastActivityAt;
+        private Timer timer;
+
+        public ConsoleHeartbeat(string label, int silenceSeconds) {
+            this.label = String.IsNullOrWhiteSpace(label) ? "operation" : label;
+            this.silenceSeconds = Math.Max(2, silenceSeconds);
+            this.startedAt = DateTime.UtcNow;
+            this.lastActivityAt = this.startedAt;
+            this.timer = new Timer(Tick, null, this.silenceSeconds * 1000, this.silenceSeconds * 1000);
+        }
+
+        public void Touch() {
+            lock (sync) { lastActivityAt = DateTime.UtcNow; }
+        }
+
+        private void Tick(object state) {
+            DateTime last;
+            lock (sync) { last = lastActivityAt; }
+            var now = DateTime.UtcNow;
+            if ((now - last).TotalSeconds < silenceSeconds) { return; }
+            try {
+                var previous = Console.ForegroundColor;
+                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                Console.WriteLine("    [ACTIF] {0} est toujours en cours | ecoule {1:hh\\:mm\\:ss}", label, now - startedAt);
+                Console.ForegroundColor = previous;
+            } catch { }
+            lock (sync) { lastActivityAt = now; }
+        }
+
+        public void Dispose() {
+            lock (sync) {
+                if (timer != null) {
+                    timer.Dispose();
+                    timer = null;
+                }
+            }
+        }
+    }
+}
+'@
+}
+
 function Get-WpcProjectRelease {
     param([Parameter(Mandatory)][string]$RepoRoot)
     $versionPath = Join-Path $RepoRoot 'VERSION'
@@ -57,10 +109,81 @@ function Get-WpcColor {
 function Get-WpcLabel {
     param([string]$Status)
     switch ($Status) {
-        'DEJA_OK' { 'DÉJÀ OK' } 'A_FAIRE' { 'À FAIRE' } 'ACTION_REQUISE' { 'ACTION REQUISE' }
+        'DEJA_OK' { 'DEJA OK' } 'A_FAIRE' { 'A FAIRE' } 'ACTION_REQUISE' { 'ACTION REQUISE' }
         'EN_COURS' { 'EN COURS' } 'AVERTISSEMENT' { 'AVERTISSEMENT' } 'ATTENTE' { 'EN ATTENTE' }
         default { $Status.Replace('_', ' ') }
     }
+}
+
+function Get-WpcElapsedText {
+    param([Parameter(Mandatory)][datetime]$StartedAt)
+    $elapsed = (Get-Date) - $StartedAt
+    return ('{0:00}:{1:00}:{2:00}' -f [int]$elapsed.TotalHours, $elapsed.Minutes, $elapsed.Seconds)
+}
+
+function Get-WpcHeartbeatSeconds {
+    $value = [Environment]::GetEnvironmentVariable('WPC_HEARTBEAT_SECONDS')
+    $seconds = 0
+    if ([int]::TryParse($value, [ref]$seconds) -and $seconds -ge 2 -and $seconds -le 300) { return $seconds }
+    return 15
+}
+
+function New-WpcHeartbeat {
+    param([Parameter(Mandatory)][string]$Label)
+    return [Windows11ProCustom.ConsoleHeartbeat]::new($Label, (Get-WpcHeartbeatSeconds))
+}
+
+function Get-WpcPhasePresentation {
+    param([string]$Phase)
+    switch ($Phase) {
+        'Discovery' { return [pscustomobject]@{ Title='Decouverte et preflight'; Detail='Observe la machine, les prerequis et le materiel avant toute decision.' } }
+        'Safety' { return [pscustomobject]@{ Title='Protection avant modification'; Detail='Cree ou verifie les garde-fous avant toute convergence.' } }
+        'Foundation' { return [pscustomobject]@{ Title='Fondations Windows'; Detail='Prepare WSL, Virtual Machine Platform, WinGet et les composants de base.' } }
+        'FoundationValidation' { return [pscustomobject]@{ Title='Revalidation des fondations'; Detail='Confirme que les fondations sont operationnelles avant de continuer.' } }
+        'Apply' { return [pscustomobject]@{ Title='Application de la configuration'; Detail='Applique uniquement les ecarts detectes.' } }
+        'VerifyAfterApply' { return [pscustomobject]@{ Title='Revalidation apres modification'; Detail='Prouve que chaque correction vient bien de converger.' } }
+        'Measurement' { return [pscustomobject]@{ Title='Mesures avant et apres'; Detail='Produit les preuves factuelles de l etat de la workstation.' } }
+        'FinalValidation' { return [pscustomobject]@{ Title='Validation finale'; Detail='Controle Windows, WSL, DevOps et le materiel critique selon la demande.' } }
+        'DevOps' { return [pscustomobject]@{ Title='Configuration DevOps WSL2'; Detail='Installe ou verifie les outils Linux, Docker et les composants DevOps.' } }
+        'Backup' { return [pscustomobject]@{ Title='Sauvegarde'; Detail='Execute l operation de sauvegarde demandee.' } }
+        'Rollback' { return [pscustomobject]@{ Title='Rollback'; Detail='Restaure uniquement les etats precedemment geres par le depot.' } }
+        'Audit' { return [pscustomobject]@{ Title='Audit'; Detail='Observe sans modifier la machine.' } }
+        'Verify' { return [pscustomobject]@{ Title='Verification de conformite'; Detail='Valide strictement les contrats demandes.' } }
+        'ManualEvidence' { return [pscustomobject]@{ Title='Preuves manuelles'; Detail='Enregistre les controles qui ne peuvent pas etre deduits automatiquement.' } }
+        'External' { return [pscustomobject]@{ Title='Commande externe'; Detail='Execute un outil externe tout en conservant un suivi visible.' } }
+        default { return [pscustomobject]@{ Title=$Phase; Detail='Execution de la phase courante.' } }
+    }
+}
+
+function Write-WpcPhaseHeader {
+    param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Phase)
+    if ([string]::IsNullOrWhiteSpace($Phase) -or $Phase -eq 'Probe') { return }
+    if ($Context.CurrentPhase -eq $Phase) { return }
+    $Context.CurrentPhase = $Phase
+    $Context.PhaseNumber = [int]$Context.PhaseNumber + 1
+    $meta = Get-WpcPhasePresentation -Phase $Phase
+    Write-Host ''
+    Write-Host ('=' * 78) -ForegroundColor DarkCyan
+    Write-Host ("  ETAPE {0:00} | {1}" -f $Context.PhaseNumber, $meta.Title) -ForegroundColor Cyan
+    Write-Host ("  Objectif   : {0}" -f $meta.Detail) -ForegroundColor DarkGray
+    Write-Host ("  Temps total: {0}" -f (Get-WpcElapsedText -StartedAt $Context.StartedAt)) -ForegroundColor DarkGray
+    Write-Host ('=' * 78) -ForegroundColor DarkCyan
+    Add-WpcLogLine -Path $Context.OrchestratorLogPath -Level 'PHASE' -Message ("Phase={0} Title={1}" -f $Phase,$meta.Title)
+}
+
+function Write-WpcActionHeader {
+    param(
+        [Parameter(Mandatory)]$Context,
+        [Parameter(Mandatory)][string]$DisplayName,
+        [Parameter(Mandatory)][string]$Identity,
+        [Parameter(Mandatory)][string]$LogPath
+    )
+    $Context.ActionNumber = [int]$Context.ActionNumber + 1
+    Write-Host ''
+    Write-Host ("  SOUS-ETAPE {0:00} | {1}" -f $Context.ActionNumber, $DisplayName) -ForegroundColor White
+    Write-Host ("    Script  : {0}" -f $Identity) -ForegroundColor DarkGray
+    Write-Host ("    Journal : {0}" -f $LogPath) -ForegroundColor DarkGray
+    Write-Host ("    Demarre : {0} | ecoule global {1}" -f (Get-Date -Format 'HH:mm:ss'), (Get-WpcElapsedText -StartedAt $Context.StartedAt)) -ForegroundColor DarkGray
 }
 
 function Write-WpcStatus {
@@ -80,6 +203,9 @@ function Write-WpcBanner {
     Write-Host ("  Run     : {0}" -f $Context.RunId) -ForegroundColor DarkGray
     Write-Host ("  Logs    : {0}" -f $Context.LogRoot) -ForegroundColor DarkGray
     Write-Host ('=' * 78) -ForegroundColor DarkCyan
+    Write-Host '  Suivi interactif actif : phases, sous-etapes, durees et journaux sont affiches.' -ForegroundColor White
+    Write-Host ("  Battement de vie       : apres {0}s sans sortie, [ACTIF] confirme que le traitement continue." -f (Get-WpcHeartbeatSeconds)) -ForegroundColor DarkGray
+    Write-Host '  Legende                 : DEJA OK=rien a faire | A FAIRE=changement | EN COURS=travail | FAIT=termine | AVERTISSEMENT=non bloquant' -ForegroundColor DarkGray
     Add-WpcLogLine -Path $Context.OrchestratorLogPath -Level 'RUN' -Message "$Title | Release=$($Context.Release) | RunId=$($Context.RunId)"
 }
 
@@ -97,6 +223,7 @@ function New-WpcRunContext {
     $context = [pscustomobject]@{
         RepoRoot=[IO.Path]::GetFullPath($RepoRoot); Release=$release; RunId=$runId; Mode=$Mode; LogRoot=$logRoot; RunDir=$runDir
         EventsPath=$eventsPath; OrchestratorLogPath=$orchestratorLog; NonInteractive=[bool]$NonInteractive; StartedAt=(Get-Date)
+        CurrentPhase=''; PhaseNumber=0; ActionNumber=0; ComponentNumber=0
     }
     $env:W11_CUSTOM_RELEASE = $context.Release
     $env:W11_CUSTOM_RUN_ID = $context.RunId
@@ -140,11 +267,11 @@ function Write-WpcChildLine {
     Add-WpcLogLine -Path $LogPath -Level 'OUTPUT' -Message (Protect-WpcCommandText -Text $Line)
     if ($Quiet) { return }
     $color = 'Gray'
-    if ($Line -match '^\s*\[(OK|DÉJÀ OK|DEJA OK|FAIT|READY)\]') { $color='Green' }
-    elseif ($Line -match '^\s*\[(WARN|WARNING|AVERTISSEMENT|À FAIRE|A FAIRE|TODO)\]') { $color='Yellow' }
+    if ($Line -match '^\s*\[(OK|DEJA OK|D\u00c9J\u00c0 OK|FAIT|READY)\]') { $color='Green' }
+    elseif ($Line -match '^\s*\[(WARN|WARNING|AVERTISSEMENT|A FAIRE|\u00c0 FAIRE|TODO)\]') { $color='Yellow' }
     elseif ($Line -match '^\s*\[(KO|ERROR|ERREUR|FAILED)\]') { $color='Red' }
     elseif ($Line -match '^\s*\[(ACTION|ACTION REQUISE|USER ACTION)\]') { $color='Magenta' }
-    elseif ($Line -match '^\s*\[(INFO|ANALYSE|EN COURS)\]') { $color='Cyan' }
+    elseif ($Line -match '^\s*\[(INFO|ANALYSE|EN COURS|ATTENTE|ACTIF)\]') { $color='Cyan' }
     Write-Host ("    {0}" -f $Line) -ForegroundColor $color
 }
 
@@ -167,17 +294,23 @@ function Invoke-WpcManagedScript {
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
     Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Release=$($Context.Release) Phase=$Phase Purpose=$effectivePurpose Script=$relative Args=$argText"
     Add-WpcLogLine -Path $logPath -Level 'HOST' -Message "Computer=$env:COMPUTERNAME User=$env:USERNAME PowerShell=$($PSVersionTable.PSVersion)"
+    if (-not $Quiet -and $Purpose -ne 'Probe') {
+        Write-WpcPhaseHeader -Context $Context -Phase $Phase
+        Write-WpcActionHeader -Context $Context -DisplayName $DisplayName -Identity $relative -LogPath $logPath
+    }
     if (-not $Quiet) { Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $relative -Context $Context }
 
     $success=$false; $errorText=''; $sawAlready=$false; $sawChanged=$false; $sawUserAction=$false
     $oldParent = [Environment]::GetEnvironmentVariable('W11_CUSTOM_PARENT_PURPOSE')
+    $heartbeat = New-WpcHeartbeat -Label $(if ($Purpose -eq 'Probe') { "Analyse: $DisplayName" } else { $DisplayName })
     try {
         if ($Purpose -eq 'Probe') { $env:W11_CUSTOM_PARENT_PURPOSE='Probe' }
         & $Path @Arguments 2>&1 3>&1 4>&1 5>&1 6>&1 | ForEach-Object {
             foreach ($line in @(([string]$_) -split "`r?`n")) {
-                if ($line -match '\[(DÉJÀ OK|DEJA OK)\]') { $sawAlready=$true }
+                if ($line -match '\[(DEJA OK|D\u00c9J\u00c0 OK)\]') { $sawAlready=$true }
                 if ($line -match '\[(FAIT|CHANGED)\]') { $sawChanged=$true }
                 if ($line -match '\[(ACTION REQUISE|USER ACTION)\]') { $sawUserAction=$true }
+                $heartbeat.Touch()
                 Write-WpcChildLine -Line $line -LogPath $logPath -Quiet:$Quiet
             }
         }
@@ -187,6 +320,7 @@ function Invoke-WpcManagedScript {
         Add-WpcLogLine -Path $logPath -Level 'ERROR' -Message (Protect-WpcCommandText -Text $errorText)
         if (-not $Quiet) { Write-WpcStatus -Status $(if ($Purpose -eq 'Probe') { 'A_FAIRE' } else { 'ERREUR' }) -Message $DisplayName -Detail $errorText -Context $Context }
     } finally {
+        if ($null -ne $heartbeat) { $heartbeat.Dispose() }
         if ($null -eq $oldParent) { Remove-Item Env:W11_CUSTOM_PARENT_PURPOSE -ErrorAction SilentlyContinue } else { $env:W11_CUSTOM_PARENT_PURPOSE=$oldParent }
     }
     $duration=[math]::Round(((Get-Date)-$started).TotalSeconds,2)
@@ -194,18 +328,21 @@ function Invoke-WpcManagedScript {
     if ($Purpose -eq 'Probe') { $outcome=if ($success) { 'DEJA_OK' } else { 'A_FAIRE' } }
     Add-WpcLogLine -Path $logPath -Level 'END' -Message "Outcome=$outcome DurationSeconds=$duration"
     Add-WpcEvent -Context $Context -Data @{ Kind='SCRIPT'; Purpose=$effectivePurpose; Phase=$Phase; Script=$relative; DisplayName=$DisplayName; Outcome=$outcome; Success=$success; DurationSeconds=$duration; LogPath=$logPath; Error=(Protect-WpcCommandText -Text $errorText) }
+    if (-not $Quiet -and $success -and $Purpose -ne 'Probe') {
+        Write-WpcStatus -Status 'OK' -Message "$DisplayName termine" -Detail ("Duree: {0:n2}s | journal: {1}" -f $duration,$logPath) -Context $Context
+    }
     $result=[pscustomobject]@{ Success=$success; Outcome=$outcome; Error=$errorText; LogPath=$logPath; DurationSeconds=$duration }
-    if (-not $success -and -not $AllowFailure) { throw "$DisplayName a échoué: $errorText" }
+    if (-not $success -and -not $AllowFailure) { throw "$DisplayName a echoue: $errorText" }
     return $result
 }
 
 function Test-WpcManagedScript {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Path,[hashtable]$Arguments=@{},[string]$DisplayName='')
     if ([string]::IsNullOrWhiteSpace($DisplayName)) { $DisplayName=[IO.Path]::GetFileName($Path) }
-    Write-WpcStatus -Status 'ANALYSE' -Message $DisplayName -Detail 'Lecture de lʼétat réel de la machine avant décision.' -Context $Context
+    Write-WpcStatus -Status 'ANALYSE' -Message $DisplayName -Detail 'Lecture de l etat reel de la machine avant decision.' -Context $Context
     $result=Invoke-WpcManagedScript -Context $Context -Path $Path -Arguments $Arguments -DisplayName $DisplayName -Phase 'Probe' -Purpose 'Probe' -AllowFailure -Quiet
-    if ($result.Success) { Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'La cible est déjà conforme; aucune modification nécessaire.' -Context $Context; return $true }
-    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'La cible nʼest pas conforme; cette étape est planifiée.' -Context $Context
+    if ($result.Success) { Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'La cible est deja conforme; aucune modification necessaire.' -Context $Context; return $true }
+    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'La cible n est pas conforme; cette etape est planifiee.' -Context $Context
     return $false
 }
 
@@ -221,18 +358,24 @@ function Invoke-WpcPlannedComponent {
         [Parameter(Mandatory)][string]$ApplyPath,[hashtable]$ApplyArguments=@{},
         [ValidateSet('Unknown','Compliant','NeedsChange')][string]$KnownState='Unknown'
     )
+    $Context.ComponentNumber = [int]$Context.ComponentNumber + 1
+    Write-Host ''
+    Write-Host ("  COMPOSANT {0:00} | {1}" -f $Context.ComponentNumber,$DisplayName) -ForegroundColor White
     $compliant=$false
     if ($KnownState -eq 'Compliant') { $compliant=$true }
     elseif ($KnownState -eq 'NeedsChange') { $compliant=$false }
     else { $compliant=Test-WpcManagedScript -Context $Context -Path $VerifyPath -Arguments $VerifyArguments -DisplayName $DisplayName }
     if ($compliant) {
+        Write-WpcStatus -Status 'DEJA_OK' -Message $DisplayName -Detail 'Composant deja conforme: aucune modification ni reinstallation.' -Context $Context
         Add-WpcComponentResult -Context $Context -DisplayName $DisplayName -Identity $VerifyPath -Outcome 'DEJA_OK'
         return [pscustomobject]@{ Changed=$false; Success=$true; Outcome='DEJA_OK' }
     }
-    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'Application uniquement de ce qui manque, puis revalidation factuelle.' -Context $Context
+    Write-WpcStatus -Status 'A_FAIRE' -Message $DisplayName -Detail 'Correction requise: application puis revalidation automatique.' -Context $Context
+    Write-WpcStatus -Status 'EN_COURS' -Message "$DisplayName - application 1/2" -Detail 'Le script applique uniquement ce qui manque.' -Context $Context
     [void](Invoke-WpcManagedScript -Context $Context -Path $ApplyPath -Arguments $ApplyArguments -DisplayName $DisplayName -Phase 'Apply' -Purpose 'Apply')
+    Write-WpcStatus -Status 'EN_COURS' -Message "$DisplayName - revalidation 2/2" -Detail 'Le script prouve immediatement le resultat apres modification.' -Context $Context
     [void](Invoke-WpcManagedScript -Context $Context -Path $VerifyPath -Arguments $VerifyArguments -DisplayName $DisplayName -Phase 'VerifyAfterApply' -Purpose 'VerifyAfterApply')
-    Write-WpcStatus -Status 'FAIT' -Message $DisplayName -Detail 'Écart corrigé et état final vérifié.' -Context $Context
+    Write-WpcStatus -Status 'FAIT' -Message $DisplayName -Detail 'Ecart corrige et etat final verifie.' -Context $Context
     Add-WpcComponentResult -Context $Context -DisplayName $DisplayName -Identity $VerifyPath -Outcome 'FAIT'
     return [pscustomobject]@{ Changed=$true; Success=$true; Outcome='FAIT' }
 }
@@ -259,23 +402,40 @@ function Invoke-WpcExternalCommand {
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ''
     Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ('=' * 96)
     Add-WpcLogLine -Path $logPath -Level 'START' -Message "Run=$($Context.RunId) Release=$($Context.Release) Command=$FilePath $safeArgs"
-    if (-not $Quiet) { Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $LogIdentity -Context $Context }
+    if (-not $Quiet) {
+        $phaseName = if ($LogIdentity -like 'scripts/wsl/*') { 'DevOps' } else { 'External' }
+        Write-WpcPhaseHeader -Context $Context -Phase $phaseName
+        Write-WpcActionHeader -Context $Context -DisplayName $DisplayName -Identity $LogIdentity -LogPath $logPath
+        Write-WpcStatus -Status 'EN_COURS' -Message $DisplayName -Detail $LogIdentity -Context $Context
+    }
     $started=Get-Date
-    & $FilePath @ArgumentList 2>&1 | ForEach-Object { foreach ($line in @(([string]$_) -split "`r?`n")) { Write-WpcChildLine -Line $line -LogPath $logPath -Quiet:$Quiet } }
-    $exitCode=$LASTEXITCODE; $global:LASTEXITCODE=0
+    $heartbeat=New-WpcHeartbeat -Label $DisplayName
+    try {
+        & $FilePath @ArgumentList 2>&1 | ForEach-Object {
+            foreach ($line in @(([string]$_) -split "`r?`n")) {
+                $heartbeat.Touch()
+                Write-WpcChildLine -Line $line -LogPath $logPath -Quiet:$Quiet
+            }
+        }
+        $exitCode=$LASTEXITCODE
+        $global:LASTEXITCODE=0
+    } finally {
+        if ($null -ne $heartbeat) { $heartbeat.Dispose() }
+    }
     $duration=[math]::Round(((Get-Date)-$started).TotalSeconds,2)
     $parentPurpose=[Environment]::GetEnvironmentVariable('W11_CUSTOM_PARENT_PURPOSE')
     $purpose=if ($parentPurpose -match '^Probe') { 'ProbeNested' } else { 'External' }
     if ($exitCode -ne 0) {
         Add-WpcLogLine -Path $logPath -Level 'ERROR' -Message "ExitCode=$exitCode"
         Add-WpcEvent -Context $Context -Data @{ Kind='SCRIPT'; Purpose=$purpose; Phase='Run'; Script=$LogIdentity; DisplayName=$DisplayName; Outcome='FAILED'; Success=$false; DurationSeconds=$duration; LogPath=$logPath; Error="ExitCode=$exitCode" }
-        $errorText="$DisplayName a échoué avec le code $exitCode. Voir $logPath"
+        $errorText="$DisplayName a echoue avec le code $exitCode. Voir $logPath"
         $result=[pscustomobject]@{ Success=$false; Outcome='FAILED'; Error=$errorText; ExitCode=$exitCode; LogPath=$logPath; DurationSeconds=$duration }
         if (-not $AllowFailure) { throw $errorText }
         return $result
     }
     Add-WpcLogLine -Path $logPath -Level 'END' -Message "Outcome=OK DurationSeconds=$duration"
     Add-WpcEvent -Context $Context -Data @{ Kind='SCRIPT'; Purpose=$purpose; Phase='Run'; Script=$LogIdentity; DisplayName=$DisplayName; Outcome='OK'; Success=$true; DurationSeconds=$duration; LogPath=$logPath; Error='' }
+    if (-not $Quiet) { Write-WpcStatus -Status 'OK' -Message "$DisplayName termine" -Detail ("Duree: {0:n2}s | journal: {1}" -f $duration,$logPath) -Context $Context }
     return [pscustomobject]@{ Success=$true; Outcome='OK'; Error=''; ExitCode=0; LogPath=$logPath; DurationSeconds=$duration }
 }
 
@@ -283,7 +443,7 @@ function Read-WpcRequiredValue {
     param([Parameter(Mandatory)]$Context,[Parameter(Mandatory)][string]$Name,[string]$CurrentValue='',[Parameter(Mandatory)][string]$Prompt,[Parameter(Mandatory)][string]$Example,[string]$Pattern='.+')
     if (-not [string]::IsNullOrWhiteSpace($CurrentValue) -and $CurrentValue -match $Pattern) { return $CurrentValue }
     Write-WpcStatus -Status 'ACTION_REQUISE' -Message "Valeur requise: $Name" -Detail "$Prompt Exemple: $Example" -Context $Context
-    if ($Context.NonInteractive) { throw "Paramètre $Name requis. Exemple: $Example" }
+    if ($Context.NonInteractive) { throw "Parametre $Name requis. Exemple: $Example" }
     while ($true) {
         $value=Read-Host $Prompt
         if (-not [string]::IsNullOrWhiteSpace($value) -and $value -match $Pattern) { return $value }
@@ -294,14 +454,14 @@ function Read-WpcRequiredValue {
 function Confirm-WpcChanges {
     param([Parameter(Mandatory)]$Context,[switch]$Yes)
     if ($Yes) { return }
-    if ($Context.NonInteractive) { throw 'Mode Apply non interactif: ajoute -Yes pour autoriser les modifications après le plan factuel.' }
+    if ($Context.NonInteractive) { throw 'Mode Apply non interactif: ajoute -Yes pour autoriser les modifications apres le plan factuel.' }
     Write-Host ''
-    Write-Host 'Les étapes marquées À FAIRE vont maintenant être appliquées.' -ForegroundColor Yellow
+    Write-Host 'Les etapes marquees A FAIRE vont maintenant etre appliquees.' -ForegroundColor Yellow
     while ($true) {
         $answer=(Read-Host 'Continuer ? [O/N]').Trim().ToLowerInvariant()
         if ($answer -in @('o','oui','y','yes')) { return }
-        if ($answer -in @('n','non','no')) { throw 'Exécution annulée avant toute modification planifiée.' }
-        Write-Host 'Répondre O (oui) ou N (non).' -ForegroundColor Yellow
+        if ($answer -in @('n','non','no')) { throw 'Execution annulee avant toute modification planifiee.' }
+        Write-Host 'Repondre O (oui) ou N (non).' -ForegroundColor Yellow
     }
 }
 
@@ -318,9 +478,11 @@ function Complete-WpcRun {
     $scriptEvents=@($events | Where-Object { $_.Kind -eq 'SCRIPT' -and $_.Purpose -notmatch '^Probe' })
     $latestScriptEvents=@()
     foreach ($group in ($scriptEvents | Group-Object Script)) { $latestScriptEvents += @($group.Group | Sort-Object Timestamp | Select-Object -Last 1) }
+    $totalDuration=[math]::Round(((Get-Date)-$Context.StartedAt).TotalSeconds,2)
     $summary=[ordered]@{
         Release=$Context.Release; SchemaVersion=1; RunId=$Context.RunId; Mode=$Context.Mode; StartedAt=$Context.StartedAt.ToString('o'); CompletedAt=(Get-Date).ToString('o')
         Success=$Success; FailureMessage=(Protect-WpcCommandText -Text $FailureMessage); Components=$finalEvents; ScriptExecutions=$scriptEvents; LatestScriptState=$latestScriptEvents
+        TotalDurationSeconds=$totalDuration; VisiblePhases=[int]$Context.PhaseNumber; VisibleActions=[int]$Context.ActionNumber
         Counts=[ordered]@{
             AlreadyOk=@($finalEvents | Where-Object Outcome -EQ 'DEJA_OK').Count
             Changed=@($finalEvents | Where-Object Outcome -EQ 'FAIT').Count
@@ -335,16 +497,19 @@ function Complete-WpcRun {
     $summary | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $latestDir 'latest-run.json') -Encoding UTF8
     Write-Host ''
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
-    Write-Host "  SYNTHÈSE D’EXÉCUTION — RELEASE $($Context.Release)" -ForegroundColor Cyan
+    Write-Host "  SYNTHESE D EXECUTION - RELEASE $($Context.Release)" -ForegroundColor Cyan
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
-    Write-Host ("  Déjà conformes : {0}" -f $summary.Counts.AlreadyOk) -ForegroundColor Green
-    Write-Host ("  Modifiés/validés : {0}" -f $summary.Counts.Changed) -ForegroundColor Green
-    Write-Host ("  Scripts exécutés : {0}" -f $summary.Counts.ExecutedScripts)
-    Write-Host ("  Échecs actuels    : {0}" -f $summary.Counts.FailedScripts) -ForegroundColor $(if ($summary.Counts.FailedScripts -gt 0) { 'Red' } else { 'Green' })
-    Write-Host ("  Résumé            : {0}" -f $summaryPath) -ForegroundColor DarkGray
-    if ($Success) { Write-Host '  VERDICT: exécution terminée sans erreur.' -ForegroundColor Green }
-    else { Write-Host ("  VERDICT: exécution interrompue - {0}" -f $FailureMessage) -ForegroundColor Red }
+    Write-Host ("  Duree totale       : {0}" -f (Get-WpcElapsedText -StartedAt $Context.StartedAt)) -ForegroundColor White
+    Write-Host ("  Phases visibles    : {0}" -f $summary.VisiblePhases)
+    Write-Host ("  Sous-etapes        : {0}" -f $summary.VisibleActions)
+    Write-Host ("  Deja conformes     : {0}" -f $summary.Counts.AlreadyOk) -ForegroundColor Green
+    Write-Host ("  Modifies/valides   : {0}" -f $summary.Counts.Changed) -ForegroundColor Green
+    Write-Host ("  Scripts executes   : {0}" -f $summary.Counts.ExecutedScripts)
+    Write-Host ("  Echecs actuels     : {0}" -f $summary.Counts.FailedScripts) -ForegroundColor $(if ($summary.Counts.FailedScripts -gt 0) { 'Red' } else { 'Green' })
+    Write-Host ("  Resume             : {0}" -f $summaryPath) -ForegroundColor DarkGray
+    if ($Success) { Write-Host '  VERDICT: execution terminee sans erreur.' -ForegroundColor Green }
+    else { Write-Host ("  VERDICT: execution interrompue - {0}" -f $FailureMessage) -ForegroundColor Red }
     Write-Host ('-' * 78) -ForegroundColor DarkCyan
 }
 
-Export-ModuleMember -Function Get-WpcProjectRelease, New-WpcRunContext, Get-WpcRunContextFromEnvironment, Write-WpcStatus, Write-WpcBanner, Invoke-WpcManagedScript, Test-WpcManagedScript, Invoke-WpcPlannedComponent, Invoke-WpcIdempotentScript, Invoke-WpcExternalCommand, Read-WpcRequiredValue, Confirm-WpcChanges, Complete-WpcRun, Get-WpcLogPath, Add-WpcComponentResult
+Export-ModuleMember -Function Get-WpcProjectRelease, New-WpcRunContext, Get-WpcRunContextFromEnvironment, Write-WpcStatus, Write-WpcBanner, Invoke-WpcManagedScript, Test-WpcManagedScript, Invoke-WpcPlannedComponent, Invoke-WpcIdempotentScript, Invoke-WpcExternalCommand, Read-WpcRequiredValue, Confirm-WpcChanges, Complete-WpcRun, Get-WpcLogPath, Add-WpcComponentResult, Write-WpcPhaseHeader, Write-WpcActionHeader
