@@ -5,22 +5,22 @@ on:
     branches: ['**']
     paths:
       - 'config/wsl/runtime-contract.json'
-      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/bootstrap/14_validate_wsl.ps1'
       - 'scripts/wsl/**'
       - 'manifests/winget/apps-core.json'
       - 'README.md'
       - 'docs/**'
-      - '.github/workflows/devops-terminal-v10.yml'
+      - '.github/workflows/devops-terminal.yml'
       - '.github/workflows/contract-consistency.yml'
   pull_request:
     paths:
       - 'config/wsl/runtime-contract.json'
-      - 'scripts/bootstrap/14_validate_wsl_v6.ps1'
+      - 'scripts/bootstrap/14_validate_wsl.ps1'
       - 'scripts/wsl/**'
       - 'manifests/winget/apps-core.json'
       - 'README.md'
       - 'docs/**'
-      - '.github/workflows/devops-terminal-v10.yml'
+      - '.github/workflows/devops-terminal.yml'
       - '.github/workflows/contract-consistency.yml'
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
 
           install='scripts/wsl/install-devops.sh'
           validate='scripts/wsl/validate-devops.sh'
-          powershell='scripts/bootstrap/14_validate_wsl_v6.ps1'
+          powershell='scripts/bootstrap/14_validate_wsl.ps1'
 
           grep -Fq '.workingRoots' "$install"
           grep -Fq '.utilityRoots' "$install"
@@ -139,7 +139,7 @@ jobs:
           $tokens = $null
           $errors = $null
           [void][System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path '.\scripts\bootstrap\14_validate_wsl_v6.ps1'),
+            (Resolve-Path '.\scripts\bootstrap\14_validate_wsl.ps1'),
             [ref]$tokens,
             [ref]$errors
           )
