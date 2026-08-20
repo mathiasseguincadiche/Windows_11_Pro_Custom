@@ -50,7 +50,7 @@ $amdInstalledVersion = ConvertTo-VersionSafe -Value $amdInstalledVersionText
 $amdMinimumVersion = ConvertTo-VersionSafe -Value ([string]$policy.drivers.amdChipset.minimumApprovedVersion)
 $amdBaseline = $null
 if ($null -ne $amdInstalledVersion -and $null -ne $amdMinimumVersion) { $amdBaseline = ($amdInstalledVersion -ge $amdMinimumVersion) }
-else { $warnings.Add('La version du package AMD Chipset Software ne peut pas être lue de façon fiable; la revue finale des pilotes constructeur reste manuelle.') }
+else { $warnings.Add('La version du package AMD Chipset Software ne peut pas être lue de façon fiable; information pilote uniquement, installation non bloquée.') }
 
 $videoControllers = @(Get-CimInstance Win32_VideoController)
 $arc = @($videoControllers | Where-Object { [string]$_.Name -match [string]$policy.drivers.intelArc.deviceNameRegex })
@@ -79,12 +79,16 @@ foreach ($disk in $t705) {
 }
 
 $networkDrivers = @(Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceClass -eq 'NET' })
-$lanDrivers = @($networkDrivers | Where-Object { ([string]$_.DeviceName + ' ' + [string]$_.Manufacturer) -match [string]$policy.network.lanDeviceRegex })
-$wifiDrivers = @($networkDrivers | Where-Object { ([string]$_.DeviceName + ' ' + [string]$_.Manufacturer) -match [string]$policy.network.wifiDeviceRegex })
 $physicalAdapters = @()
 try { $physicalAdapters = @(Get-NetAdapter -Physical -ErrorAction Stop | Select-Object Name, InterfaceDescription, Status, LinkSpeed, MacAddress, DriverInformation) }
 catch { $warnings.Add('État runtime des interfaces réseau physiques indisponible.') }
-$lanAdapters = @($physicalAdapters | Where-Object { ([string]$_.Name + ' ' + [string]$_.InterfaceDescription) -match [string]$policy.network.lanDeviceRegex })
+
+$lanDrivers = @($networkDrivers | Where-Object { ([string]$_.DeviceName + ' ' + [string]$_.Manufacturer + ' ' + [string]$_.DeviceID) -match [string]$policy.network.lanDeviceRegex })
+$wifiDrivers = @($networkDrivers | Where-Object { ([string]$_.DeviceName + ' ' + [string]$_.Manufacturer + ' ' + [string]$_.DeviceID) -match [string]$policy.network.wifiDeviceRegex })
+$lanAdapters = @($physicalAdapters | Where-Object { ([string]$_.Name + ' ' + [string]$_.InterfaceDescription + ' ' + [string]$_.DriverInformation) -match [string]$policy.network.lanDeviceRegex })
+$wifiAdapters = @($physicalAdapters | Where-Object { ([string]$_.Name + ' ' + [string]$_.InterfaceDescription + ' ' + [string]$_.DriverInformation) -match [string]$policy.network.wifiDeviceRegex })
+$lanPresent = (-not [bool]$policy.network.requireLanDevice -or $lanDrivers.Count -gt 0 -or $lanAdapters.Count -gt 0)
+$wifiPresent = (-not [bool]$policy.network.requireWifiDevice -or $wifiDrivers.Count -gt 0 -or $wifiAdapters.Count -gt 0)
 $lanRss = @()
 if ($lanAdapters.Count -gt 0) {
     try { foreach ($adapter in $lanAdapters) { $lanRss += @(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop | Select-Object Name, Enabled, NumberOfReceiveQueues, Profile) } }
@@ -99,16 +103,21 @@ $hvciEnabled = Get-HvciState
 if ($vbsRunning -eq $false) { $warnings.Add("VBS n'est pas signalé actif. Vérifier Windows Security et la compatibilité pilotes avant toute activation.") }
 if ($hvciEnabled -eq $false) { $warnings.Add("Memory Integrity/HVCI n'est pas signalé actif. Ne pas forcer son activation avant revue des pilotes incompatibles.") }
 
+# Seuls les éléments pouvant compromettre la sûreté ou l'identité matérielle bloquent Verify.
 $hardChecks = [ordered]@{
     ArcB580Detected = ($arc.Count -gt 0)
-    ArcDriverAtLeastApproved = $arcDriverBaseline
     T705Count = ($t705.Count -ge [int]$policy.storage.minimumCount)
     T705Healthy = ($t705.Count -ge [int]$policy.storage.minimumCount -and @($t705 | Where-Object { [string]$_.HealthStatus -ne 'Healthy' }).Count -eq 0)
     T705Nvme = ($t705.Count -ge [int]$policy.storage.minimumCount -and @($t705 | Where-Object { [string]$_.BusType -ne 'NVMe' }).Count -eq 0)
     T705TemperatureBelowCritical = (-not $criticalTemperatureDetected)
-    Realtek8126Present = (-not [bool]$policy.network.requireLanDevice -or $lanDrivers.Count -gt 0)
-    WifiAdapterPresent = (-not [bool]$policy.network.requireWifiDevice -or $wifiDrivers.Count -gt 0)
-    AmdChipsetNotBelowApprovedBaseline = ($null -eq $amdBaseline -or [bool]$amdBaseline)
+}
+
+# Les pilotes et leurs baselines sont observés et signalés, jamais utilisés pour empêcher l'installation.
+$driverChecks = [ordered]@{
+    ArcDriverAtLeastApproved = $arcDriverBaseline
+    Realtek8126Present = $lanPresent
+    WifiAdapterPresent = $wifiPresent
+    AmdChipsetAtLeastApprovedBaseline = $amdBaseline
 }
 
 $arcDetectedText = if ($arc.Count -gt 0) { @($arc | ForEach-Object { [string]$_.Name }) -join ', ' } else { 'aucune Arc B580 détectée' }
@@ -121,19 +130,28 @@ $temperatureEvidence = @(
         if ($null -ne $_.Reliability -and $null -ne $_.Reliability.Temperature) { "$($_.FriendlyName)=$([int]$_.Reliability.Temperature)C" }
     }
 )
+$networkObserved = @($physicalAdapters | ForEach-Object { "$($_.Name) [$($_.InterfaceDescription)] status=$($_.Status) link=$($_.LinkSpeed)" })
+$networkObservedText = if ($networkObserved.Count -gt 0) { $networkObserved -join ' | ' } else { 'aucun adaptateur physique lisible' }
 
 function Get-HardCheckDetail {
     param([Parameter(Mandatory)][string]$Name)
     switch ($Name) {
         'ArcB580Detected' { return "détecté=$arcDetectedText ; attenduRegex=$([string]$policy.drivers.intelArc.deviceNameRegex)" }
-        'ArcDriverAtLeastApproved' { return "versionDétectée=$arcVersionText ; minimum=$([string]$policy.drivers.intelArc.minimumApprovedVersion)" }
         'T705Count' { return "détectés=$($t705.Count) ; minimum=$([int]$policy.storage.minimumCount)" }
         'T705Healthy' { return $(if ($unhealthyT705.Count -eq 0) { 'tous les T705 détectés sont Healthy' } else { $unhealthyT705 -join ', ' }) }
         'T705Nvme' { return $(if ($nonNvmeT705.Count -eq 0) { 'tous les T705 détectés sont NVMe' } else { $nonNvmeT705 -join ', ' }) }
         'T705TemperatureBelowCritical' { return "températures=$(if ($temperatureEvidence.Count -gt 0) { $temperatureEvidence -join ', ' } else { 'télémétrie indisponible' }) ; critique>$([int]$policy.storage.temperatureCriticalC)C" }
-        'Realtek8126Present' { return "correspondances=$($lanDrivers.Count) ; attenduRegex=$([string]$policy.network.lanDeviceRegex)" }
-        'WifiAdapterPresent' { return "correspondances=$($wifiDrivers.Count) ; attenduRegex=$([string]$policy.network.wifiDeviceRegex)" }
-        'AmdChipsetNotBelowApprovedBaseline' { return "versionDétectée=$amdVersionText ; minimum=$([string]$policy.drivers.amdChipset.minimumApprovedVersion)" }
+        default { return 'aucun détail spécifique disponible' }
+    }
+}
+
+function Get-DriverCheckDetail {
+    param([Parameter(Mandatory)][string]$Name)
+    switch ($Name) {
+        'ArcDriverAtLeastApproved' { return "version détectée=$arcVersionText ; baseline=$([string]$policy.drivers.intelArc.minimumApprovedVersion)" }
+        'Realtek8126Present' { return "correspondances driver=$($lanDrivers.Count), adaptateur=$($lanAdapters.Count) ; attendu=$([string]$policy.network.lanDeviceRegex) ; observés=$networkObservedText" }
+        'WifiAdapterPresent' { return "correspondances driver=$($wifiDrivers.Count), adaptateur=$($wifiAdapters.Count) ; attendu=$([string]$policy.network.wifiDeviceRegex) ; observés=$networkObservedText" }
+        'AmdChipsetAtLeastApprovedBaseline' { return "version détectée=$amdVersionText ; baseline=$([string]$policy.drivers.amdChipset.minimumApprovedVersion)" }
         default { return 'aucun détail spécifique disponible' }
     }
 }
@@ -141,7 +159,12 @@ function Get-HardCheckDetail {
 $hardCheckFailures = @(
     $hardChecks.GetEnumerator() |
         Where-Object { -not [bool]$_.Value } |
-        ForEach-Object { [pscustomobject]@{ Name=[string]$_.Key; Detail=(Get-HardCheckDetail -Name ([string]$_.Key)) } }
+        ForEach-Object { [pscustomobject]@{ Name=[string]$_.Key; Detail=(Get-HardCheckDetail -Name ([string]$_.Key)); Blocking=$true } }
+)
+$driverFindings = @(
+    $driverChecks.GetEnumerator() |
+        Where-Object { $null -eq $_.Value -or -not [bool]$_.Value } |
+        ForEach-Object { [pscustomobject]@{ Name=[string]$_.Key; Detail=(Get-DriverCheckDetail -Name ([string]$_.Key)); Blocking=$false; Category='DriverAdvisory' } }
 )
 
 $advisory = [ordered]@{
@@ -161,34 +184,47 @@ $advisory = [ordered]@{
 
 $report = [ordered]@{
     Release=$release
-    SchemaVersion=1
+    SchemaVersion=2
     Timestamp=(Get-Date).ToString('o')
     Mode=$Mode
     PolicyReviewedAt=[string]$policy.reviewedAt
     HardChecks=$hardChecks
     HardCheckFailures=$hardCheckFailures
+    DriverChecks=$driverChecks
+    DriverFindings=$driverFindings
     Advisory=$advisory
     BIOS=$bios
     Arc=$arc | Select-Object Name, DriverVersion, DriverDate, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate
     Storage=$storageTelemetry
-    LanDrivers=$lanDrivers | Select-Object DeviceName, Manufacturer, DriverProviderName, DriverVersion, DriverDate, InfName
-    WifiDrivers=$wifiDrivers | Select-Object DeviceName, Manufacturer, DriverProviderName, DriverVersion, DriverDate, InfName
+    LanDrivers=$lanDrivers | Select-Object DeviceName, Manufacturer, DeviceID, DriverProviderName, DriverVersion, DriverDate, InfName
+    WifiDrivers=$wifiDrivers | Select-Object DeviceName, Manufacturer, DeviceID, DriverProviderName, DriverVersion, DriverDate, InfName
     PhysicalNetworkAdapters=$physicalAdapters
     LanRss=$lanRss
     Warnings=$warnings.ToArray()
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $reportPath
+
 foreach ($check in $hardChecks.GetEnumerator()) {
     $state = if ([bool]$check.Value) { 'OK' } else { 'KO' }
-    $detail = Get-HardCheckDetail -Name ([string]$check.Key)
-    Write-Host ("[{0}] {1} | {2}" -f $state, $check.Key, $detail)
+    Write-Host ("[{0}] {1} | {2}" -f $state, $check.Key, (Get-HardCheckDetail -Name ([string]$check.Key))) -ForegroundColor $(if ([bool]$check.Value) { 'Green' } else { 'Red' })
+}
+foreach ($check in $driverChecks.GetEnumerator()) {
+    $passed = ($null -ne $check.Value -and [bool]$check.Value)
+    $label = if ($passed) { 'PILOTE OK' } else { 'PILOTE À VÉRIFIER' }
+    $color = if ($passed) { 'Green' } else { 'Yellow' }
+    Write-Host ("[{0}] {1} | {2} | non bloquant" -f $label, $check.Key, (Get-DriverCheckDetail -Name ([string]$check.Key))) -ForegroundColor $color
 }
 foreach ($message in $warnings) { Write-Warning $message }
-Write-Host "[INFO] Rapport de qualification matérielle: $reportPath"
+Write-Host "[INFO] Rapport détaillé: $reportPath" -ForegroundColor DarkGray
+
 if ($Mode -eq 'Verify') {
     if ($hardCheckFailures.Count -gt 0) {
         $failureText = @($hardCheckFailures | ForEach-Object { "$($_.Name) ($($_.Detail))" }) -join ' | '
-        throw "Qualification de symbiose matérielle échouée: $($hardCheckFailures.Count) contrôle(s) bloquant(s): $failureText. Voir $reportPath"
+        throw "Qualification matérielle critique échouée: $($hardCheckFailures.Count) contrôle(s) bloquant(s): $failureText. Voir $reportPath"
     }
-    Write-Host 'VERDICT: HARDWARE SYMBIOSIS READY' -ForegroundColor Green
+    if ($driverFindings.Count -gt 0) {
+        Write-Host "VERDICT: HARDWARE SYMBIOSIS READY — $($driverFindings.Count) information(s) pilote à vérifier, non bloquante(s)." -ForegroundColor Yellow
+    } else {
+        Write-Host 'VERDICT: HARDWARE SYMBIOSIS READY' -ForegroundColor Green
+    }
 }
