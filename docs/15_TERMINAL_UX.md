@@ -7,7 +7,7 @@ L'option **1. Installation complete** doit rester comprehensible pendant toute s
 Le suivi interactif appartient au runtime moderne du projet :
 
 ```text
-PowerShell 7.6.5 minimum
+PowerShell 7.6.4 minimum
 PSEdition Core
 processus x64
 pwsh.exe
@@ -102,7 +102,7 @@ Le `summary.json` conserve egalement l'edition, la version, la version minimale,
 ```text
 ==============================================================================
   Windows 11 Pro Custom - Orchestrateur
-  PowerShell: 7.6.5 | Core | x64 | pwsh.exe | minimum 7.6.5
+  PowerShell: 7.6.4 | Core | x64 | pwsh.exe | minimum 7.6.4
 ==============================================================================
 
 ==============================================================================

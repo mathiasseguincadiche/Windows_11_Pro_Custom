@@ -32,7 +32,7 @@ Windows 11 Pro
 ├── Hôte Windows
 │   ├── sécurité / Windows Update / Defender
 │   ├── pilotes et qualification matérielle
-│   ├── PowerShell 7.6.5+ / WinGet
+│   ├── PowerShell 7.6.4+ / WinGet
 │   ├── VS Code
 │   └── Windows Terminal
 │       ├── PowerShell 7 - DevOps
@@ -104,7 +104,7 @@ C'est le cœur de l'idempotence du projet.
 Le runtime Windows du dépôt est volontairement unique :
 
 ```text
-Version minimale : PowerShell 7.6.5
+Version minimale : PowerShell 7.6.4
 Edition          : Core
 Architecture     : x64
 Exécutable       : pwsh.exe
@@ -170,7 +170,7 @@ Portail complet : [`docs/README.md`](docs/README.md).
 
 ## Quick start — parcours canonique
 
-> **Prérequis runtime :** ouvrez le dépôt avec **PowerShell 7.6.5 ou ultérieur (`pwsh.exe`, Core, x64)**.
+> **Prérequis runtime :** ouvrez le dépôt avec **PowerShell 7.6.4 ou ultérieur (`pwsh.exe`, Core, x64)**.
 >
 > **Important :** le premier enrôlement de l'identité physique des SSD demande un contrôle humain. Ne remplacez jamais une baseline uniquement pour faire disparaître une alerte.
 
@@ -244,7 +244,7 @@ Le parcours détaillé, avec critères de succès et conditions d'arrêt, est [`
 Le résultat final doit combiner :
 
 ```text
-PowerShell 7.6.5+ conforme
+PowerShell 7.6.4+ conforme
 + Windows qualifié
 + matériel qualifié
 + identité du stockage vérifiée
@@ -263,7 +263,7 @@ Checklist officielle : [`docs/24_CRITERES_ACCEPTATION.md`](docs/24_CRITERES_ACCE
 
 Le projet privilégie la convergence contrôlée :
 
-- PowerShell 7.6.5+ est le seul moteur PowerShell autorisé par le dépôt ;
+- PowerShell 7.6.4+ est le seul moteur PowerShell autorisé par le dépôt ;
 - Defender, firewall et Windows Update restent des composants normaux de la workstation ;
 - les versions sensibles viennent des contrats du dépôt, pas d'un `latest` arbitraire ;
 - les preuves non observables automatiquement restent explicitement humaines ;

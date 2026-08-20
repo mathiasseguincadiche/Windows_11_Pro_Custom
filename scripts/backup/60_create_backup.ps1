@@ -16,7 +16,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $PowerShellRuntimeModule = Join-Path $RepoRoot 'scripts\core\powershell-runtime.psm1'
 if (-not (Test-Path -LiteralPath $PowerShellRuntimeModule)) { throw "Contrat PowerShell introuvable: $PowerShellRuntimeModule" }
 Import-Module $PowerShellRuntimeModule -Force
-[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru)
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 $Release = (Get-Content -Raw (Join-Path $RepoRoot 'VERSION')).Trim()
 if ($Release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION invalide: $Release" }
 $PolicyPath = Join-Path $RepoRoot 'config\backup\policy.json'
@@ -195,7 +195,7 @@ $Manifest=[ordered]@{
     capacityPreflight=$CapacityPreflight; protectedVolumes=@($Policy.systemVolumes); windowsImageBackupRoot=$WindowsImageRoot
     wbadminBackupExitCode=$WbadminExitCode; wbadminVersionsExitCode=$VersionsExitCode; wbadminVersionIdentifier=$CreatedWbadminVersionIdentifier
     winReEnabled=[bool]$WinReEnabled; restorePointAttempted=[bool]$RestorePointAttempted; restorePointExitCode=$RestorePointExitCode
-    powerShell=[ordered]@{ edition=[string]$PSVersionTable.PSEdition; version=[string]$PSVersionTable.PSVersion; executable='pwsh.exe'; minimumVersion='7.6.5' }
+    powerShell=[ordered]@{ edition=[string]$PSVersionTable.PSEdition; version=[string]$PSVersionTable.PSVersion; executable='pwsh.exe'; minimumVersion='7.6.4' }
     wsl=[ordered]@{ distribution=$Distribution; exportPath=$WslBackupPath; relativePath="WSL\$($WslFile.Name)"; bytes=$WslFile.Length; sha256=$WslHash.Hash; format='vhdx' }
     storageIdentity=[ordered]@{ schemaVersion=$storageSchema; legacyContractVersion=$legacyContract; sourcePath=$StorageIdentity.Path; relativePath='metadata\storage-identity.json'; sha256=$StorageIdentityHash.Hash; legacySource=[bool]$StorageIdentity.Legacy }
     safety=[ordered]@{ destructiveRestoreAutomation=$false; unregisterExistingDistribution=$false; automaticDiskRecreation=$false }

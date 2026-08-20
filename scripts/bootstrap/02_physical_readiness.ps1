@@ -24,7 +24,7 @@ $hardwareSymbiosisScript = Join-Path $repoRoot 'scripts\windows\52_hardware_symb
 $hardwareSymbiosisReport = Join-Path $repoRoot 'reports\hardware\hardware-symbiosis.json'
 foreach ($path in @($hardwareTargetPath,$wslContractPath,$appsManifestPath,$windowsNativeModule,$nativeProcessModule,$rebootStateModule,$powerShellRuntimeModule,$hardwareSymbiosisScript)) { if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" } }
 Import-Module $powerShellRuntimeModule -Force
-$powerShellRuntimeFact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru
+$powerShellRuntimeFact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru
 Import-Module $windowsNativeModule
 Import-Module $nativeProcessModule
 Import-Module $rebootStateModule -Force
@@ -63,7 +63,7 @@ function Test-TcpEndpoint {
 $os=Get-CimInstance Win32_OperatingSystem; $computer=Get-CimInstance Win32_ComputerSystem; $cpu=Get-CimInstance Win32_Processor | Select-Object -First 1
 $memory=@(Get-CimInstance Win32_PhysicalMemory); $board=Get-CimInstance Win32_BaseBoard | Select-Object -First 1; $video=@(Get-CimInstance Win32_VideoController)
 $psVersion=[version]$powerShellRuntimeFact.Version
-Add-ReadinessCheck -Name 'PowerShell 7.6.5+ Core x64' -Passed $true -Detail "Edition=$($powerShellRuntimeFact.Edition) Version=$psVersion Executable=$($powerShellRuntimeFact.ExecutableName) Process64=$($powerShellRuntimeFact.Is64BitProcess) ; minimum=7.6.5. Windows PowerShell 5.1 non supporté."
+Add-ReadinessCheck -Name 'PowerShell 7.6.4+ Core x64' -Passed $true -Detail "Edition=$($powerShellRuntimeFact.Edition) Version=$psVersion Executable=$($powerShellRuntimeFact.ExecutableName) Process64=$($powerShellRuntimeFact.Is64BitProcess) ; minimum=7.6.4. Windows PowerShell 5.1 non supporté."
 Add-ReadinessCheck -Name 'Session administrateur' -Passed (Test-Administrator) -Detail "Utilisateur=$env:USERNAME"
 Add-ReadinessCheck -Name 'Processus et OS 64 bits' -Passed ([Environment]::Is64BitOperatingSystem -and [Environment]::Is64BitProcess) -Detail "OS64=$([Environment]::Is64BitOperatingSystem) Process64=$([Environment]::Is64BitProcess)"
 
@@ -146,7 +146,7 @@ try {
     $systemRestoreClass=Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop
     $methodNames=@($systemRestoreClass.CimClassMethods.Keys)
     $restorePointProviderReady=($methodNames -contains 'CreateRestorePoint' -and $methodNames -contains 'Enable')
-    $restorePointDetail="SystemRestore CIM/WMI présent; CreateRestorePoint=$($methodNames -contains 'CreateRestorePoint'); Enable=$($methodNames -contains 'Enable'); aucun powershell.exe requis."
+    $restorePointDetail="SystemRestore CIM/WMI présent; CreateRestorePoint=$($methodNames -contains 'CreateRestorePoint'); Enable=$($methodNames -contains 'Enable'); aucun moteur PowerShell historique requis."
 } catch {$restorePointDetail=$_.Exception.Message}
 Add-ReadinessCheck -Name 'Garde-fou point de restauration disponible' -Passed $restorePointProviderReady -Detail $restorePointDetail
 
@@ -176,7 +176,7 @@ Add-ReadinessCheck -Name 'Accès réseau aux fournisseurs DevOps' -Passed ($unre
 
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $blockers=@($checks | Where-Object {$_.Blocking -and -not $_.Passed}); $warnings=@($checks | Where-Object {-not $_.Blocking -and -not $_.Passed})
-[ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Strict=[bool]$Strict; RequireFoundation=[bool]$RequireFoundation; Computer=$env:COMPUTERNAME; User=$env:USERNAME; PowerShell=[ordered]@{Edition=[string]$powerShellRuntimeFact.Edition; Version=$psVersion.ToString(); MinimumVersion='7.6.5'; Executable=[string]$powerShellRuntimeFact.ExecutableName; Is64BitProcess=[bool]$powerShellRuntimeFact.Is64BitProcess; WindowsPowerShellSupported=$false}; Windows=[ordered]@{Caption=[string]$os.Caption; Build=$build; DisplayVersion=$displayVersion; EditionID=$editionId; FeatureCompatible=$featureCompatible; SupportState=$supportState; SupportEnd=$supportEndText; Recommended=$recommendedOs}; Wsl=[ordered]@{Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent}; Checks=$checks.ToArray(); DriverFindingCount=$driverFindings.Count; BlockerCount=$blockers.Count; WarningCount=$warnings.Count; Ready=($blockers.Count -eq 0) } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
+[ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Strict=[bool]$Strict; RequireFoundation=[bool]$RequireFoundation; Computer=$env:COMPUTERNAME; User=$env:USERNAME; PowerShell=[ordered]@{Edition=[string]$powerShellRuntimeFact.Edition; Version=$psVersion.ToString(); MinimumVersion='7.6.4'; Executable=[string]$powerShellRuntimeFact.ExecutableName; Is64BitProcess=[bool]$powerShellRuntimeFact.Is64BitProcess; WindowsPowerShellSupported=$false}; Windows=[ordered]@{Caption=[string]$os.Caption; Build=$build; DisplayVersion=$displayVersion; EditionID=$editionId; FeatureCompatible=$featureCompatible; SupportState=$supportState; SupportEnd=$supportEndText; Recommended=$recommendedOs}; Wsl=[ordered]@{Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent}; Checks=$checks.ToArray(); DriverFindingCount=$driverFindings.Count; BlockerCount=$blockers.Count; WarningCount=$warnings.Count; Ready=($blockers.Count -eq 0) } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
 
 Write-Host ''; Write-Host ('='*78) -ForegroundColor DarkCyan; Write-Host '  PRÉQUALIFICATION INSTALLATION PHYSIQUE' -ForegroundColor Cyan; Write-Host ('='*78) -ForegroundColor DarkCyan
 foreach ($check in $checks) {if ($check.Passed) {Write-Host "[OK] $($check.Name) | $($check.Detail)" -ForegroundColor Green} elseif ($check.Blocking) {Write-Host "[KO] $($check.Name) | $($check.Detail)" -ForegroundColor Red} else {Write-Host "[AVERTISSEMENT] $($check.Name) | $($check.Detail)" -ForegroundColor Yellow}}

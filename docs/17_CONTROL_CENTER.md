@@ -11,7 +11,7 @@ Le centre de contrôle est désormais **PowerShell 7 only**.
 Contrat officiel :
 
 ```text
-PowerShell : 7.6.5 minimum
+PowerShell : 7.6.4 minimum
 Edition    : Core
 Architecture: x64
 Executable : pwsh.exe
@@ -45,8 +45,8 @@ Depuis PowerShell 7 ou Windows Terminal :
 Le bandeau affiche la version réellement utilisée, par exemple :
 
 ```text
-PowerShell : 7.6.5 | Core | x64 | pwsh.exe
-Runtime minimum : 7.6.5
+PowerShell : 7.6.4 | Core | x64 | pwsh.exe
+Runtime minimum : 7.6.4
 ```
 
 ## Menu principal
@@ -74,7 +74,7 @@ Utilisateur
    ↓
 START_MENU.cmd / menu.ps1
    │
-   ├── contrat runtime ────────────► PowerShell 7.6.5+ / Core / x64 / pwsh.exe
+   ├── contrat runtime ────────────► PowerShell 7.6.4+ / Core / x64 / pwsh.exe
    ├── installation / conformité ─► install.ps1
    ├── mises à jour ──────────────► update.ps1
    ├── logiciels WinGet ──────────► scripts/bootstrap/03_apps.ps1

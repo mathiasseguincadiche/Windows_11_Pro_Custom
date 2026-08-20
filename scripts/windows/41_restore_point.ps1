@@ -11,7 +11,7 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $powerShellRuntimeModule = Join-Path $repoRoot 'scripts\core\powershell-runtime.psm1'
 if (-not (Test-Path -LiteralPath $powerShellRuntimeModule)) { throw "Contrat PowerShell introuvable: $powerShellRuntimeModule" }
 Import-Module $powerShellRuntimeModule -Force
-[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru)
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
