@@ -4,11 +4,12 @@ on:
   pull_request:
     paths:
       - '.github/workflows/hardware-symbiosis.yml'
+      - 'VERSION'
       - 'install.ps1'
-      - 'config/hardware/target-v5.json'
-      - 'config/hardware/symbiosis-v5.json'
+      - 'config/hardware/target.json'
+      - 'config/hardware/symbiosis.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
-      - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
+      - 'scripts/bootstrap/13_validate_hardware.ps1'
       - 'docs/12_HARDWARE_QUALIFICATION.md'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -16,11 +17,12 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/hardware-symbiosis.yml'
+      - 'VERSION'
       - 'install.ps1'
-      - 'config/hardware/target-v5.json'
-      - 'config/hardware/symbiosis-v5.json'
+      - 'config/hardware/target.json'
+      - 'config/hardware/symbiosis.json'
       - 'scripts/windows/52_hardware_symbiosis.ps1'
-      - 'scripts/bootstrap/13_validate_hardware_v5.ps1'
+      - 'scripts/bootstrap/13_validate_hardware.ps1'
       - 'docs/12_HARDWARE_QUALIFICATION.md'
       - 'README.md'
       - 'CHANGELOG.md'
@@ -38,9 +40,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          policy='config/hardware/symbiosis-v5.json'
+          policy='config/hardware/symbiosis.json'
           jq -e '
-            (.version == "V5") and
+            (.schemaVersion == 1) and
             (.reviewedAt == "2026-08-12") and
             (.drivers.amdChipset.minimumApprovedVersion == "8.05.04.516") and
             (.drivers.intelArc.minimumApprovedVersion == "32.0.101.8864") and
@@ -58,9 +60,9 @@ jobs:
             (.bios.autoFlash == false)
           ' "$policy" >/dev/null
 
-          jq -e '.symbiosisPolicy == "config/hardware/symbiosis-v5.json"' config/hardware/target-v5.json >/dev/null
-          grep -Fq 'scripts\windows\52_hardware_symbiosis.ps1' scripts/bootstrap/13_validate_hardware_v5.ps1
-          grep -Fq -- '-Mode Verify' scripts/bootstrap/13_validate_hardware_v5.ps1
+          jq -e '.schemaVersion == 1 and .symbiosisPolicy == "config/hardware/symbiosis.json"' config/hardware/target.json >/dev/null
+          grep -Fq 'scripts\windows\52_hardware_symbiosis.ps1' scripts/bootstrap/13_validate_hardware.ps1
+          grep -Fq -- '-Mode Verify' scripts/bootstrap/13_validate_hardware.ps1
 
       - name: Validate bootstrap wiring
         shell: bash
@@ -69,7 +71,7 @@ jobs:
           inventory_pattern="Invoke-Step -RelativePath 'scripts\\windows\\50_hardware_inventory.ps1'"
           symbiosis_pattern="Invoke-Step -RelativePath 'scripts\\windows\\52_hardware_symbiosis.ps1' -Arguments @{ Mode='Audit' }"
           trim_pattern="Invoke-Step -RelativePath 'scripts\\windows\\21_storage_trim.ps1' -Arguments @{ Mode='Audit' }"
-          final_validation_pattern="Invoke-Step -RelativePath 'scripts\\bootstrap\\13_validate_hardware_v5.ps1' -Arguments @{ RequireManualChecks=[switch]::Present }"
+          final_validation_pattern="Invoke-Step -RelativePath 'scripts\\bootstrap\\13_validate_hardware.ps1' -Arguments @{ RequireManualChecks=[switch]::Present }"
 
           grep -Fq "$inventory_pattern" install.ps1
           grep -Fq "$symbiosis_pattern" install.ps1
@@ -111,8 +113,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $report = Get-Content -Raw .\reports\hardware\hardware-symbiosis-v5.json | ConvertFrom-Json
-          if ($report.Version -ne 'V5') { throw 'Unexpected internal hardware report schema version.' }
+          $release = (Get-Content -Raw .\VERSION).Trim()
+          $report = Get-Content -Raw .\reports\hardware\hardware-symbiosis.json | ConvertFrom-Json
+          if ($report.Release -ne $release) { throw "Unexpected hardware report release: $($report.Release)" }
+          if ([int]$report.SchemaVersion -ne 1) { throw 'Unexpected hardware report schema version.' }
           if ($report.PolicyReviewedAt -ne '2026-08-12') { throw 'Hardware policy review date is missing.' }
           if ($null -eq $report.HardChecks) { throw 'HardChecks section is missing.' }
           if ($null -eq $report.Advisory) { throw 'Advisory section is missing.' }
