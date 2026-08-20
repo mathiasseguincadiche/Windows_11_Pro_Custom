@@ -102,7 +102,8 @@ if legacy_violations:
 
 # P1 — toutes les dépendances statiques versionnées référencées par le code
 # PowerShell exécutable doivent exister dans le dépôt. Les chemins construits avec
-# des variables restent couverts par leurs contrats spécifiques.
+# des variables restent couverts par leurs contrats spécifiques. La frontière négative
+# évite de prendre un chemin utilisateur comme .config/... pour un chemin racine repo.
 runtime_powershell_files = [
     REPO_ROOT / "install.ps1",
     REPO_ROOT / "menu.ps1",
@@ -115,6 +116,7 @@ runtime_powershell_files.extend(
 )
 
 dependency_pattern = re.compile(
+    r"(?<![A-Za-z0-9._/\\-])"
     r"(?P<path>(?:config|scripts|manifests)[\\/]"
     r"[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*\."
     r"(?:ps1|psm1|sh|json|toml|wslconfig|txt))",
