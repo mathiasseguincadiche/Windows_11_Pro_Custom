@@ -1,29 +1,35 @@
-name: Workstation evidence V26
+name: Workstation evidence
 
 on:
   push:
     branches: [main]
     paths:
-      - 'scripts/windows/90_workstation_fingerprint_v26.ps1'
-      - 'scripts/backup/63_restore_drill_v26.ps1'
-      - 'tests/powershell/v26_contract.tests.ps1'
+      - 'VERSION'
+      - 'scripts/windows/90_workstation_fingerprint.ps1'
+      - 'scripts/backup/60_create_backup.ps1'
+      - 'scripts/backup/61_validate_backup.ps1'
+      - 'scripts/backup/63_restore_drill.ps1'
+      - 'tests/powershell/workstation_evidence_contract.tests.ps1'
       - 'docs/23_SOURCES_DE_VERITE.md'
       - 'docs/24_CRITERES_ACCEPTATION.md'
       - 'docs/26_PREUVES_DRIFT_ET_RESTAURATION.md'
       - 'config/**'
       - 'manifests/**'
-      - '.github/workflows/workstation-evidence-v26.yml'
+      - '.github/workflows/workstation-evidence.yml'
   pull_request:
     paths:
-      - 'scripts/windows/90_workstation_fingerprint_v26.ps1'
-      - 'scripts/backup/63_restore_drill_v26.ps1'
-      - 'tests/powershell/v26_contract.tests.ps1'
+      - 'VERSION'
+      - 'scripts/windows/90_workstation_fingerprint.ps1'
+      - 'scripts/backup/60_create_backup.ps1'
+      - 'scripts/backup/61_validate_backup.ps1'
+      - 'scripts/backup/63_restore_drill.ps1'
+      - 'tests/powershell/workstation_evidence_contract.tests.ps1'
       - 'docs/23_SOURCES_DE_VERITE.md'
       - 'docs/24_CRITERES_ACCEPTATION.md'
       - 'docs/26_PREUVES_DRIFT_ET_RESTAURATION.md'
       - 'config/**'
       - 'manifests/**'
-      - '.github/workflows/workstation-evidence-v26.yml'
+      - '.github/workflows/workstation-evidence.yml'
 
 permissions:
   contents: read
@@ -33,19 +39,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Verify V26 contract
+      - name: Verify workstation evidence contract
         shell: bash
         run: |
           set -euo pipefail
-          fingerprint='scripts/windows/90_workstation_fingerprint_v26.ps1'
-          restore='scripts/backup/63_restore_drill_v26.ps1'
+          fingerprint='scripts/windows/90_workstation_fingerprint.ps1'
+          restore='scripts/backup/63_restore_drill.ps1'
           doc='docs/26_PREUVES_DRIFT_ET_RESTAURATION.md'
 
           test -f "$fingerprint"
           test -f "$restore"
           test -f "$doc"
 
-          grep -Fq "ValidateSet('Audit', 'Record', 'Verify')" "$fingerprint"
+          grep -Fq "ValidateSet('Audit','Record','Verify')" "$fingerprint"
           grep -Fq 'ConfirmHealthyState' "$fingerprint"
           grep -Fq 'ConfirmPhysicalEvidence' "$fingerprint"
           grep -Fq 'ReplaceBaseline' "$fingerprint"
@@ -53,13 +59,14 @@ jobs:
           grep -Fq 'workstation-fingerprint.json' "$fingerprint"
           grep -Fq 'repositoryRevision' "$fingerprint"
           grep -Fq 'contractDigestSha256' "$fingerprint"
-          grep -Fq 'storageIdentityV25Sha256' "$fingerprint"
+          grep -Fq 'storageIdentitySha256' "$fingerprint"
           grep -Fq 'LocalBaselineHashPath' "$fingerprint"
           grep -Fq 'Get-WpcBaselineIntegrity' "$fingerprint"
           grep -Fq 'Aucun remplacement silencieux' "$fingerprint"
           grep -Fq 'WORKSTATION FINGERPRINT DRIFT' "$fingerprint"
+          grep -Fq 'Release=$Release;SchemaVersion=1' "$fingerprint"
 
-          grep -Fq "ValidateSet('Verify', 'Sandbox')" "$restore"
+          grep -Fq "ValidateSet('Verify','Sandbox')" "$restore"
           grep -Fq 'ConfirmIsolatedRestoreDrill' "$restore"
           grep -Fq 'wsl.exe --import-in-place' "$restore"
           grep -Fq 'finally {' "$restore"
@@ -80,22 +87,21 @@ jobs:
           grep -Fq '`PHYSICAL`' "$doc"
           grep -Fq 'WinRE/offline' "$doc"
 
-      - name: Reject unsafe V26 operations
+      - name: Reject unsafe evidence operations
         shell: bash
         run: |
           set -euo pipefail
           files=(
-            'scripts/windows/90_workstation_fingerprint_v26.ps1'
-            'scripts/backup/63_restore_drill_v26.ps1'
+            'scripts/windows/90_workstation_fingerprint.ps1'
+            'scripts/backup/63_restore_drill.ps1'
           )
           forbidden='Format-Volume|Clear-Disk|Initialize-Disk|Remove-Partition|Resize-Partition|Set-Partition|diskpart|Repair-Volume|chkdsk|ntfsfix|wbadmin[.]exe[[:space:]]+start[[:space:]]+recovery'
           if grep -InE "$forbidden" "${files[@]}"; then
-            echo 'V26 evidence paths must not repair, repartition or restore Windows automatically.' >&2
+            echo 'Evidence paths must not repair, repartition or restore Windows automatically.' >&2
             exit 1
           fi
-          # The dollar sign is intentionally literal: this scans source code, not a shell variable.
           # shellcheck disable=SC2016
-          if grep -InE 'wsl[.]exe[[:space:]]+--unregister[[:space:]]+(Ubuntu|\$Distribution)' scripts/backup/63_restore_drill_v26.ps1; then
+          if grep -InE 'wsl[.]exe[[:space:]]+--unregister[[:space:]]+(Ubuntu|\$Distribution)' scripts/backup/63_restore_drill.ps1; then
             echo 'Restore drill must never unregister the production distribution.' >&2
             exit 1
           fi
@@ -104,13 +110,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
-      - name: Parse V26 PowerShell
+      - name: Parse workstation evidence PowerShell
         shell: pwsh
         run: |
           $failed = $false
           foreach ($path in @(
-            '.\scripts\windows\90_workstation_fingerprint_v26.ps1',
-            '.\scripts\backup\63_restore_drill_v26.ps1'
+            '.\scripts\windows\90_workstation_fingerprint.ps1',
+            '.\scripts\backup\63_restore_drill.ps1',
+            '.\tests\powershell\workstation_evidence_contract.tests.ps1'
           )) {
             $tokens = $null
             $errors = $null
@@ -125,21 +132,23 @@ jobs:
       - name: Exercise fingerprint Audit on Windows runner
         shell: pwsh
         run: |
-          .\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
-          $report = Get-Content -Raw '.\reports\workstation-v26\latest.json' | ConvertFrom-Json
-          if ($report.contractVersion -ne 'V26') { throw 'Unexpected V26 report version.' }
+          .\scripts\windows\90_workstation_fingerprint.ps1 -Mode Audit
+          $release = (Get-Content -Raw '.\VERSION').Trim()
+          $report = Get-Content -Raw '.\reports\workstation\latest.json' | ConvertFrom-Json
+          if ($report.Release -ne $release) { throw "Unexpected report release: $($report.Release)" }
+          if ([int]$report.SchemaVersion -ne 1) { throw 'Unexpected workstation report schema.' }
           if ($report.evidenceLevel -ne 'SIMULATED') { throw 'A hosted runner must emit SIMULATED evidence.' }
           if ([string]::IsNullOrWhiteSpace([string]$report.repositoryRevision)) { throw 'Repository revision missing.' }
           if ([string]::IsNullOrWhiteSpace([string]$report.contractDigestSha256)) { throw 'Contract digest missing.' }
 
           $rejected = $false
           try {
-            .\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit -EvidenceLevel PHYSICAL -ConfirmPhysicalEvidence
+            .\scripts\windows\90_workstation_fingerprint.ps1 -Mode Audit -EvidenceLevel PHYSICAL -ConfirmPhysicalEvidence
           } catch {
             $rejected = $_.Exception.Message -match 'ne peut jamais produire une preuve PHYSICAL'
           }
           if (-not $rejected) { throw 'A hosted runner must reject PHYSICAL evidence.' }
 
-      - name: Exercise V26 diff and wbadmin parsers
+      - name: Exercise evidence diff and wbadmin parsers
         shell: pwsh
-        run: .\tests\powershell\v26_contract.tests.ps1
+        run: .\tests\powershell\workstation_evidence_contract.tests.ps1
