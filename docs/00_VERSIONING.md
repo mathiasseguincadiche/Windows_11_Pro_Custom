@@ -5,7 +5,7 @@ Windows 11 Pro Custom utilise une seule version de produit, stockée dans le fic
 ## Règles
 
 - `VERSION` est l’unique source de vérité de la release du projet.
-- Les interfaces, journaux et rapports exposent `Release`, jamais un numéro de jalon interne de type `V24`, `V25`, `V27`, etc.
+- Les interfaces, journaux et rapports exposent `Release`, jamais un numéro de jalon interne de type `jalon historique`, `identité stockage`, `jalon historique`, etc.
 - `SchemaVersion` est réservé aux formats de données persistants ou aux contrats sérialisés. Il ne représente jamais la version du produit.
 - Les composants actifs portent des noms fonctionnels stables : `storage_identity`, `storage_integrity`, `orchestration`, `menu_process_isolation`, etc.
 - Les anciens chemins numérotés peuvent subsister temporairement comme wrappers de compatibilité, mais ne doivent plus être appelés par le flux normal.

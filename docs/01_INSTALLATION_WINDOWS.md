@@ -409,7 +409,7 @@ Ne mets pas le dépôt dans un dossier temporaire ou un emplacement synchronisé
 
 ---
 
-## Première inspection et enrôlement V25
+## Première inspection et enrôlement identité stockage
 
 Commencer par l'audit non mutatif :
 
@@ -424,7 +424,7 @@ Avant le premier `PlanOnly` ou la première installation complète, ouvrir
 PowerShell en administrateur et qualifier l'identité physique des deux volumes :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
 ```
 
 Contrôler humainement que `C:` est le volume Windows attendu, que `E:` est le
@@ -432,10 +432,10 @@ second Crucial T705 NTFS destiné aux données/WSL, et qu'ils résident sur deux
 physiques distincts. Enregistrer ensuite la baseline une seule fois :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 Si une baseline existe déjà, ne pas la remplacer : exécuter seulement

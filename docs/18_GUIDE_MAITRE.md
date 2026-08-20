@@ -85,7 +85,7 @@ La documentation ne doit pas créer un second contrat contradictoire. Voir [`23_
 
 La workstation utilise deux SSD de même famille. Une lettre de lecteur ne suffit pas toujours à prouver l'identité physique.
 
-Le parcours V25 enrôle puis vérifie :
+Le parcours d’identité stockage enrôle puis vérifie :
 
 ```text
 C: -> Windows
@@ -95,11 +95,11 @@ E: -> données / WSL2
 Première qualification :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 `Record` ne doit être utilisé qu'après contrôle humain d'une topologie saine. Une alerte inexpliquée ne se résout pas en remplaçant la baseline.

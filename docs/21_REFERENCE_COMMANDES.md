@@ -80,16 +80,16 @@ Restaure uniquement les états initiaux que le dépôt sait réellement remettre
 
 # 3. Planification
 
-## Prérequis V25 des modes stricts
+## Prérequis identité stockage des modes stricts
 
 Avant le premier `PlanOnly`, `Apply` ou `Verify` strict :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 `Record` est un enrôlement unique après contrôle humain. Si la baseline existe,
@@ -241,7 +241,7 @@ Voir [`04_OPTIMISATION_WINDOWS.md`](04_OPTIMISATION_WINDOWS.md).
 Le code expose actuellement le switch technique :
 
 ```text
--SkipV4RestorePoint
+-SkipFoundationRestorePoint
 ```
 
 Ce nom historique reste documenté parce qu'il fait encore partie de l'interface réelle de `install.ps1`. Il permet d'ignorer explicitement la création du point de restauration préalable aux changements planifiés.
@@ -380,18 +380,18 @@ Voir [`15_MISES_A_JOUR.md`](15_MISES_A_JOUR.md).
 
 ---
 
-# 13. Preuves V26 et restauration isolée
+# 13. Preuves preuves workstation et restauration isolée
 
 Audit simulé :
 
 ```powershell
-.\scripts\windows\90_workstation_fingerprint_v26.ps1 -Mode Audit
+.\scripts\windows\90_workstation_fingerprint.ps1 -Mode Audit
 ```
 
 Audit ou vérification physique sur la workstation réelle :
 
 ```powershell
-.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+.\scripts\windows\90_workstation_fingerprint.ps1 `
   -Mode Verify `
   -EvidenceLevel PHYSICAL `
   -ConfirmPhysicalEvidence
@@ -405,7 +405,7 @@ SHA-256 sont archivés.
 Vérification d'une session Golden Backup :
 
 ```powershell
-.\scripts\backup\63_restore_drill_v26.ps1 `
+.\scripts\backup\63_restore_drill.ps1 `
   -BackupSessionPath '<session>' `
   -Mode Verify
 ```
@@ -446,7 +446,7 @@ logs\runs\<RunId>\summary.json
 reports\orchestration\latest-run.json
 reports\orchestration\machine-state.json
 reports\updates\latest-run.json
-reports\workstation-v26\latest.json
+reports\workstation\latest.json
 ```
 
 ---
@@ -455,10 +455,10 @@ reports\workstation-v26\latest.json
 
 ```powershell
 .\install.ps1 -Mode Audit
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
 # Premier enrôlement seulement, après contrôle humain :
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Record -ConfirmHealthyTopology
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Record -ConfirmHealthyTopology
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 .\install.ps1 -Mode Apply -FullInstall -PlanOnly
 .\install.ps1 -Mode Apply -FullInstall
 .\install.ps1 -Mode Verify -ValidateHardware -ValidateWsl -ValidateDevOps

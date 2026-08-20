@@ -77,11 +77,11 @@ ou directement :
 .\scripts\bootstrap\03_apps.ps1 -Mode Apply
 ```
 
-Cette commande directe est un composant ciblé : elle ne remplace pas la préqualification complète de la workstation. Avant un `Apply` direct, vérifier au minimum les garde-fous V25 et V24 ; pour une convergence globale, utiliser `install.ps1`.
+Cette commande directe est un composant ciblé : elle ne remplace pas la préqualification complète de la workstation. Avant un `Apply` direct, vérifier au minimum les garde-fous identité stockage et jalon historique ; pour une convergence globale, utiliser `install.ps1`.
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
-.\scripts\bootstrap\00_storage_integrity_v24.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_integrity.ps1 -Mode Verify
 ```
 
 Audit :

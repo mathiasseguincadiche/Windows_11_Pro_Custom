@@ -1,13 +1,13 @@
 # Identité du stockage et reprise après disparition d'un volume
 
-Ce document définit le garde-fou V25 imposé par les parcours stricts de `install.ps1` et par le bootstrap WSL avant leurs mutations.
+Ce document définit le garde-fou identité stockage imposé par les parcours stricts de `install.ps1` et par le bootstrap WSL avant leurs mutations.
 Il répond à deux risques différents :
 
 - une lettre `C:` ou `E:` peut désigner un autre volume après un redémarrage ;
 - un volume peut être présent physiquement mais ne plus être monté, être hors ligne,
   verrouillé ou absent de la table de partitions.
 
-V25 ne crée, ne supprime, ne formate, ne redimensionne et ne répare aucune
+identité stockage ne crée, ne supprime, ne formate, ne redimensionne et ne répare aucune
 partition. Il observe la topologie et bloque l'installation si l'identité réelle
 ne correspond plus à la référence explicitement approuvée.
 
@@ -19,7 +19,7 @@ création ou modification de son emplacement.
 
 Les scripts internes exécutés isolément restent des composants ciblés : leur
 succès ne constitue pas une preuve de conformité globale. Avant un `Apply` direct,
-exécuter explicitement V25 puis V24, ou préférer le parcours orchestré.
+exécuter explicitement identité stockage puis jalon historique, ou préférer le parcours orchestré.
 
 ## Identités contrôlées
 
@@ -49,7 +49,7 @@ Avant la première installation complète, ouvrir PowerShell en administrateur e
 produire d'abord l'inventaire :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
 ```
 
 Contrôler dans la Gestion des disques et dans le rapport
@@ -64,7 +64,7 @@ Contrôler dans la Gestion des disques et dans le rapport
 Après cette vérification humaine seulement :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology
 ```
@@ -72,7 +72,7 @@ Après cette vérification humaine seulement :
 Puis prouver immédiatement la correspondance :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
 ```
 
 L'installation complète restera bloquée tant que cette preuve n'est pas valide.
@@ -84,7 +84,7 @@ physique volontaire d'un SSD ou recréation contrôlée d'une partition, effectu
 une nouvelle investigation, puis utiliser explicitement les deux confirmations :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 `
+.\scripts\bootstrap\00_storage_identity.ps1 `
   -Mode Record `
   -ConfirmHealthyTopology `
   -ReplaceBaseline
@@ -101,7 +101,7 @@ Ne pas initialiser, formater ou recréer une partition et ne pas lancer
 Produire uniquement le rapport non mutatif :
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Audit
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Audit
 ```
 
 Compléter avec :
@@ -131,12 +131,12 @@ source et de la destination doit être validé avant toute commande de clonage.
 
 L'option WSL `--location E:\WSL\Ubuntu-DevOps` désigne un dossier dans le volume
 NTFS `E:`. Elle ne crée pas de partition Linux physique. Le script WSL appelle
-désormais V25 en mode `Verify` avant toute création de dossier, mise à jour WSL
+désormais identité stockage en mode `Verify` avant toute création de dossier, mise à jour WSL
 ou installation de distribution.
 
 ## Intégrité locale de la baseline
 
-La baseline locale V25 est désormais accompagnée d'un sidecar SHA-256 :
+La baseline locale identité stockage est désormais accompagnée d'un sidecar SHA-256 :
 
 ```text
 %ProgramData%\Windows11ProCustom\storage-v25\volume-identity.json.sha256

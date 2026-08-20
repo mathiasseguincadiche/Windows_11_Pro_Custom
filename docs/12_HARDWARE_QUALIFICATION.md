@@ -145,7 +145,7 @@ Le projet :
 - n'exécute pas de benchmark d'écriture massif automatiquement ;
 - conserve TRIM et Scheduled Optimize ;
 - privilégie les contrôles de santé et d'identité ;
-- vérifie séparément l'identité physique `C:` / `E:` via le parcours V25.
+- vérifie séparément l'identité physique `C:` / `E:` via le parcours d’identité stockage.
 
 Référence : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
 

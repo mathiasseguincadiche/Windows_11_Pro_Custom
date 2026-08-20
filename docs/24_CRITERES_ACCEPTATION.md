@@ -33,18 +33,18 @@ Cette page transforme le résultat attendu de `Windows_11_Pro_Custom` en critèr
 
 ## 4. Stockage
 
-- [ ] `C:` contient Windows et correspond à l'identité physique V25 enrôlée ;
-- [ ] `E:` est le volume NTFS attendu et correspond à l'identité physique V25 enrôlée ;
+- [ ] `C:` contient Windows et correspond à l'identité physique identité stockage enrôlée ;
+- [ ] `E:` est le volume NTFS attendu et correspond à l'identité physique identité stockage enrôlée ;
 - [ ] `C:` et `E:` résident sur deux SSD physiques distincts ;
-- [ ] la baseline V25 a été enregistrée après contrôle humain puis vérifiée ;
-- [ ] le contrôle V24 confirme NTFS/NVMe sans corruption bloquante ;
+- [ ] la baseline d’identité stockage a été enregistrée après contrôle humain puis vérifiée ;
+- [ ] le contrôle jalon historique confirme NTFS/NVMe sans corruption bloquante ;
 - [ ] WSL est sous `E:\WSL\Ubuntu-DevOps` ;
 - [ ] le filesystem Linux est fourni par le VHDX WSL2 ;
 - [ ] le support de sauvegarde est distinct des SSD internes.
 
 ```powershell
-.\scripts\bootstrap\00_storage_identity_v25.ps1 -Mode Verify
-.\scripts\bootstrap\00_storage_integrity_v24.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_identity.ps1 -Mode Verify
+.\scripts\bootstrap\00_storage_integrity.ps1 -Mode Verify
 ```
 
 Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECUPERATION.md).
@@ -124,21 +124,21 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 
 Guide : [`10_BACKUP_RESTORE.md`](10_BACKUP_RESTORE.md).
 
-## 11. Preuves V26, dérive et restaurabilité
+## 11. Preuves preuves workstation, dérive et restaurabilité
 
 - [ ] les preuves `STATIC`, `SIMULATED` et `PHYSICAL` ne sont pas confondues ;
 - [ ] une CI verte n'est pas considérée comme une preuve physique ;
-- [ ] `90_workstation_fingerprint_v26.ps1 -Mode Audit` produit une preuve `SIMULATED`, un rapport structuré et son SHA-256 ;
+- [ ] `90_workstation_fingerprint.ps1 -Mode Audit` produit une preuve `SIMULATED`, un rapport structuré et son SHA-256 ;
 - [ ] une preuve `PHYSICAL` exige `-EvidenceLevel PHYSICAL -ConfirmPhysicalEvidence` sur la workstation réelle ;
-- [ ] une baseline V26 n'est enregistrée qu'après validation physique complète et possède un sidecar SHA-256 valide ;
+- [ ] une baseline preuves workstation n'est enregistrée qu'après validation physique complète et possède un sidecar SHA-256 valide ;
 - [ ] `-Mode Verify` ne signale aucune dérive inexpliquée ;
 - [ ] un remplacement de baseline est justifié, archivé et accompagné d'un diff ;
-- [ ] le Golden Backup passe `63_restore_drill_v26.ps1 -Mode Verify` ;
+- [ ] le Golden Backup passe `63_restore_drill.ps1 -Mode Verify` ;
 - [ ] au moins un drill WSL `Sandbox` a prouvé que le VHDX peut être importé et démarré sans toucher à la distribution `Ubuntu` réelle ; en cas d'échec du désenregistrement temporaire, le VHDX scratch n'est pas supprimé ;
 - [ ] l'exercice de restauration Windows complet reste planifié sous WinRE/offline et n'est jamais automatisé sur le système actif.
 
 ```powershell
-.\scripts\windows\90_workstation_fingerprint_v26.ps1 `
+.\scripts\windows\90_workstation_fingerprint.ps1 `
   -Mode Audit `
   -EvidenceLevel PHYSICAL `
   -ConfirmPhysicalEvidence
@@ -156,6 +156,6 @@ Guide : [`26_PREUVES_DRIFT_ET_RESTAURATION.md`](26_PREUVES_DRIFT_ET_RESTAURATION
   -ValidateDevOps
 ```
 
-Puis vérifier l'idempotence avec `-FullInstall -PlanOnly`, la sauvegarde de référence et l'absence de dérive V26 inexpliquée.
+Puis vérifier l'idempotence avec `-FullInstall -PlanOnly`, la sauvegarde de référence et l'absence de dérive preuves workstation inexpliquée.
 
 Le résultat attendu est une workstation **cohérente, performante, maintenable, reproductible et récupérable**, indépendante des projets applicatifs ou IA éventuellement utilisés dessus.
