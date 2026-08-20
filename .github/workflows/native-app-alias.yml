@@ -62,14 +62,18 @@ jobs:
             exit 1
           fi
 
-      - name: Keep physical readiness fail-closed
+      - name: Keep critical readiness fail-closed and drivers advisory
         shell: bash
         run: |
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
           grep -Eq '\$pendingReboot[[:space:]]*=[[:space:]]*@\(Get-PendingRebootReasons\)' "$readiness"
           grep -Fq 'VERDICT: PHYSICAL INSTALL READY' "$readiness"
-          grep -Fq 'aucune convergence ne doit commencer avant un verdict READY' "$readiness"
+          grep -Fq 'Symbiose matérielle critique' "$readiness"
+          grep -Fq 'Corrige uniquement les prérequis bloquants puis relance' "$readiness"
+          grep -Fq "les informations pilotes ne bloquent jamais l'installation" "$readiness"
+          grep -Fq 'Pilote à vérifier:' "$readiness"
+          grep -Fq 'Installation non bloquée' "$readiness"
 
   windows-native-capture:
     runs-on: windows-latest
