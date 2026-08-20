@@ -37,14 +37,16 @@ $preflight = Get-Content -Raw -LiteralPath $preflightPath
 if ($menu.Contains('& $Path @Arguments')) {
     throw 'Régression: le menu ne doit jamais réutiliser son propre scope pour exécuter un script du dépôt.'
 }
-foreach ($required in @(
-    '$childArgs = $argList.ToArray()',
-    '& $exe @childArgs',
-    'Assert-WpcRebootStateCommands',
-    'Le processus PowerShell isolé'
-)) {
-    if (-not $menu.Contains($required)) {
-        throw "Contrat d’isolation absent de menu.ps1: $required"
+
+$requiredMenuPatterns = @(
+    @{ Pattern = '\$childArgs\s*=\s*\$argList\.ToArray\(\)'; Label = '$childArgs = $argList.ToArray()' },
+    @{ Pattern = '&\s*\$exe\s+@childArgs'; Label = '& $exe @childArgs' },
+    @{ Pattern = 'Assert-WpcRebootStateCommands'; Label = 'Assert-WpcRebootStateCommands' },
+    @{ Pattern = 'Le processus PowerShell isolé'; Label = 'Le processus PowerShell isolé' }
+)
+foreach ($required in $requiredMenuPatterns) {
+    if ($menu -notmatch $required.Pattern) {
+        throw "Contrat d’isolation absent de menu.ps1: $($required.Label)"
     }
 }
 
