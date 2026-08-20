@@ -144,7 +144,10 @@ Add-ReadinessCheck -Name 'VirtualMachinePlatform active' -Passed ($vmpFeatureSta
 $restorePointProviderReady=$false; $restorePointDetail=''
 try {
     $systemRestoreClass=Get-CimClass -Namespace 'root/default' -ClassName SystemRestore -ErrorAction Stop
-    $methodNames=@($systemRestoreClass.CimClassMethods.Keys)
+    $methodNames=@(
+        $systemRestoreClass.CimClassMethods |
+            ForEach-Object { [string]$_.Name }
+    )
     $restorePointProviderReady=($methodNames -contains 'CreateRestorePoint' -and $methodNames -contains 'Enable')
     $restorePointDetail="SystemRestore CIM/WMI présent; CreateRestorePoint=$($methodNames -contains 'CreateRestorePoint'); Enable=$($methodNames -contains 'Enable'); aucun moteur PowerShell historique requis."
 } catch {$restorePointDetail=$_.Exception.Message}
