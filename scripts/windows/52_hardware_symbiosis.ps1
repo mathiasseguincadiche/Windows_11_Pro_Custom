@@ -88,7 +88,7 @@ $lanAdapters = @($physicalAdapters | Where-Object { ([string]$_.Name + ' ' + [st
 $lanRss = @()
 if ($lanAdapters.Count -gt 0) {
     try { foreach ($adapter in $lanAdapters) { $lanRss += @(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop | Select-Object Name, Enabled, NumberOfReceiveQueues, Profile) } }
-    catch { $warnings.Add('État RSS illisible pour l’adaptateur 5 GbE; aucun réglage réseau n’a été modifié.') }
+    catch { $warnings.Add("État RSS illisible pour l'adaptateur 5 GbE; aucun réglage réseau n'a été modifié.") }
 }
 
 $deviceGuard = $null
@@ -96,8 +96,8 @@ try { $deviceGuard = Get-CimInstance -Namespace 'root\Microsoft\Windows\DeviceGu
 catch { $warnings.Add('État runtime VBS DeviceGuard indisponible sur cette instance Windows.') }
 $vbsRunning = if ($null -ne $deviceGuard) { [int]$deviceGuard.VirtualizationBasedSecurityStatus -eq 2 } else { $null }
 $hvciEnabled = Get-HvciState
-if ($vbsRunning -eq $false) { $warnings.Add('VBS n’est pas signalé actif. Vérifier Windows Security et la compatibilité pilotes avant toute activation.') }
-if ($hvciEnabled -eq $false) { $warnings.Add('Memory Integrity/HVCI n’est pas signalé actif. Ne pas forcer son activation avant revue des pilotes incompatibles.') }
+if ($vbsRunning -eq $false) { $warnings.Add("VBS n'est pas signalé actif. Vérifier Windows Security et la compatibilité pilotes avant toute activation.") }
+if ($hvciEnabled -eq $false) { $warnings.Add("Memory Integrity/HVCI n'est pas signalé actif. Ne pas forcer son activation avant revue des pilotes incompatibles.") }
 
 $hardChecks = [ordered]@{
     ArcB580Detected = ($arc.Count -gt 0)
