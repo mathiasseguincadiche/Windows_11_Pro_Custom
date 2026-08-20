@@ -86,7 +86,6 @@ jobs:
           $failed = $false
           foreach ($path in @(
             '.\scripts\bootstrap\00_storage_identity.ps1',
-            '.\scripts\bootstrap\00_storage_identity_v25.ps1',
             '.\scripts\bootstrap\00_preflight.ps1',
             '.\scripts\bootstrap\06_wsl.ps1'
           )) {
