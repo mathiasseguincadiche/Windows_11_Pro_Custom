@@ -11,7 +11,7 @@ on:
       - scripts/updates/**
       - scripts/wsl/update-system-packages.sh
       - scripts/wsl/reconcile-pinned-devops.sh
-      - .github/workflows/system-update-v11.yml
+      - .github/workflows/system-update.yml
   pull_request:
     paths:
       - update.ps1
@@ -19,7 +19,7 @@ on:
       - scripts/updates/**
       - scripts/wsl/update-system-packages.sh
       - scripts/wsl/reconcile-pinned-devops.sh
-      - .github/workflows/system-update-v11.yml
+      - .github/workflows/system-update.yml
 
 permissions:
   contents: read
@@ -32,14 +32,14 @@ jobs:
 
       - name: Validate update policy
         run: |
-          jq -e '.schemaVersion == "1.0"' config/updates/v11.json >/dev/null
-          jq -e '.windowsUpdate.includeDriversByDefault == false' config/updates/v11.json >/dev/null
-          jq -e '.windowsUpdate.includeOptionalByDefault == false' config/updates/v11.json >/dev/null
-          jq -e '.windowsUpdate.forceReboot == false' config/updates/v11.json >/dev/null
-          jq -e '.winget.respectPins == true and .winget.force == false' config/updates/v11.json >/dev/null
-          jq -e '.wsl.allowDistributionReleaseUpgrade == false' config/updates/v11.json >/dev/null
-          jq -e '.ubuntu.autoremove == false and .ubuntu.distUpgrade == false' config/updates/v11.json >/dev/null
-          jq -e '.devops.internetLatestIsTruth == false and .devops.reconcileOnlyPinnedTargets == true' config/updates/v11.json >/dev/null
+          jq -e '.schemaVersion == 1' config/updates/policy.json >/dev/null
+          jq -e '.windowsUpdate.includeDriversByDefault == false' config/updates/policy.json >/dev/null
+          jq -e '.windowsUpdate.includeOptionalByDefault == false' config/updates/policy.json >/dev/null
+          jq -e '.windowsUpdate.forceReboot == false' config/updates/policy.json >/dev/null
+          jq -e '.winget.respectPins == true and .winget.force == false' config/updates/policy.json >/dev/null
+          jq -e '.wsl.allowDistributionReleaseUpgrade == false' config/updates/policy.json >/dev/null
+          jq -e '.ubuntu.autoremove == false and .ubuntu.distUpgrade == false' config/updates/policy.json >/dev/null
+          jq -e '.devops.internetLatestIsTruth == false and .devops.reconcileOnlyPinnedTargets == true' config/updates/policy.json >/dev/null
 
       - name: Parse and lint update Bash
         run: |
