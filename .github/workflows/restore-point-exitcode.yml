@@ -29,6 +29,7 @@ jobs:
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
           restore='scripts/windows/41_restore_point.ps1'
+          workflow='.github/workflows/restore-point-exitcode.yml'
           grep -Fq "ClassName SystemRestore" "$readiness"
           grep -Fq "CreateRestorePoint" "$readiness"
           grep -Fq "MethodName 'Enable'" "$restore"
@@ -40,8 +41,8 @@ jobs:
           grep -Fq 'ForEach-Object { [string]$_.Name }' "$readiness" "$restore"
           grep -Fq 'Release=$release' "$readiness"
           grep -Fq 'SchemaVersion=2' "$readiness"
-          if grep -Fq 'CimClassMethods.Keys' "$restore" "$readiness" '.github/workflows/restore-point-exitcode.yml'; then
-            echo 'CimClassMethods.Keys is invalid for CimReadOnlyKeyedCollection and is forbidden.' >&2
+          if grep -Eq 'CimClassMethods[.]Keys' "$restore" "$readiness" "$workflow"; then
+            echo 'Invalid CimClassMethods key-property access is forbidden.' >&2
             exit 1
           fi
           if grep -Fq 'Checkpoint-Computer' "$restore" "$readiness"; then
