@@ -92,14 +92,48 @@ function Format-WpcCommand {
     foreach ($key in $Arguments.Keys) {$value=$Arguments[$key];if ($value -is [System.Management.Automation.SwitchParameter]) {if ($value.IsPresent) {$parts.Add("-$key")}} elseif ($value -is [bool]) {if ($value) {$parts.Add("-$key")}} elseif ($value -is [Array]) {if ($value.Count -gt 0) {$quoted=@($value|ForEach-Object {"'$_'"}) -join ',';$parts.Add("-$key $quoted")}} elseif ($null -ne $value) {$parts.Add("-$key '$value'")}}
     return ($parts -join ' ')
 }
+function Get-WpcLatestFailureContext {
+    param([Parameter(Mandatory)][datetime]$NotBefore)
+    $summaryPath=Join-Path $RepoRoot 'reports\orchestration\latest-run.json'
+    if (-not (Test-Path -LiteralPath $summaryPath)) {return $null}
+    try {
+        $summary=Get-Content -Raw -LiteralPath $summaryPath | ConvertFrom-Json
+        if ([bool]$summary.Success) {return $null}
+        if ($summary.CompletedAt) {
+            $completed=[datetimeoffset]::Parse([string]$summary.CompletedAt)
+            if ($completed.UtcDateTime -lt $NotBefore.ToUniversalTime().AddSeconds(-2)) {return $null}
+        }
+        $failed=@($summary.LatestScriptState | Where-Object {$_.Success -eq $false} | Sort-Object Timestamp | Select-Object -Last 1)
+        $event=if ($failed.Count -gt 0) {$failed[0]} else {$null}
+        $step=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.DisplayName)) {[string]$event.DisplayName} else {'Orchestration'}
+        $script=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.Script)) {[string]$event.Script} else {''}
+        $cause=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.Error)) {[string]$event.Error} else {[string]$summary.FailureMessage}
+        $log=if ($null -ne $event -and -not [string]::IsNullOrWhiteSpace([string]$event.LogPath)) {[string]$event.LogPath} else {''}
+        return [pscustomobject]@{Step=$step;Script=$script;Cause=$cause;LogPath=$log;SummaryPath=$summaryPath}
+    } catch {return $null}
+}
+function Format-WpcProcessFailure {
+    param([Parameter(Mandatory)][string]$DisplayName,[Parameter(Mandatory)][int]$ExitCode,[Parameter(Mandatory)][datetime]$StartedAt)
+    $context=Get-WpcLatestFailureContext -NotBefore $StartedAt
+    if ($null -eq $context) {return "Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode. Consulte la sortie ci-dessus et les journaux du dépôt pour la cause détaillée."}
+    $lines=New-Object System.Collections.Generic.List[string]
+    $lines.Add("Le processus PowerShell isolé '$DisplayName' a retourné le code $ExitCode.")
+    $lines.Add("  Étape   : $($context.Step)")
+    if ($context.Script) {$lines.Add("  Script  : $($context.Script)")}
+    if ($context.Cause) {$lines.Add("  Cause   : $($context.Cause)")}
+    if ($context.LogPath) {$lines.Add("  Journal : $($context.LogPath)")}
+    $lines.Add("  Résumé  : $($context.SummaryPath)")
+    return ($lines -join [Environment]::NewLine)
+}
 function Invoke-WpcRepoScript {
     param([Parameter(Mandatory)][string]$DisplayName,[Parameter(Mandatory)][string]$Path,[hashtable]$Arguments=@{},[switch]$RequiresAdmin)
     Write-Host '';Write-Line ("[ACTION] {0}" -f $DisplayName) Cyan;Write-Line ("Commande: {0}" -f (Format-WpcCommand -Path $Path -Arguments $Arguments)) DarkGray;$script:LastActionRequiresReboot=$false
     if ($DryRun) {Write-Line '[DRY-RUN] Aucune commande executee.' Green;return $true}
+    $actionStartedAt=Get-Date
     try {
         $exe=Get-PowerShellExecutable;$argList=New-Object System.Collections.Generic.List[string];$argList.Add('-NoProfile');$argList.Add('-ExecutionPolicy');$argList.Add('Bypass');$argList.Add('-File');$argList.Add($Path);foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) {$argList.Add($arg)};$childArgs=$argList.ToArray();$exitCode=0
         if ($RequiresAdmin -and -not (Test-IsAdministrator)) {Write-Line '[ADMIN] Elevation UAC requise. Une fenetre PowerShell admin va etre ouverte.' Yellow;$process=Start-Process -FilePath $exe -Verb RunAs -ArgumentList $childArgs -Wait -PassThru;$exitCode=$process.ExitCode} else {& $exe @childArgs;$exitCode=$LASTEXITCODE}
-        if ($exitCode -ne 0) {Assert-WpcRebootStateCommands;$state=Get-WpcPendingRebootState;if ($state.Pending) {$script:LastActionRequiresReboot=$true;throw "REDÉMARRAGE REQUIS: le processus PowerShell isolé s'est arrêté avec un redémarrage Windows en attente ($($state.Reasons -join ', '))."};throw "Le processus PowerShell isolé '$DisplayName' a retourné le code $exitCode. Consulte la sortie ci-dessus et les journaux du dépôt pour la cause détaillée."}
+        if ($exitCode -ne 0) {Assert-WpcRebootStateCommands;$state=Get-WpcPendingRebootState;if ($state.Pending) {$script:LastActionRequiresReboot=$true;throw "REDÉMARRAGE REQUIS: le processus PowerShell isolé s'est arrêté avec un redémarrage Windows en attente ($($state.Reasons -join ', '))."};throw (Format-WpcProcessFailure -DisplayName $DisplayName -ExitCode $exitCode -StartedAt $actionStartedAt)}
         Write-Line '[TERMINE] Action terminee.' Green;return $true
     } catch {$message=$_.Exception.Message;Assert-WpcRebootStateCommands;if (Test-WpcRebootRequiredMessage -Message $message) {$script:LastActionRequiresReboot=$true;Write-Line ("[ACTION REQUISE] {0}" -f $message) Yellow;return $false};Write-Line ("[ERREUR] {0}" -f $message) Red;return $false}
 }

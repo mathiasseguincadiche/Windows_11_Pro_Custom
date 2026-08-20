@@ -12,7 +12,7 @@ $versionPath = Join-Path $repoRoot 'VERSION'
 $release = if (Test-Path -LiteralPath $versionPath) { (Get-Content -Raw -LiteralPath $versionPath).Trim() } else { 'unknown' }
 $reportDir = Join-Path $repoRoot 'reports\storage-safety'
 $reportPath = Join-Path $reportDir 'storage-integrity.json'
-$storagePolicyPath = Join-Path $repoRoot 'config\hardware\symbiosis-v5.json'
+$storagePolicyPath = Join-Path $repoRoot 'config\hardware\symbiosis.json'
 
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 

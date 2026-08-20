@@ -140,5 +140,5 @@ try {
         Write-Host "[OK] Point de restauration Windows créé avant les modifications. Vérification WMI indisponible: $($after.Error)" -ForegroundColor Green
     }
 } catch {
-    throw "Impossible de créer ou confirmer le point de restauration de sécurité. Aucune optimisation ne doit continuer sans ce garde-fou, sauf choix explicite via -SkipV4RestorePoint. Détail: $($_.Exception.Message)"
+    throw "Impossible de créer ou confirmer le point de restauration de sécurité. Aucune optimisation ne doit continuer sans ce garde-fou, sauf choix explicite de l'orchestrateur via -SkipFoundationRestorePoint. Détail: $($_.Exception.Message)"
 }
