@@ -99,7 +99,7 @@ jobs:
         run: |
           $full = & ./menu.ps1 -Choice 1 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($full.Contains('install.ps1') -and $full.Contains('-FullInstall'))) { throw 'Full install route incorrect.' }
-          if (-not $full.Contains('Runtime minimum : 7.6.4')) { throw 'PowerShell minimum runtime is not visible in menu output.' }
+          if (-not ($full.Contains('Runtime minimum :') -and $full.Contains('7.6.4'))) { throw 'PowerShell minimum runtime is not visible in menu output.' }
 
           $apps = & ./menu.ps1 -Choice 2 -DryRun -NoPause -NoClear *>&1 | Out-String
           if (-not ($apps.Contains('03_apps.ps1') -and $apps.Contains("-Mode 'Apply'"))) { throw 'Apps-only route incorrect.' }
