@@ -48,11 +48,11 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
-      - name: Validate PowerShell 7.6.5 runtime
+      - name: Validate PowerShell 7.6.4 runtime
         shell: pwsh
         run: |
           Import-Module .\scripts\core\powershell-runtime.psm1 -Force
-          [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.5') -RequireWindows -PassThru)
+          [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 
       - name: Parse helper
         shell: pwsh
