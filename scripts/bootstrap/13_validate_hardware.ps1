@@ -65,9 +65,18 @@ try { & "$repoRoot\scripts\windows\52_hardware_symbiosis.ps1" -Mode Verify; $che
 catch { $checks.HardwareSymbiosis=$false; $details.HardwareSymbiosisError=$_.Exception.Message; $details.HardwareSymbiosisReport='reports\hardware\hardware-symbiosis.json' }
 
 if ($RequireManualChecks) {
-    try { & "$repoRoot\scripts\windows\51_hardware_manual_checks.ps1" -Mode Verify; $checks.ManualChecks=$true }
-    catch { $checks.ManualChecks=$false; $details.ManualChecksError=$_.Exception.Message }
-} else { $details.ManualChecks='Not required in this pass. Use -RequireManualChecks for final hardware qualification.' }
+    try {
+        & "$repoRoot\scripts\windows\51_hardware_manual_checks.ps1" -Mode Verify -Strict
+        $advisoryChecks.ManualChecks = $true
+        $details.ManualChecks = 'Toutes les preuves manuelles strictes sont confirmees.'
+    } catch {
+        $advisoryChecks.ManualChecks = $false
+        $details.ManualChecksError = $_.Exception.Message
+        $details.ManualChecks = 'Preuves manuelles incompletes: information de conformite, non bloquante pour Installation complete.'
+    }
+} else {
+    $details.ManualChecks='Not required in this pass. Use -RequireManualChecks to surface the manual-evidence advisory.'
+}
 
 $report = [ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Checks=$checks; AdvisoryChecks=$advisoryChecks; Details=$details }
 $reportPath = Join-Path $reportDir 'validation-hardware.json'

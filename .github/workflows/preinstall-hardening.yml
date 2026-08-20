@@ -125,13 +125,15 @@ jobs:
             exit 1
           fi
 
-      - name: Enforce WinGet preflight before mutation
+      - name: Enforce WinGet preflight before mutation with bounded retries
         shell: bash
         run: |
           set -euo pipefail
           script='scripts/bootstrap/03_apps.ps1'
-          grep -Fq 'Préflight WinGet: validation de tous les identifiants avant la première installation.' "$script"
-          grep -Fq 'Préflight WinGet échoué avant toute mutation' "$script"
+          grep -Fq 'Préflight WinGet: validation de tous les identifiants avant la première installation, avec retries réseau bornés.' "$script"
+          grep -Fq 'Préflight WinGet échoué après retries avant toute mutation' "$script"
+          grep -Fq '$wingetRetryCount = 3' "$script"
+          grep -Fq 'Invoke-WingetInstallWithRetry' "$script"
           grep -Fq 'Invoke-WpcNativeCapture' "$script"
           grep -Fq "ArgumentList @('show', '--id', \$Id, '--exact'" "$script"
           if grep -nE 'winget\.exe[^[:cntrl:]]*\|' "$script"; then

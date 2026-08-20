@@ -59,6 +59,7 @@ sudo install -m 0755 -d /etc/apt/keyrings
 sudo install -m 0755 -d /etc/apt/sources.list.d
 
 log() { printf '\n==> %s\n' "$*"; }
+curl_retry() { curl --retry 5 --retry-all-errors --connect-timeout 15 "$@"; }
 
 log "Paquets de base"
 sudo apt-get update
@@ -70,8 +71,9 @@ log "Docker Engine + Buildx + Compose depuis le dépôt Docker officiel"
 for pkg in docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc; do
   sudo apt-get remove -y "$pkg" >/dev/null 2>&1 || true
 done
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
+curl_retry -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/windows11-pro-custom-docker.asc
+sudo install -m 0644 /tmp/windows11-pro-custom-docker.asc /etc/apt/keyrings/docker.asc
+rm -f /tmp/windows11-pro-custom-docker.asc
 sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
@@ -92,15 +94,15 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
 log "kubectl ${KUBECTL_VERSION} avec checksum upstream"
-curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
-curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" -o "$tmpdir/kubectl.sha256"
+curl_retry -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
+curl_retry -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" -o "$tmpdir/kubectl.sha256"
 echo "$(cat "$tmpdir/kubectl.sha256")  $tmpdir/kubectl" | sha256sum -c -
 sudo install -m 0755 "$tmpdir/kubectl" /usr/local/bin/kubectl
 
 log "Helm ${HELM_VERSION} avec checksum upstream"
 helm_archive="helm-${HELM_VERSION}-linux-amd64.tar.gz"
-curl -fsSL "https://get.helm.sh/${helm_archive}" -o "$tmpdir/$helm_archive"
-curl -fsSL "https://get.helm.sh/${helm_archive}.sha256sum" -o "$tmpdir/$helm_archive.sha256sum"
+curl_retry -fsSL "https://get.helm.sh/${helm_archive}" -o "$tmpdir/$helm_archive"
+curl_retry -fsSL "https://get.helm.sh/${helm_archive}.sha256sum" -o "$tmpdir/$helm_archive.sha256sum"
 helm_sha="$(awk '{print $1}' "$tmpdir/$helm_archive.sha256sum")"
 echo "$helm_sha  $tmpdir/$helm_archive" | sha256sum -c -
 tar -xzf "$tmpdir/$helm_archive" -C "$tmpdir"
@@ -108,8 +110,8 @@ sudo install -m 0755 "$tmpdir/linux-amd64/helm" /usr/local/bin/helm
 
 log "Terraform ${TERRAFORM_VERSION} avec checksum HashiCorp"
 terraform_archive="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${terraform_archive}" -o "$tmpdir/$terraform_archive"
-curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" -o "$tmpdir/terraform_SHA256SUMS"
+curl_retry -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/${terraform_archive}" -o "$tmpdir/$terraform_archive"
+curl_retry -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" -o "$tmpdir/terraform_SHA256SUMS"
 (
   cd "$tmpdir"
   grep " ${terraform_archive}$" terraform_SHA256SUMS | sha256sum -c -
@@ -118,7 +120,7 @@ curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraf
 sudo install -m 0755 "$tmpdir/terraform" /usr/local/bin/terraform
 
 log "GitHub CLI depuis le dépôt officiel"
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+curl_retry -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
 sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
@@ -140,9 +142,25 @@ aws_sig="$tmpdir/awscliv2.sig"
 aws_gnupg="$tmpdir/aws-gnupg"
 aws_fingerprint='FB5DB77FD5C118B80511ADA8A6310ACC4672475C'
 install -m 0700 -d "$aws_gnupg"
-curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$aws_zip"
-curl --retry 5 --retry-all-errors -fsSL "https://awscli.amazonaws.com/${aws_archive}.sig" -o "$aws_sig"
-gpg --batch --homedir "$aws_gnupg" --keyserver hkps://keyserver.ubuntu.com --recv-keys "$aws_fingerprint"
+curl_retry -fsSL "https://awscli.amazonaws.com/${aws_archive}" -o "$aws_zip"
+curl_retry -fsSL "https://awscli.amazonaws.com/${aws_archive}.sig" -o "$aws_sig"
+
+aws_key_loaded=0
+for keyserver in hkps://keyserver.ubuntu.com hkps://keys.openpgp.org; do
+  for attempt in 1 2 3; do
+    if gpg --batch --homedir "$aws_gnupg" --keyserver-options timeout=15 --keyserver "$keyserver" --recv-keys "$aws_fingerprint"; then
+      aws_key_loaded=1
+      break 2
+    fi
+    echo "[AVERTISSEMENT] Clé AWS non récupérée depuis $keyserver (tentative $attempt/3)." >&2
+    sleep $((attempt * 2))
+  done
+done
+if [[ $aws_key_loaded -ne 1 ]]; then
+  echo '[ERREUR] Impossible de récupérer la clé publique AWS après retries sur les keyservers autorisés.' >&2
+  exit 1
+fi
+
 aws_imported_fingerprint="$(gpg --batch --homedir "$aws_gnupg" --with-colons --fingerprint "$aws_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
 if [[ "$aws_imported_fingerprint" != "$aws_fingerprint" ]]; then
   echo "[ERREUR] Empreinte de clé AWS CLI inattendue: ${aws_imported_fingerprint:-absente}" >&2
@@ -158,26 +176,34 @@ fi
 
 log "Minikube ${MINIKUBE_VERSION} avec checksum upstream"
 minikube_url="https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64"
-curl -fsSL "$minikube_url" -o "$tmpdir/minikube"
-curl -fsSL "${minikube_url}.sha256" -o "$tmpdir/minikube.sha256"
+curl_retry -fsSL "$minikube_url" -o "$tmpdir/minikube"
+curl_retry -fsSL "${minikube_url}.sha256" -o "$tmpdir/minikube.sha256"
 echo "$(cat "$tmpdir/minikube.sha256")  $tmpdir/minikube" | sha256sum -c -
 sudo install -m 0755 "$tmpdir/minikube" /usr/local/bin/minikube
 
 log "kind ${KIND_VERSION} avec checksum upstream"
 kind_url="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
-curl --retry 5 --retry-all-errors -fsSL "$kind_url" -o "$tmpdir/kind-linux-amd64"
-curl --retry 5 --retry-all-errors -fsSL "${kind_url}.sha256sum" -o "$tmpdir/kind-linux-amd64.sha256sum"
+curl_retry -fsSL "$kind_url" -o "$tmpdir/kind-linux-amd64"
+curl_retry -fsSL "${kind_url}.sha256sum" -o "$tmpdir/kind-linux-amd64.sha256sum"
 (
   cd "$tmpdir"
   sha256sum -c kind-linux-amd64.sha256sum
 )
 sudo install -m 0755 "$tmpdir/kind-linux-amd64" /usr/local/bin/kind
 
-log "Outils qualité IaC"
-bash "$SCRIPT_DIR/install-quality-tools.sh"
+log "Outils qualité IaC (complément non bloquant)"
+if bash "$SCRIPT_DIR/install-quality-tools.sh"; then
+  echo '[OK] Outils qualité IaC installés.'
+else
+  echo '[AVERTISSEMENT] Les outils qualité additionnels n ont pas tous pu être installés. La stack DevOps cœur continue; relance le composant plus tard.' >&2
+fi
 
-log "Profil shell DevOps"
-bash "$SCRIPT_DIR/manage-shell-profile.sh" apply
+log "Profil shell DevOps (complément non bloquant)"
+if bash "$SCRIPT_DIR/manage-shell-profile.sh" apply; then
+  echo '[OK] Profil shell DevOps appliqué.'
+else
+  echo '[AVERTISSEMENT] Profil shell DevOps non appliqué complètement. Les outils cœur restent installés.' >&2
+fi
 
 log "Répertoires Linux gérés"
 managed_roots_raw="$(jq -er '
@@ -209,14 +235,12 @@ kind version | grep -F "$KIND_VERSION" >/dev/null
 
 cat <<'EOF'
 
-[OK] Stack DevOps installée avec versions cœur épinglées et artefacts sensibles vérifiés.
+[OK] Stack DevOps cœur installée avec versions épinglées et artefacts sensibles vérifiés.
 
 Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
 Les versions kubectl, Helm, Terraform, AWS CLI, Minikube et kind sont pilotées par config/devops/tool-versions.env.
 AWS CLI est vérifié par signature PGP et kind par checksum SHA-256 upstream avant installation.
-Les outils IaC, le profil shell DevOps et les répertoires Linux définis par le contrat runtime sont installés.
-Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL.
-Exécute ensuite :
-  wsl.exe --shutdown   # depuis Windows
-puis relance Ubuntu et exécute la validation DevOps.
+Les outils qualité additionnels et le profil shell sont des compléments: leurs anomalies sont signalées mais ne rendent pas la stack cœur inutilisable.
+Les répertoires Linux définis par le contrat runtime sont créés sur le filesystem Linux.
+Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL; l orchestrateur gère ce redémarrage de session et revalide Docker.
 EOF

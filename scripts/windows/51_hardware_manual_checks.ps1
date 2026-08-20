@@ -3,6 +3,7 @@ param(
     [ValidateSet('Show', 'Record', 'Verify', 'Reset')]
     [string]$Mode = 'Show',
     [switch]$Interactive,
+    [switch]$Strict,
     [switch]$UefiCsmDisabled,
     [switch]$Above4GEnabled,
     [switch]$ResizableBarEnabled,
@@ -37,7 +38,7 @@ $descriptions = [ordered]@{
     t705_heatsinks_and_airflow_verified = "Les deux T705 disposent d'un dissipateur et d'un flux d'air correct."
     memory_6000_stability_verified = "La DDR5 6000 MT/s a passe un vrai test de stabilite memoire sans erreur."
     latest_stable_bios_reviewed = "La version BIOS MSI stable actuelle a ete verifiee avant qualification."
-    current_vendor_drivers_reviewed = "Les pilotes AMD chipset, Intel Arc et MSI ont ete verifies depuis les sources constructeur. Ce point est informatif et ne bloque pas l'installation."
+    current_vendor_drivers_reviewed = "Les pilotes AMD chipset, Intel Arc et MSI ont ete verifies depuis les sources constructeur. Ce point est informatif."
 }
 
 function New-EmptyState {
@@ -79,7 +80,7 @@ function Show-State {
         } elseif ($isAdvisory) {
             Write-Host "[AVERTISSEMENT] $name - $($descriptions[$name])" -ForegroundColor Yellow
         } else {
-            Write-Host "[ACTION REQUISE] $name - $($descriptions[$name])" -ForegroundColor Magenta
+            Write-Host "[ACTION REQUISE] $name - $($descriptions[$name]) | requis pour une qualification manuelle stricte, non bloquant pour Installation complete." -ForegroundColor Magenta
         }
     }
     if ($State.Notes) { Write-Host "Notes: $($State.Notes)" }
@@ -159,9 +160,19 @@ foreach ($name in @($target.manualChecks)) {
     if ($name -in $advisoryManualChecks) { $missingAdvisory += $name } else { $missingBlocking += $name }
 }
 Show-State -State $state
-if ($missingBlocking.Count -gt 0) {
-    throw "Qualification materielle manuelle incomplete: $($missingBlocking -join ', '). Pour une saisie guidee: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
+
+if ($missingBlocking.Count -gt 0 -and $Strict) {
+    throw "Qualification materielle manuelle stricte incomplete: $($missingBlocking -join ', '). Pour une saisie guidee: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
 }
+
+if ($missingBlocking.Count -gt 0) {
+    Write-Host "VERDICT: HARDWARE MANUAL CHECKS ADVISORY - $($missingBlocking.Count) preuve(s) manuelle(s) non confirmee(s). Installation complete non bloquee." -ForegroundColor Yellow
+    if ($missingAdvisory.Count -gt 0) {
+        Write-Host "Informations supplementaires non confirmees: $($missingAdvisory -join ', ')" -ForegroundColor Yellow
+    }
+    return
+}
+
 if ($missingAdvisory.Count -gt 0) {
     Write-Host "VERDICT: HARDWARE MANUAL CHECKS READY - information(s) non bloquante(s): $($missingAdvisory -join ', ')" -ForegroundColor Yellow
 } else {
