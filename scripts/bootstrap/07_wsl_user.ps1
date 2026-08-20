@@ -14,6 +14,21 @@ Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1')
 Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $usernamePattern = '^[a-z_][a-z0-9_-]{0,31}$'
+$runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
+if (-not (Test-Path -LiteralPath $runtimeContractPath)) { throw "Contrat runtime WSL absent: $runtimeContractPath" }
+$runtimeContract = Get-Content -Raw -LiteralPath $runtimeContractPath | ConvertFrom-Json
+$expectedDistribution = [string]$runtimeContract.distribution
+$expectedLinuxUser = [string]$runtimeContract.expectedLinuxUser
+
+if ([string]::IsNullOrWhiteSpace($expectedLinuxUser) -or $expectedLinuxUser -notmatch $usernamePattern) {
+    throw "Contrat WSL invalide: expectedLinuxUser='$expectedLinuxUser'."
+}
+if ($Distribution -ne $expectedDistribution) {
+    throw "Distribution non conforme au contrat WSL. Demandée=$Distribution Attendue=$expectedDistribution"
+}
+if (-not [string]::IsNullOrWhiteSpace($LinuxUser) -and $LinuxUser -ne $expectedLinuxUser) {
+    throw "Utilisateur WSL non conforme au contrat. Demandé=$LinuxUser Attendu=$expectedLinuxUser"
+}
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe introuvable.' }
 $registration = Get-WpcWslRegistrationFact -Distribution $Distribution
@@ -99,19 +114,17 @@ rm -f "$tmp"
 
 $defaultUser = Get-DefaultLinuxUser
 $configuredUser = Get-ConfiguredDefaultUser
-$targetUser = if (-not [string]::IsNullOrWhiteSpace($LinuxUser)) { $LinuxUser } elseif ($configuredUser) { $configuredUser } elseif ($defaultUser -and $defaultUser -ne 'root') { $defaultUser } else { '' }
-$exists = if ($targetUser) { Test-LinuxUserExists -Name $targetUser } else { $false }
-$sudo = if ($targetUser -and $exists) { Test-LinuxUserSudo -Name $targetUser } else { $false }
-$compliant = $targetUser -and $exists -and $sudo -and ($defaultUser -eq $targetUser) -and ($configuredUser -eq $targetUser)
+$targetUser = $expectedLinuxUser
+$exists = Test-LinuxUserExists -Name $targetUser
+$sudo = if ($exists) { Test-LinuxUserSudo -Name $targetUser } else { $false }
+$compliant = $exists -and $sudo -and ($defaultUser -eq $targetUser) -and ($configuredUser -eq $targetUser)
 
 if ($Mode -eq 'Audit') {
     Write-Host "Utilisateur WSL par défaut observé: $(if ($defaultUser) { $defaultUser } else { '<indéterminé>' })"
     Write-Host "Utilisateur déclaré dans /etc/wsl.conf: $(if ($configuredUser) { $configuredUser } else { '<absent>' })"
-    Write-Host "Utilisateur cible: $(if ($targetUser) { $targetUser } else { '<à fournir>' })"
+    Write-Host "Utilisateur cible du contrat: $targetUser"
     if ($compliant) {
         Write-Host "[DÉJÀ OK] Utilisateur WSL '$targetUser' présent, membre de sudo et réellement utilisé par défaut." -ForegroundColor Green
-    } elseif (-not $targetUser) {
-        Write-Host '[ACTION REQUISE] Aucun utilisateur Linux non-root nʼest encore défini. Apply te demandera un nom dʼutilisateur.' -ForegroundColor Magenta
     } else {
         Write-Host "[À FAIRE] Utilisateur WSL '$targetUser' incomplet: présent=$exists sudo=$sudo défaut=$defaultUser config=$configuredUser" -ForegroundColor Yellow
     }
@@ -119,27 +132,21 @@ if ($Mode -eq 'Audit') {
 }
 
 if ($Mode -eq 'Verify') {
-    if (-not $targetUser) { throw 'Aucun utilisateur Linux cible nʼest connu. Fournis -WslUser à install.ps1 ou exécute le mode Apply interactif.' }
-    if (-not $exists) { throw "Utilisateur Linux absent: $targetUser" }
+    if (-not $exists) { throw "Utilisateur Linux attendu par le contrat absent: $targetUser" }
     if (-not $sudo) { throw "Utilisateur Linux '$targetUser' nʼest pas membre du groupe sudo." }
     if ($configuredUser -ne $targetUser) { throw "/etc/wsl.conf ne définit pas '$targetUser' comme utilisateur par défaut." }
     if ($defaultUser -ne $targetUser) { throw "WSL démarre actuellement avec '$defaultUser', attendu '$targetUser'. Exécute wsl --terminate $Distribution puis relance." }
-    Write-Host "[OK] Utilisateur WSL '$targetUser' vérifié: non-root, sudo, utilisateur par défaut." -ForegroundColor Green
+    Write-Host "[OK] Utilisateur WSL '$targetUser' vérifié: contrat, non-root, sudo, utilisateur par défaut." -ForegroundColor Green
     return
 }
-
-if (-not $targetUser) {
-    $targetUser = Read-WpcRequiredValue -Context $context -Name 'WslUser' -CurrentValue $LinuxUser -Prompt 'Choisis le nom de ton utilisateur Linux WSL (minuscules, sans espace)' -Example 'mathias' -Pattern $usernamePattern
-}
-if ($targetUser -notmatch $usernamePattern) { throw "Nom utilisateur Linux invalide: '$targetUser'. Exemple valide: mathias" }
 
 if (-not (Test-LinuxUserExists -Name $targetUser)) {
     if ($context.NonInteractive) {
         throw "Utilisateur WSL '$targetUser' absent. Sa création nécessite une saisie interactive sécurisée du mot de passe. Relance sans -NonInteractive ou crée-le manuellement puis relance."
     }
     Write-Host ''
-    Write-Host "[ACTION REQUISE] Création de lʼutilisateur Linux '$targetUser'." -ForegroundColor Magenta
-    Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et nʼest jamais passée dans une variable, un argument ou un fichier log.' -ForegroundColor Yellow
+    Write-Host "[ACTION REQUISE] Création de lʼutilisateur Linux '$targetUser' défini par le contrat WSL." -ForegroundColor Magenta
+    Write-Host 'Linux va te demander un mot de passe deux fois. La saisie est masquée par adduser et nʼest jamais passée dans une variable, un argument, un fichier de configuration ou un journal.' -ForegroundColor Yellow
     Write-Host 'Les champs complémentaires sont laissés vides automatiquement.' -ForegroundColor DarkGray
     & wsl.exe -d $Distribution -u root -- adduser --gecos '' $targetUser
     $addUserCode = $LASTEXITCODE
