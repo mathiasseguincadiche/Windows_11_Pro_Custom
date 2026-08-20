@@ -227,6 +227,35 @@ if missing_physical_fragments:
         + ", ".join(missing_physical_fragments)
     )
 
+# P1 — la revue manuelle des pilotes et l'état 1440p240 ne doivent pas re-bloquer
+# FullInstall plus loin dans la qualification finale.
+manual_source = (
+    REPO_ROOT / "scripts/windows/51_hardware_manual_checks.ps1"
+).read_text(encoding="utf-8")
+for fragment in (
+    "$advisoryManualChecks = @('current_vendor_drivers_reviewed')",
+    "$missingBlocking",
+    "$missingAdvisory",
+    "AVERTISSEMENT",
+):
+    if fragment not in manual_source:
+        fail(f"Manual hardware advisory contract incomplete: {fragment}")
+
+final_hardware_source = (
+    REPO_ROOT / "scripts/bootstrap/13_validate_hardware.ps1"
+).read_text(encoding="utf-8")
+for fragment in (
+    "$advisoryChecks = [ordered]@{}",
+    "$advisoryChecks.ArcDriver",
+    "$advisoryChecks.Display1440p240",
+    "non bloquant",
+):
+    if fragment not in final_hardware_source:
+        fail(f"Final hardware advisory contract incomplete: {fragment}")
+checks_prefix = final_hardware_source.split("$report =", 1)[0]
+if "$checks.ArcDriver" in checks_prefix or "$checks.Display1440p240" in checks_prefix:
+    fail("ArcDriver and Display1440p240 must not be final blocking checks.")
+
 
 print("[OK] storagePolicyPath -> config/hardware/symbiosis.json")
 print("[OK] no legacy component path in active code")
@@ -234,4 +263,5 @@ print("[OK] all detected static repository dependencies exist")
 print("[OK] control center has JSON and orchestrator-log failure fallbacks")
 print("[OK] driver presence/version checks are advisory and non blocking")
 print("[OK] physical preflight surfaces driver findings without blocking install")
+print("[OK] manual driver review and display refresh are non blocking")
 print("VERDICT: REPOSITORY INTEGRITY READY")
