@@ -68,20 +68,26 @@ function Restart-WslSessionAfterDockerGroupChange {
     }
 
     $dockerReady = $false
-    $lastDockerOutput = ''
-    for ($attempt = 1; $attempt -le 12; $attempt++) {
+    $maxAttempts = 60
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         $probe = Invoke-WslUserCommand -Command 'docker info >/dev/null 2>&1' -IgnoreExitCode
         if ($probe.ExitCode -eq 0) {
             $dockerReady = $true
+            Write-Host "[OK] Docker prêt après $attempt tentative(s)." -ForegroundColor Green
             break
         }
-        $lastDockerOutput = $probe.Output
+        if ($attempt -in @(1,10,20,30,45)) {
+            Write-Host "[ATTENTE] Docker démarre encore... tentative $attempt/$maxAttempts" -ForegroundColor Yellow
+        }
         Start-Sleep -Seconds 1
     }
     if (-not $dockerReady) {
-        throw "Docker nʼest pas accessible sans sudo après redémarrage contrôlé de la session WSL. Dernière sortie: $lastDockerOutput"
+        $serviceState = Invoke-WslUserCommand -Command 'systemctl is-active docker 2>/dev/null || true' -IgnoreExitCode
+        $serviceStatus = Invoke-WslUserCommand -Command 'systemctl --no-pager --full status docker 2>&1 | tail -n 20 || true' -IgnoreExitCode
+        $journal = Invoke-WslUserCommand -Command 'journalctl -u docker --no-pager -n 30 2>&1 || true' -IgnoreExitCode
+        throw "Docker nʼest pas accessible sans sudo après $maxAttempts secondes. systemd=$($serviceState.Output). Status: $($serviceStatus.Output). Journal: $($journal.Output)"
     }
-    Write-Host "[OK] Nouvelle session WSL active: groupe docker chargé et Docker Engine accessible sans sudo." -ForegroundColor Green
+    Write-Host '[OK] Nouvelle session WSL active: groupe docker chargé et Docker Engine accessible sans sudo.' -ForegroundColor Green
 }
 
 Write-Host '[1/4] /etc/wsl.conf et systemd' -ForegroundColor Cyan
@@ -96,8 +102,8 @@ Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @(
 
 # install-devops.sh ajoute l’utilisateur au groupe docker. Les groupes auxiliaires d’une
 # session Linux déjà ouverte ne sont pas recalculés dynamiquement. La revalidation
-# immédiate de l’orchestrateur doit donc démarrer une nouvelle session WSL avant de
-# tester docker info; sinon une première installation correcte peut être déclarée KO.
+# immédiate de l’orchestrateur démarre donc une nouvelle session WSL puis attend
+# Docker jusqu’à 60 secondes avec diagnostics systemd/journal en cas d’échec.
 Restart-WslSessionAfterDockerGroupChange
 
 Write-Host '[3/4] Terminal Bash DevOps' -ForegroundColor Cyan
@@ -107,11 +113,14 @@ $global:LASTEXITCODE = 0
 if ($convertTerminal -ne 0 -or [string]::IsNullOrWhiteSpace($linuxTerminalScript)) { throw 'Impossible de convertir le chemin du gestionnaire Terminal DevOps avec wslpath.' }
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxTerminalScript, 'apply') -LogIdentity 'scripts/wsl/manage-devops-terminal.sh' -DisplayName 'manage-devops-terminal.sh'
 
-Write-Host '[4/4] Extensions VS Code dans WSL' -ForegroundColor Cyan
+Write-Host '[4/4] Extensions VS Code dans WSL (advisory)' -ForegroundColor Cyan
 $linuxVsCodeScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $vscodeWslScript).Trim()
 $convertVsCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
-if ($convertVsCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxVsCodeScript)) { throw 'Impossible de convertir le chemin du gestionnaire VS Code WSL avec wslpath.' }
-Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxVsCodeScript, 'apply') -LogIdentity 'scripts/wsl/manage-vscode-extensions.sh' -DisplayName 'manage-vscode-extensions.sh'
+if ($convertVsCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxVsCodeScript)) {
+    Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Intégration VS Code WSL non exécutée' -Detail 'wslpath n a pas pu convertir le chemin. La stack DevOps cœur reste valide.' -Context $context
+} else {
+    Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxVsCodeScript, 'apply') -LogIdentity 'scripts/wsl/manage-vscode-extensions.sh' -DisplayName 'manage-vscode-extensions.sh'
+}
 
-Write-Host '[FAIT] Stack DevOps + terminal exécutés; la session WSL a été rechargée automatiquement après Docker et chaque sous-script possède son journal dédié.' -ForegroundColor Green
+Write-Host '[FAIT] Stack DevOps cœur + terminal exécutés; Docker a été revalidé après redémarrage de session. VS Code WSL reste un complément non bloquant.' -ForegroundColor Green
