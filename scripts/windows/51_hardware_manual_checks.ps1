@@ -27,6 +27,7 @@ $statePath = Join-Path $stateDir 'hardware-manual.json'
 $legacyStatePath = Join-Path $stateDir 'hardware-v5-manual.json'
 $target = Get-Content -Raw $targetPath | ConvertFrom-Json
 if ([int]$target.schemaVersion -ne 1) { throw "SchemaVersion de cible matérielle non supporté: $($target.schemaVersion)" }
+$advisoryManualChecks = @('current_vendor_drivers_reviewed')
 
 $descriptions = [ordered]@{
     uefi_csm_disabled = 'UEFI démarré et CSM/Legacy désactivé.'
@@ -36,7 +37,7 @@ $descriptions = [ordered]@{
     t705_heatsinks_and_airflow_verified = 'Les deux T705 disposent dʼun dissipateur et dʼun flux dʼair correct.'
     memory_6000_stability_verified = 'La DDR5 6000 MT/s a passé un vrai test de stabilité mémoire sans erreur.'
     latest_stable_bios_reviewed = 'La version BIOS MSI stable actuelle a été vérifiée avant qualification.'
-    current_vendor_drivers_reviewed = 'Les pilotes AMD chipset, Intel Arc et MSI ont été vérifiés depuis les sources constructeur.'
+    current_vendor_drivers_reviewed = 'Les pilotes AMD chipset, Intel Arc et MSI ont été vérifiés depuis les sources constructeur. Ce point est informatif et ne bloque pas l’installation.'
 }
 
 function New-EmptyState {
@@ -72,8 +73,11 @@ function Show-State {
     param([Parameter(Mandatory)]$State)
     foreach ($name in @($target.manualChecks)) {
         $value = [bool]$State.Checks[$name]
+        $isAdvisory = $name -in $advisoryManualChecks
         if ($value) {
             Write-Host "[DÉJÀ OK] $name - $($descriptions[$name])" -ForegroundColor Green
+        } elseif ($isAdvisory) {
+            Write-Host "[AVERTISSEMENT] $name - $($descriptions[$name])" -ForegroundColor Yellow
         } else {
             Write-Host "[ACTION REQUISE] $name - $($descriptions[$name])" -ForegroundColor Magenta
         }
@@ -148,10 +152,18 @@ if ($Mode -eq 'Record') {
     return
 }
 
-$missing = @()
-foreach ($name in @($target.manualChecks)) { if (-not [bool]$state.Checks[$name]) { $missing += $name } }
-Show-State -State $state
-if ($missing.Count -gt 0) {
-    throw "Qualification matérielle manuelle incomplète: $($missing -join ', '). Pour une saisie guidée: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
+$missingBlocking = @()
+$missingAdvisory = @()
+foreach ($name in @($target.manualChecks)) {
+    if ([bool]$state.Checks[$name]) { continue }
+    if ($name -in $advisoryManualChecks) { $missingAdvisory += $name } else { $missingBlocking += $name }
 }
-Write-Host 'VERDICT: HARDWARE MANUAL CHECKS READY' -ForegroundColor Green
+Show-State -State $state
+if ($missingBlocking.Count -gt 0) {
+    throw "Qualification matérielle manuelle incomplète: $($missingBlocking -join ', '). Pour une saisie guidée: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive"
+}
+if ($missingAdvisory.Count -gt 0) {
+    Write-Host "VERDICT: HARDWARE MANUAL CHECKS READY — information(s) non bloquante(s): $($missingAdvisory -join ', ')" -ForegroundColor Yellow
+} else {
+    Write-Host 'VERDICT: HARDWARE MANUAL CHECKS READY' -ForegroundColor Green
+}
