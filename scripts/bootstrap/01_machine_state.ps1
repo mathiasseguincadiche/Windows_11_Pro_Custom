@@ -22,6 +22,7 @@ $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $reportDir = Join-Path $repoRoot 'reports\orchestration'
 $reportPath = Join-Path $reportDir 'machine-state.json'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+$wingetRetryCount = 3
 
 function Test-Administrator {
     try {
@@ -53,49 +54,31 @@ function Get-VolumeFact {
     }
 }
 
-function Get-WingetInventory {
+function Get-WingetPackageFact {
+    param([Parameter(Mandatory)][string]$Id)
+
     $wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
     if (-not $wingetCommand) {
-        return [pscustomobject]@{ Available=$false; Success=$false; Lines=@(); Error='WinGet unavailable' }
-    }
-
-    $result = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('list', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
-    $lines = @($result.Lines)
-    if ($result.ExitCode -ne 0) {
-        return [pscustomobject]@{ Available=$true; Success=$false; Lines=$lines; Error="winget list failed with exit code $($result.ExitCode)" }
-    }
-    return [pscustomobject]@{ Available=$true; Success=$true; Lines=$lines; Error='' }
-}
-
-function Get-WingetPackageFact {
-    param(
-        [Parameter(Mandatory)]$Inventory,
-        [Parameter(Mandatory)][string]$Id
-    )
-    if (-not $Inventory.Available) {
         return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence='WinGet unavailable' }
     }
-    if (-not $Inventory.Success) {
-        return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence=$Inventory.Error }
+
+    $lastCode = $null
+    for ($attempt = 1; $attempt -le $wingetRetryCount; $attempt++) {
+        $result = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('list', '--id', $Id, '--exact', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
+        $lastCode = $result.ExitCode
+        $line = @($result.Text -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
+
+        if ($result.ExitCode -eq 0) {
+            if ($line.Count -gt 0) {
+                return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence=[string]$line[0] }
+            }
+            return [pscustomobject]@{ Id=$Id; State='MISSING'; Evidence='Identifiant exact absent de winget list.' }
+        }
+
+        if ($attempt -lt $wingetRetryCount) { Start-Sleep -Seconds $attempt }
     }
 
-    $line = @($Inventory.Lines | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
-    if ($line.Count -gt 0) {
-        return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence=[string]$line[0] }
-    }
-
-    $wingetCommand = Get-WpcNativeApplication -Name 'winget.exe'
-    if (-not $wingetCommand) {
-        return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence='WinGet unavailable during exact fallback' }
-    }
-    $exactResult = Invoke-WpcNativeCapture -FilePath $wingetCommand.Source -ArgumentList @('list', '--id', $Id, '--exact', '--accept-source-agreements', '--disable-interactivity') -SuppressErrorOutput
-    $exactText = $exactResult.Text
-    $exactLine = @($exactText -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($Id) } | Select-Object -First 1)
-    if ($exactResult.ExitCode -eq 0 -and $exactLine.Count -gt 0) {
-        return [pscustomobject]@{ Id=$Id; State='INSTALLED'; Evidence="Exact fallback: $([string]$exactLine[0])" }
-    }
-
-    return [pscustomobject]@{ Id=$Id; State='MISSING'; Evidence='Exact WinGet ID absent après vérification ciblée' }
+    return [pscustomobject]@{ Id=$Id; State='UNKNOWN'; Evidence="winget list --exact indisponible après $wingetRetryCount tentative(s), dernier code=$lastCode" }
 }
 
 function Get-WslFacts {
@@ -186,16 +169,17 @@ $e = Get-VolumeFact -DriveLetter 'E'
 $winget = Get-WpcNativeApplication -Name 'winget.exe'
 $manifest = Get-Content -Raw (Join-Path $repoRoot 'manifests\winget\apps-core.json') | ConvertFrom-Json
 $requiredApps = @($manifest.apps | Where-Object { $_.autoInstall -eq $true -and -not [string]::IsNullOrWhiteSpace([string]$_.wingetId) })
-Write-Host "[INFO] Inventaire WinGet global: $($requiredApps.Count) applications cibles..." -ForegroundColor DarkGray
-$wingetInventory = Get-WingetInventory
+Write-Host "[INFO] Inventaire WinGet exact: $($requiredApps.Count) applications cibles..." -ForegroundColor DarkGray
 $appFacts = @()
 foreach ($app in $requiredApps) {
-    $fact = Get-WingetPackageFact -Inventory $wingetInventory -Id ([string]$app.wingetId)
+    $fact = Get-WingetPackageFact -Id ([string]$app.wingetId)
     $appFacts += [pscustomobject]@{ Name=[string]$app.name; Id=[string]$app.wingetId; State=$fact.State; Evidence=$fact.Evidence }
 }
 $installedApps = @($appFacts | Where-Object State -EQ 'INSTALLED').Count
 $missingApps = @($appFacts | Where-Object State -EQ 'MISSING').Count
 $unknownApps = @($appFacts | Where-Object State -EQ 'UNKNOWN').Count
+$wingetInventorySuccess = ($null -ne $winget) -and ($unknownApps -eq 0)
+$wingetInventoryError = if ($null -eq $winget) { 'WinGet unavailable' } elseif ($unknownApps -gt 0) { "$unknownApps vérification(s) exacte(s) WinGet indéterminée(s)." } else { '' }
 
 Write-Host '[INFO] Découverte WSL2...' -ForegroundColor DarkGray
 $wslFacts = Get-WslFacts
@@ -249,8 +233,9 @@ $report = [ordered]@{
     Storage = @($c, $e)
     WinGet = [ordered]@{
         Available = ($null -ne $winget)
-        InventorySuccess = [bool]$wingetInventory.Success
-        InventoryError = [string]$wingetInventory.Error
+        InventorySuccess = [bool]$wingetInventorySuccess
+        InventoryError = [string]$wingetInventoryError
+        DetectionPolicy = 'Exact WinGet IDs only: winget list --id <ID> --exact with bounded retries.'
         Path = if ($winget) { $winget.Source } else { $null }
         RequiredApps = $appFacts
         InstalledCount = $installedApps
@@ -284,11 +269,11 @@ switch ($state) {
 Write-WpcStatus -Status $(if ($c.Present -and $c.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume C:' -Detail "Présent=$($c.Present) FS=$($c.FileSystem) Santé=$($c.HealthStatus) Libre=$($c.FreeGB) Go" -Context $context
 Write-WpcStatus -Status $(if ($e.Present -and $e.FileSystem -eq 'NTFS') { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'Volume E:' -Detail "Présent=$($e.Present) FS=$($e.FileSystem) Santé=$($e.HealthStatus) Libre=$($e.FreeGB) Go" -Context $context
 if ($unknownApps -gt 0) {
-    Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Applications WinGet' -Detail "État incomplet: $unknownApps application(s) indéterminée(s). $($wingetInventory.Error)" -Context $context
+    Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Applications WinGet' -Detail "État incomplet: $unknownApps application(s) indéterminée(s). $wingetInventoryError" -Context $context
 } elseif ($missingApps -gt 0) {
     Write-WpcStatus -Status 'A_FAIRE' -Message 'Applications WinGet' -Detail "$installedApps installées, $missingApps manquantes." -Context $context
 } else {
-    Write-WpcStatus -Status 'DEJA_OK' -Message 'Applications WinGet' -Detail "$installedApps/$($appFacts.Count) applications automatiques détectées." -Context $context
+    Write-WpcStatus -Status 'DEJA_OK' -Message 'Applications WinGet' -Detail "$installedApps/$($appFacts.Count) applications automatiques détectées par identifiant exact." -Context $context
 }
 Write-WpcStatus -Status $(if ($wslFacts.DistributionPresent -and $wslFacts.Version -eq 2 -and $wslFacts.ConfigMatches) { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'WSL2' -Detail "Distribution=$($wslFacts.DistributionPresent) Version=$($wslFacts.Version) Profil=$($wslFacts.ConfigMatches) Détection=$($wslFacts.DetectionSource)" -Context $context
 Write-WpcStatus -Status $(if (-not $oneDrive.Installed) { 'DEJA_OK' } else { 'A_FAIRE' }) -Message 'OneDrive' -Detail "Installé=$($oneDrive.Installed) Actif=$($oneDrive.Running)" -Context $context
