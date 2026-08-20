@@ -1,15 +1,15 @@
-name: Native App Alias V18
+name: Native App Alias
 
 on:
   pull_request:
     paths:
-      - '.github/workflows/native-app-alias-v18.yml'
+      - '.github/workflows/native-app-alias.yml'
       - 'scripts/core/native-process.psm1'
       - 'scripts/**/*.ps1'
   push:
     branches: [main]
     paths:
-      - '.github/workflows/native-app-alias-v18.yml'
+      - '.github/workflows/native-app-alias.yml'
       - 'scripts/core/native-process.psm1'
       - 'scripts/**/*.ps1'
 
@@ -67,8 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           readiness='scripts/bootstrap/02_physical_readiness.ps1'
-          # shellcheck disable=SC2016
-          grep -Fq '$pendingReboot = @(Get-PendingRebootReasons)' "$readiness"
+          grep -Eq '\$pendingReboot[[:space:]]*=[[:space:]]*@\(Get-PendingRebootReasons\)' "$readiness"
           grep -Fq 'VERDICT: PHYSICAL INSTALL READY' "$readiness"
           grep -Fq 'aucune convergence ne doit commencer avant un verdict READY' "$readiness"
 
