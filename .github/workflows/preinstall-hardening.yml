@@ -1,4 +1,4 @@
-name: preinstall-hardening
+name: Preinstall hardening
 
 on:
   pull_request:
@@ -29,7 +29,7 @@ jobs:
             'scripts/bootstrap/08_devops.ps1',
             'scripts/bootstrap/09_validate_devops.ps1',
             'scripts/bootstrap/10_workstation.ps1',
-            'scripts/bootstrap/11_validate_v3.ps1',
+            'scripts/bootstrap/11_validate_windows.ps1',
             'scripts/windows/41_restore_point.ps1'
           )) {
             $tokens = $null
@@ -66,7 +66,6 @@ jobs:
             echo "Machine-state must contain exactly one targeted WinGet exact-fallback command location; found ${exact_calls}." >&2
             exit 1
           fi
-          # The exact command must stay after the fast global-match return path.
           global_hit_line="$(grep -nF "State='INSTALLED'; Evidence=[string]\$line[0]" "$script" | head -n1 | cut -d: -f1)"
           exact_line="$(grep -nF "ArgumentList @('list', '--id', \$Id, '--exact'" "$script" | head -n1 | cut -d: -f1)"
           if [[ -z "$global_hit_line" || -z "$exact_line" || "$exact_line" -le "$global_hit_line" ]]; then
@@ -83,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           preflight='scripts/bootstrap/00_preflight.ps1'
+          validator='scripts/bootstrap/11_validate_windows.ps1'
           reboot='scripts/core/reboot-state.psm1'
 
           grep -Fq 'EditionID' "$preflight"
@@ -94,9 +94,9 @@ jobs:
           grep -Fq 'Component Based Servicing\RebootPending' "$reboot"
           grep -Fq 'WindowsUpdate\Auto Update\RebootRequired' "$reboot"
           grep -Fq 'PendingFileRenameOperations' "$reboot"
-          grep -Fq 'Windows11SupportedEdition' scripts/bootstrap/11_validate_v3.ps1
-          grep -Fq "editionId -notmatch '^Core'" scripts/bootstrap/11_validate_v3.ps1
-          if grep -Fq "editionId -eq 'Professional'" "$preflight" scripts/bootstrap/11_validate_v3.ps1; then
+          grep -Fq 'Windows11SupportedEdition' "$validator"
+          grep -Fq "editionId -notmatch '^Core'" "$validator"
+          if grep -Fq "editionId -eq 'Professional'" "$preflight" "$validator"; then
             echo 'Edition validation must not reject ProfessionalWorkstation or other Windows 11 non-Home editions.' >&2
             exit 1
           fi
