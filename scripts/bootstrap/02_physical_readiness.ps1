@@ -18,7 +18,9 @@ $appsManifestPath = Join-Path $repoRoot 'manifests\winget\apps-core.json'
 $windowsNativeModule = Join-Path $repoRoot 'scripts\core\windows-native.psm1'
 $nativeProcessModule = Join-Path $repoRoot 'scripts\core\native-process.psm1'
 $rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
-foreach ($path in @($hardwareTargetPath,$wslContractPath,$appsManifestPath,$windowsNativeModule,$nativeProcessModule,$rebootStateModule)) { if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" } }
+$hardwareSymbiosisScript = Join-Path $repoRoot 'scripts\windows\52_hardware_symbiosis.ps1'
+$hardwareSymbiosisReport = Join-Path $repoRoot 'reports\hardware\hardware-symbiosis.json'
+foreach ($path in @($hardwareTargetPath,$wslContractPath,$appsManifestPath,$windowsNativeModule,$nativeProcessModule,$rebootStateModule,$hardwareSymbiosisScript)) { if (-not (Test-Path -LiteralPath $path)) { throw "Contrat requis introuvable: $path" } }
 Import-Module $windowsNativeModule
 Import-Module $nativeProcessModule
 Import-Module $rebootStateModule -Force
@@ -105,11 +107,34 @@ $arc=@($video | Where-Object {[string]$_.Name -match [string]$hardwareTarget.gpu
 Add-ReadinessCheck -Name 'Matériel cible essentiel détecté' -Passed ($hardwareFailures.Count -eq 0) -Detail $(if ($hardwareFailures.Count -eq 0) {'CPU, RAM 6000, carte mère et Arc B580 correspondent à la cible.'} else {$hardwareFailures -join '; '})
 $displayMatch=@($video | Where-Object {[int]$_.CurrentHorizontalResolution -eq [int]$hardwareTarget.display.width -and [int]$_.CurrentVerticalResolution -eq [int]$hardwareTarget.display.height -and [int]$_.CurrentRefreshRate -ge [int]$hardwareTarget.display.minimumRefreshHz})
 $displayObserved=@($video | ForEach-Object {"$($_.Name): $($_.CurrentHorizontalResolution)x$($_.CurrentVerticalResolution) @$($_.CurrentRefreshRate)Hz"}) -join ' | '
-Add-ReadinessCheck -Name 'Affichage cible 1440p240' -Passed ($displayMatch.Count -gt 0) -Detail $(if ($displayMatch.Count -gt 0) {'Affichage 2560x1440 >=239 Hz détecté.'} else {"Non détecté avant bootstrap/pilotes. Observé: $displayObserved. La qualification matérielle finale reste stricte."}) -Blocking $false
+Add-ReadinessCheck -Name 'Affichage cible 1440p240' -Passed ($displayMatch.Count -gt 0) -Detail $(if ($displayMatch.Count -gt 0) {'Affichage 2560x1440 >=239 Hz détecté.'} else {"Non détecté actuellement. Observé: $displayObserved. Information uniquement; ne bloque pas l'installation."}) -Blocking $false
 
-$symbiosisReady=$false; $symbiosisDetail='Qualification non exécutée.'
-try {$symbiosisOutput=@(& (Join-Path $repoRoot 'scripts\windows\52_hardware_symbiosis.ps1') -Mode Verify *>&1 | ForEach-Object {[string]$_}); $symbiosisReady=$true; $symbiosisDetail=@($symbiosisOutput | Select-Object -Last 3) -join ' | '} catch {$symbiosisDetail=$_.Exception.Message}
-Add-ReadinessCheck -Name 'Symbiose matériel/pilotes' -Passed $symbiosisReady -Detail $symbiosisDetail
+# La symbiose est auditée ici. Seuls les HardCheckFailures matériels critiques deviennent bloquants.
+$symbiosisReady=$false
+$symbiosisDetail='Qualification matérielle non exécutée.'
+$driverFindings=@()
+try {
+    [void]@(& $hardwareSymbiosisScript -Mode Audit *>&1)
+    if (-not (Test-Path -LiteralPath $hardwareSymbiosisReport)) { throw "Rapport de symbiose introuvable après audit: $hardwareSymbiosisReport" }
+    $symbiosisReport=Get-Content -Raw -LiteralPath $hardwareSymbiosisReport | ConvertFrom-Json
+    $hardFailures=@($symbiosisReport.HardCheckFailures)
+    $driverFindings=@($symbiosisReport.DriverFindings)
+    $symbiosisReady=($hardFailures.Count -eq 0)
+    $symbiosisDetail=if ($symbiosisReady) {
+        "Matériel critique conforme. Informations pilotes à vérifier=$($driverFindings.Count). Ces informations ne bloquent pas l'installation."
+    } else {
+        @($hardFailures | ForEach-Object { "$($_.Name): $($_.Detail)" }) -join ' | '
+    }
+} catch {
+    $symbiosisDetail=$_.Exception.Message
+}
+Add-ReadinessCheck -Name 'Symbiose matérielle critique' -Passed $symbiosisReady -Detail $symbiosisDetail
+foreach ($finding in $driverFindings) {
+    Add-ReadinessCheck -Name ("Pilote à vérifier: {0}" -f [string]$finding.Name) -Passed $false -Detail ("{0}. Installation non bloquée; le rapport détaillé reste disponible dans reports\hardware\hardware-symbiosis.json." -f [string]$finding.Detail) -Blocking $false
+}
+if ($driverFindings.Count -eq 0) {
+    Add-ReadinessCheck -Name 'Pilotes observés' -Passed $true -Detail 'Aucun écart de présence/version détecté par la politique de pilotes.' -Blocking $false
+}
 
 $foundationBlocking=[bool]$RequireFoundation
 $wslFeatureState=Get-OptionalFeatureStateSafe -FeatureName 'Microsoft-Windows-Subsystem-Linux'; $vmpFeatureState=Get-OptionalFeatureStateSafe -FeatureName 'VirtualMachinePlatform'
@@ -151,10 +176,10 @@ Add-ReadinessCheck -Name 'Accès réseau aux fournisseurs DevOps' -Passed ($unre
 
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $blockers=@($checks | Where-Object {$_.Blocking -and -not $_.Passed}); $warnings=@($checks | Where-Object {-not $_.Blocking -and -not $_.Passed})
-[ordered]@{ Release=$release; SchemaVersion=1; Timestamp=(Get-Date).ToString('o'); Strict=[bool]$Strict; RequireFoundation=[bool]$RequireFoundation; Computer=$env:COMPUTERNAME; User=$env:USERNAME; PowerShell=[ordered]@{Edition=[string]$PSVersionTable.PSEdition; Version=$psVersion.ToString()}; Windows=[ordered]@{Caption=[string]$os.Caption; Build=$build; DisplayVersion=$displayVersion; EditionID=$editionId; FeatureCompatible=$featureCompatible; SupportState=$supportState; SupportEnd=$supportEndText; Recommended=$recommendedOs}; Wsl=[ordered]@{Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent}; Checks=$checks.ToArray(); BlockerCount=$blockers.Count; WarningCount=$warnings.Count; Ready=($blockers.Count -eq 0) } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
+[ordered]@{ Release=$release; SchemaVersion=2; Timestamp=(Get-Date).ToString('o'); Strict=[bool]$Strict; RequireFoundation=[bool]$RequireFoundation; Computer=$env:COMPUTERNAME; User=$env:USERNAME; PowerShell=[ordered]@{Edition=[string]$PSVersionTable.PSEdition; Version=$psVersion.ToString()}; Windows=[ordered]@{Caption=[string]$os.Caption; Build=$build; DisplayVersion=$displayVersion; EditionID=$editionId; FeatureCompatible=$featureCompatible; SupportState=$supportState; SupportEnd=$supportEndText; Recommended=$recommendedOs}; Wsl=[ordered]@{Distribution=$distribution; SourceDistribution=$sourceDistribution; Present=$distributionPresent}; Checks=$checks.ToArray(); DriverFindingCount=$driverFindings.Count; BlockerCount=$blockers.Count; WarningCount=$warnings.Count; Ready=($blockers.Count -eq 0) } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 $reportPath
 
 Write-Host ''; Write-Host ('='*78) -ForegroundColor DarkCyan; Write-Host '  PRÉQUALIFICATION INSTALLATION PHYSIQUE' -ForegroundColor Cyan; Write-Host ('='*78) -ForegroundColor DarkCyan
-foreach ($check in $checks) {if ($check.Passed) {Write-Host "[OK] $($check.Name) | $($check.Detail)" -ForegroundColor Green} elseif ($check.Blocking) {Write-Host "[KO] $($check.Name) | $($check.Detail)" -ForegroundColor Red} else {Write-Warning "$($check.Name) | $($check.Detail)"}}
-Write-Host "Rapport: $reportPath" -ForegroundColor DarkGray
-if ($blockers.Count -gt 0) {Write-Host "VERDICT: PHYSICAL INSTALL NOT READY ($($blockers.Count) bloqueur(s), $($warnings.Count) avertissement(s))" -ForegroundColor Red; if ($Strict) {throw "Préqualification physique échouée: $($blockers.Name -join '; '). Corrige ces prérequis puis relance; aucune convergence ne doit commencer avant un verdict READY."}; return}
-if ($warnings.Count -gt 0 -and -not $RequireFoundation) {Write-Host "VERDICT: PHYSICAL INSTALL READY FOR FOUNDATION BOOTSTRAP ($($warnings.Count) élément(s) à préparer avant convergence)" -ForegroundColor Green} else {Write-Host "VERDICT: PHYSICAL INSTALL READY ($($warnings.Count) avertissement(s))" -ForegroundColor Green}
+foreach ($check in $checks) {if ($check.Passed) {Write-Host "[OK] $($check.Name) | $($check.Detail)" -ForegroundColor Green} elseif ($check.Blocking) {Write-Host "[KO] $($check.Name) | $($check.Detail)" -ForegroundColor Red} else {Write-Host "[AVERTISSEMENT] $($check.Name) | $($check.Detail)" -ForegroundColor Yellow}}
+Write-Host "Rapport détaillé: $reportPath" -ForegroundColor DarkGray
+if ($blockers.Count -gt 0) {Write-Host "VERDICT: PHYSICAL INSTALL NOT READY ($($blockers.Count) bloqueur(s), $($warnings.Count) avertissement(s))" -ForegroundColor Red; if ($Strict) {throw "Préqualification physique échouée: $($blockers.Name -join '; '). Corrige uniquement les prérequis bloquants puis relance; les informations pilotes ne bloquent jamais l'installation."}; return}
+if ($warnings.Count -gt 0 -and -not $RequireFoundation) {Write-Host "VERDICT: PHYSICAL INSTALL READY FOR FOUNDATION BOOTSTRAP ($($warnings.Count) avertissement(s) non bloquant(s))" -ForegroundColor Green} else {Write-Host "VERDICT: PHYSICAL INSTALL READY ($($warnings.Count) avertissement(s) non bloquant(s))" -ForegroundColor Green}
