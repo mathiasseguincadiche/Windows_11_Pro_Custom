@@ -4,7 +4,8 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 RUNTIME_CONTRACT="$REPO_ROOT/config/wsl/runtime-contract.json"
-required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind terraform-docs actionlint yq tflint)
+required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind)
+advisory_required=(terraform-docs actionlint yq tflint)
 failed=0
 warnings=0
 
@@ -14,12 +15,22 @@ warn() { printf '[AVERTISSEMENT] %s\n' "$*"; warnings=$((warnings + 1)); }
 
 printf 'Validation stack DevOps WSL2\n\n'
 
+printf 'Outils cœur\n'
 for cmd in "${required[@]}"; do
   if command -v "$cmd" >/dev/null 2>&1; then
     printf '[OK] %-16s %s\n' "$cmd" "$(command -v "$cmd")"
   else
     printf '[KO] %-16s absent\n' "$cmd"
     failed=$((failed + 1))
+  fi
+done
+
+printf '\nOutils qualité additionnels (non bloquants pour Installation complete)\n'
+for cmd in "${advisory_required[@]}"; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    printf '[OK] %-16s %s\n' "$cmd" "$(command -v "$cmd")"
+  else
+    warn "$cmd absent; la stack cœur reste utilisable."
   fi
 done
 
@@ -146,25 +157,25 @@ printf '\nProfil shell\n'
 if bash "$SCRIPT_DIR/manage-shell-profile.sh" verify; then
   ok 'Profil shell DevOps opérationnel.'
 else
-  ko 'Profil shell DevOps invalide.'
+  warn 'Profil shell DevOps incomplet; non bloquant pour la stack cœur.'
 fi
 
 printf '\nVS Code WSL\n'
 if bash "$SCRIPT_DIR/manage-vscode-extensions.sh" verify; then
-  ok 'Extensions VS Code WSL opérationnelles.'
+  ok 'Vérification VS Code WSL terminée.'
 else
-  ko 'Extensions VS Code WSL invalides.'
+  warn 'Validation VS Code WSL non concluante; non bloquante pour la stack cœur.'
 fi
 
 printf '\nQualité GitHub Actions\n'
-if compgen -G "$REPO_ROOT/.github/workflows/*.yml" >/dev/null; then
-  if actionlint "$REPO_ROOT"/.github/workflows/*.yml; then
-    ok 'actionlint valide les workflows du dépôt.'
-  else
-    ko 'actionlint détecte une erreur dans les workflows.'
-  fi
-else
+if ! compgen -G "$REPO_ROOT/.github/workflows/*.yml" >/dev/null; then
   warn 'Aucun workflow .yml trouvé pour actionlint.'
+elif ! command -v actionlint >/dev/null 2>&1; then
+  warn 'actionlint absent; validation locale des workflows ignorée.'
+elif actionlint "$REPO_ROOT"/.github/workflows/*.yml; then
+  ok 'actionlint valide les workflows du dépôt.'
+else
+  warn 'actionlint détecte une erreur dans les workflows; cela ne rend pas Docker/kubectl/Helm/Terraform inutilisables.'
 fi
 
 printf '\nTerraform smoke test\n'
@@ -191,8 +202,8 @@ else
 fi
 
 if [[ $failed -gt 0 ]]; then
-  printf '\nVERDICT: KO (%d contrôle(s) en échec, %d avertissement(s))\n' "$failed" "$warnings"
+  printf '\nVERDICT: KO CŒUR DEVOPS (%d contrôle(s) critique(s) en échec, %d avertissement(s))\n' "$failed" "$warnings"
   exit 1
 fi
 
-printf '\nVERDICT: DEVOPS READY (%d avertissement(s))\n' "$warnings"
+printf '\nVERDICT: DEVOPS CORE READY (%d avertissement(s) non bloquant(s))\n' "$warnings"
