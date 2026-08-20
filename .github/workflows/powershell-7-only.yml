@@ -57,7 +57,10 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq 'where pwsh.exe' START_MENU.cmd
-          ! grep -Fiq 'where powershell.exe' START_MENU.cmd
+          if grep -Fiq 'where powershell.exe' START_MENU.cmd; then
+            echo 'START_MENU.cmd must never probe Windows PowerShell.' >&2
+            exit 1
+          fi
           grep -Fq 'Assert-WpcPowerShellRuntime' menu.ps1
           grep -Fq "[version]'7.6.4'" menu.ps1
           grep -Fq 'Repair-WpcWinGetPowerShell7' scripts/bootstrap/02_foundation.ps1
