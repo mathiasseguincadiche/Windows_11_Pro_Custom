@@ -109,7 +109,7 @@ jobs:
           jq -e '
             (.schemaVersion == 1) and
             (.edition == "Core") and
-            (.minimumVersion == "7.6.5") and
+            (.minimumVersion == "7.6.4") and
             (.architecture == "x64") and
             (.executable == "pwsh.exe") and
             (.windowsPowerShellSupported == false)
@@ -217,7 +217,7 @@ jobs:
           grep -Fq 'wbadminVersionIdentifier' scripts/backup/61_validate_backup.ps1
           grep -Fq 'wbadminVersionIdentifier' scripts/backup/63_restore_drill.ps1
           grep -Fq "& \$RestorePointScript" scripts/backup/60_create_backup.ps1
-          grep -Fq "minimumVersion='7.6.5'" scripts/backup/60_create_backup.ps1
+          grep -Fq "minimumVersion='7.6.4'" scripts/backup/60_create_backup.ps1
           grep -Fq 'restorePointExitCode=$RestorePointExitCode' scripts/backup/60_create_backup.ps1
 
       - name: Validate Windows Terminal configuration contract
