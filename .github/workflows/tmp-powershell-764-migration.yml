@@ -1,0 +1,59 @@
+name: Temporary PowerShell 7.6.4 migration
+
+on:
+  push:
+    branches: [refactor/powershell-7-only]
+    paths:
+      - '.github/workflows/tmp-powershell-764-migration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+        with:
+          ref: refactor/powershell-7-only
+          fetch-depth: 0
+
+      - name: Align large runtime files to PowerShell 7.6.4
+        shell: python
+        run: |
+          from pathlib import Path
+
+          targets = [
+              Path('scripts/core/runtime.psm1'),
+              Path('scripts/bootstrap/02_physical_readiness.ps1'),
+              Path('scripts/backup/60_create_backup.ps1'),
+              Path('scripts/windows/41_restore_point.ps1'),
+              Path('scripts/core/windows-native.psm1'),
+              Path('README.md'),
+              Path('docs/15_TERMINAL_UX.md'),
+              Path('docs/17_CONTROL_CENTER.md'),
+          ]
+
+          for path in targets:
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('7.6.5', '7.6.4')
+              text = text.replace('aucun powershell.exe requis.', 'aucun moteur PowerShell historique requis.')
+              text = text.replace(
+                  '# Le chemin ne signifie pas que powershell.exe est exécuté : les modules sont\n# importés directement dans le processus PowerShell 7 courant.',
+                  '# Ce chemin est seulement un emplacement de modules système ; ils sont\n# importés directement dans le processus PowerShell 7 courant.'
+              )
+              path.write_text(text, encoding='utf-8')
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/core/runtime.psm1 scripts/bootstrap/02_physical_readiness.ps1 scripts/backup/60_create_backup.ps1 scripts/windows/41_restore_point.ps1 scripts/core/windows-native.psm1 README.md docs/15_TERMINAL_UX.md docs/17_CONTROL_CENTER.md
+          if git diff --cached --quiet; then
+            echo 'No migration changes required.'
+            exit 0
+          fi
+          git commit -m 'refactor: complete PowerShell 7.6.4 propagation'
+          git push origin HEAD:refactor/powershell-7-only
