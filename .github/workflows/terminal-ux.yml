@@ -69,8 +69,10 @@ jobs:
           @"
           `$ErrorActionPreference = 'Stop'
           `$env:WPC_HEARTBEAT_SECONDS = '2'
-          Import-Module '`$PWD\scripts\core\runtime.psm1' -Force
-          `$context = New-WpcRunContext -RepoRoot '`$PWD' -Mode 'Apply'
+          `$repoRoot = [Environment]::GetEnvironmentVariable('GITHUB_WORKSPACE')
+          if ([string]::IsNullOrWhiteSpace(`$repoRoot)) { throw 'GITHUB_WORKSPACE absent.' }
+          Import-Module (Join-Path `$repoRoot 'scripts\core\runtime.psm1') -Force
+          `$context = New-WpcRunContext -RepoRoot `$repoRoot -Mode 'Apply'
           Write-WpcBanner -Context `$context -Title 'Terminal UX smoke'
           [void](Invoke-WpcManagedScript -Context `$context -Path '$slow' -DisplayName 'Operation lente de test' -Phase 'Discovery')
           Complete-WpcRun -Context `$context -Success `$true
