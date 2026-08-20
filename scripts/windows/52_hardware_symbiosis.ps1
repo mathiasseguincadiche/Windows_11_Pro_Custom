@@ -110,6 +110,40 @@ $hardChecks = [ordered]@{
     WifiAdapterPresent = (-not [bool]$policy.network.requireWifiDevice -or $wifiDrivers.Count -gt 0)
     AmdChipsetNotBelowApprovedBaseline = ($null -eq $amdBaseline -or [bool]$amdBaseline)
 }
+
+$arcDetectedText = if ($arc.Count -gt 0) { @($arc | ForEach-Object { [string]$_.Name }) -join ', ' } else { 'aucune Arc B580 détectée' }
+$arcVersionText = if ([string]::IsNullOrWhiteSpace($arcDriverVersionText)) { 'inconnue' } else { $arcDriverVersionText }
+$amdVersionText = if ([string]::IsNullOrWhiteSpace($amdInstalledVersionText)) { 'inconnue' } else { $amdInstalledVersionText }
+$unhealthyT705 = @($t705 | Where-Object { [string]$_.HealthStatus -ne 'Healthy' } | ForEach-Object { "$($_.FriendlyName)=$($_.HealthStatus)" })
+$nonNvmeT705 = @($t705 | Where-Object { [string]$_.BusType -ne 'NVMe' } | ForEach-Object { "$($_.FriendlyName)=$($_.BusType)" })
+$temperatureEvidence = @(
+    $storageTelemetry | ForEach-Object {
+        if ($null -ne $_.Reliability -and $null -ne $_.Reliability.Temperature) { "$($_.FriendlyName)=$([int]$_.Reliability.Temperature)C" }
+    }
+)
+
+function Get-HardCheckDetail {
+    param([Parameter(Mandatory)][string]$Name)
+    switch ($Name) {
+        'ArcB580Detected' { return "détecté=$arcDetectedText ; attenduRegex=$([string]$policy.drivers.intelArc.deviceNameRegex)" }
+        'ArcDriverAtLeastApproved' { return "versionDétectée=$arcVersionText ; minimum=$([string]$policy.drivers.intelArc.minimumApprovedVersion)" }
+        'T705Count' { return "détectés=$($t705.Count) ; minimum=$([int]$policy.storage.minimumCount)" }
+        'T705Healthy' { return $(if ($unhealthyT705.Count -eq 0) { 'tous les T705 détectés sont Healthy' } else { $unhealthyT705 -join ', ' }) }
+        'T705Nvme' { return $(if ($nonNvmeT705.Count -eq 0) { 'tous les T705 détectés sont NVMe' } else { $nonNvmeT705 -join ', ' }) }
+        'T705TemperatureBelowCritical' { return "températures=$(if ($temperatureEvidence.Count -gt 0) { $temperatureEvidence -join ', ' } else { 'télémétrie indisponible' }) ; critique>$([int]$policy.storage.temperatureCriticalC)C" }
+        'Realtek8126Present' { return "correspondances=$($lanDrivers.Count) ; attenduRegex=$([string]$policy.network.lanDeviceRegex)" }
+        'WifiAdapterPresent' { return "correspondances=$($wifiDrivers.Count) ; attenduRegex=$([string]$policy.network.wifiDeviceRegex)" }
+        'AmdChipsetNotBelowApprovedBaseline' { return "versionDétectée=$amdVersionText ; minimum=$([string]$policy.drivers.amdChipset.minimumApprovedVersion)" }
+        default { return 'aucun détail spécifique disponible' }
+    }
+}
+
+$hardCheckFailures = @(
+    $hardChecks.GetEnumerator() |
+        Where-Object { -not [bool]$_.Value } |
+        ForEach-Object { [pscustomobject]@{ Name=[string]$_.Key; Detail=(Get-HardCheckDetail -Name ([string]$_.Key)) } }
+)
+
 $advisory = [ordered]@{
     AmdChipsetDetectedVersion=$amdInstalledVersionText
     AmdChipsetMinimumApprovedVersion=[string]$policy.drivers.amdChipset.minimumApprovedVersion
@@ -132,6 +166,7 @@ $report = [ordered]@{
     Mode=$Mode
     PolicyReviewedAt=[string]$policy.reviewedAt
     HardChecks=$hardChecks
+    HardCheckFailures=$hardCheckFailures
     Advisory=$advisory
     BIOS=$bios
     Arc=$arc | Select-Object Name, DriverVersion, DriverDate, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate
@@ -143,11 +178,17 @@ $report = [ordered]@{
     Warnings=$warnings.ToArray()
 }
 $report | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 $reportPath
-foreach ($check in $hardChecks.GetEnumerator()) { $state = if ([bool]$check.Value) { 'OK' } else { 'KO' }; Write-Host ("[{0}] {1}" -f $state, $check.Key) }
+foreach ($check in $hardChecks.GetEnumerator()) {
+    $state = if ([bool]$check.Value) { 'OK' } else { 'KO' }
+    $detail = Get-HardCheckDetail -Name ([string]$check.Key)
+    Write-Host ("[{0}] {1} | {2}" -f $state, $check.Key, $detail)
+}
 foreach ($message in $warnings) { Write-Warning $message }
 Write-Host "[INFO] Rapport de qualification matérielle: $reportPath"
 if ($Mode -eq 'Verify') {
-    $failed = @($hardChecks.GetEnumerator() | Where-Object { -not [bool]$_.Value })
-    if ($failed.Count -gt 0) { throw "Qualification de symbiose matérielle échouée: $($failed.Count) contrôle(s) bloquant(s). Voir $reportPath" }
+    if ($hardCheckFailures.Count -gt 0) {
+        $failureText = @($hardCheckFailures | ForEach-Object { "$($_.Name) ($($_.Detail))" }) -join ' | '
+        throw "Qualification de symbiose matérielle échouée: $($hardCheckFailures.Count) contrôle(s) bloquant(s): $failureText. Voir $reportPath"
+    }
     Write-Host 'VERDICT: HARDWARE SYMBIOSIS READY' -ForegroundColor Green
 }

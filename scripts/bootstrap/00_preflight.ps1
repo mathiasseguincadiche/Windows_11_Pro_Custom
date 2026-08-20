@@ -15,6 +15,7 @@ $rebootStateModule = Join-Path $repoRoot 'scripts\core\reboot-state.psm1'
 $storageSafetyScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_integrity.ps1'
 $storageIdentityScript = Join-Path $repoRoot 'scripts\bootstrap\00_storage_identity.ps1'
 $physicalReadinessScript = Join-Path $repoRoot 'scripts\bootstrap\02_physical_readiness.ps1'
+$hardwareSymbiosisReport = Join-Path $repoRoot 'reports\hardware\hardware-symbiosis.json'
 if (-not (Test-Path -LiteralPath $windowsNativeModule)) {
     throw "Bootstrap des modules Windows introuvable: $windowsNativeModule"
 }
@@ -106,6 +107,18 @@ function Invoke-WpcStorageIdentityVerify {
     }
 }
 
+function Get-WpcHardwareSymbiosisFailureDetail {
+    if (-not (Test-Path -LiteralPath $hardwareSymbiosisReport)) { return '' }
+    try {
+        $report = Get-Content -Raw -LiteralPath $hardwareSymbiosisReport | ConvertFrom-Json
+        $failures = @($report.HardCheckFailures)
+        if ($failures.Count -eq 0) { return '' }
+        return (@($failures | ForEach-Object { "$($_.Name): $($_.Detail)" }) -join ' | ')
+    } catch {
+        return ''
+    }
+}
+
 # Ordre fail-closed : identité physique, intégrité NTFS/NVMe, puis qualification physique.
 if ($StrictPhysicalReadiness) {
     Write-Host "[ANALYSE] Vérification des identités physiques C:/E:..." -ForegroundColor Cyan
@@ -127,4 +140,13 @@ Write-Host "[OK] Modules Windows natifs prêts: $($loadedNames -join ', ')" -For
 Write-Host "[OK] Preflight Windows 11 non-Home ($editionId) / C: NTFS / E: NTFS / aucun reboot pending bloquant" -ForegroundColor Green
 
 Write-Host "[ANALYSE] Préqualification physique complète avant toute convergence..." -ForegroundColor Cyan
-& $physicalReadinessScript -Strict:$StrictPhysicalReadiness -RequireFoundation:$RequireFoundation
+try {
+    & $physicalReadinessScript -Strict:$StrictPhysicalReadiness -RequireFoundation:$RequireFoundation
+} catch {
+    $physicalMessage = $_.Exception.Message
+    $hardwareDetail = Get-WpcHardwareSymbiosisFailureDetail
+    if (-not [string]::IsNullOrWhiteSpace($hardwareDetail)) {
+        throw "$physicalMessage Détail matériel/pilotes: $hardwareDetail"
+    }
+    throw
+}
