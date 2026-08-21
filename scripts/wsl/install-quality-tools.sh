@@ -36,6 +36,18 @@ verify_sha256() {
   fi
 }
 
+verify_github_attestation_if_authenticated() {
+  local file="$1"
+  local repository="$2"
+
+  if [[ -n ${GH_TOKEN:-} || -n ${GITHUB_TOKEN:-} ]] || gh auth status >/dev/null 2>&1; then
+    gh attestation verify "$file" -R "$repository"
+    echo "[OK] Attestation GitHub vérifiée pour $(basename "$file")."
+  else
+    echo "[AVERTISSEMENT] Authentification GitHub absente: attestation distante ignorée pour $(basename "$file"); la vérification SHA-256 épinglée reste obligatoire et a réussi." >&2
+  fi
+}
+
 log() { printf '\n==> %s\n' "$*"; }
 
 log "terraform-docs"
@@ -53,7 +65,7 @@ ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a
 actionlint_archive="$tmpdir/actionlint.tar.gz"
 curl --retry 5 --retry-all-errors -fsSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -o "$actionlint_archive"
 verify_sha256 "$actionlint_archive" "$ACTIONLINT_SHA256"
-gh attestation verify "$actionlint_archive" -R rhysd/actionlint
+verify_github_attestation_if_authenticated "$actionlint_archive" 'rhysd/actionlint'
 tar -xzf "$actionlint_archive" -C "$tmpdir" actionlint
 as_root install -m 0755 "$tmpdir/actionlint" /usr/local/bin/actionlint
 
@@ -85,7 +97,7 @@ curl --retry 5 --retry-all-errors -fsSL \
 verify_sha256 "$yq_binary" "$yq_expected"
 as_root install -m 0755 "$yq_binary" /usr/local/bin/yq
 
-log "TFLint v0.64.0 avec GitHub Artifact Attestations"
+log "TFLint v0.64.0 avec checksum signé/attestation optionnelle"
 TFLINT_VERSION="v0.64.0"
 TFLINT_CHECKSUMS_SHA256="07496dc0ab06a39fa718a9f8e471112b6e6ab4fd3a9f1024210a55fe3f1a9ff9"
 tflint_archive="$tmpdir/tflint_linux_amd64.zip"
@@ -93,7 +105,7 @@ tflint_checksums="$tmpdir/checksums.txt"
 curl --retry 5 --retry-all-errors -fsSL "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/tflint_linux_amd64.zip" -o "$tflint_archive"
 curl --retry 5 --retry-all-errors -fsSL "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/checksums.txt" -o "$tflint_checksums"
 verify_sha256 "$tflint_checksums" "$TFLINT_CHECKSUMS_SHA256"
-gh attestation verify "$tflint_checksums" -R terraform-linters/tflint
+verify_github_attestation_if_authenticated "$tflint_checksums" 'terraform-linters/tflint'
 (
   cd "$tmpdir"
   sha256sum --ignore-missing -c checksums.txt

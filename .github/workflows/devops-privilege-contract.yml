@@ -6,6 +6,7 @@ on:
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
+      - 'scripts/wsl/manage-devops-terminal.sh'
       - '.github/workflows/devops-privilege-contract.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - 'scripts/bootstrap/08_devops.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
+      - 'scripts/wsl/manage-devops-terminal.sh'
       - '.github/workflows/devops-privilege-contract.yml'
 
 permissions:
@@ -30,6 +32,7 @@ jobs:
           set -euo pipefail
           bash -n scripts/wsl/install-devops.sh
           bash -n scripts/wsl/install-quality-tools.sh
+          bash -n scripts/wsl/manage-devops-terminal.sh
 
       - name: Enforce root system boundary and target-user ownership
         shell: bash
@@ -38,10 +41,12 @@ jobs:
           ps='scripts/bootstrap/08_devops.ps1'
           install='scripts/wsl/install-devops.sh'
           quality='scripts/wsl/install-quality-tools.sh'
+          terminal='scripts/wsl/manage-devops-terminal.sh'
 
-          grep -Fq "'--user', 'root'" "$ps"
-          grep -Fq "'--target-user', \$LinuxUser" "$ps"
+          test "$(grep -Fc "'--user', 'root'" "$ps")" -ge 2
+          test "$(grep -Fc "'--target-user', \$LinuxUser" "$ps")" -ge 2
           grep -Fq "Aucun mot de passe n'est transmis" "$ps"
+          grep -Fq 'Paquets Terminal via root WSL' "$ps"
 
           grep -Fq 'if [[ ${EUID} -ne 0 ]]' "$install"
           grep -Fq -- '--target-user' "$install"
@@ -51,15 +56,22 @@ jobs:
           grep -Fq 'TARGET_HOME' "$install"
           grep -Fq 'install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP"' "$install"
 
-          # Interdire une vraie commande sudo dans le bootstrap cœur, sans confondre
-          # les messages/documentation qui expliquent justement son absence.
-          if grep -En '^[[:space:]]*sudo([[:space:]]|$)' "$install"; then
-            echo 'Interactive sudo dependency detected in install-devops.sh.' >&2
+          if grep -En '^[[:space:]]*sudo([[:space:]]|$)' "$install" "$terminal"; then
+            echo 'Interactive sudo dependency detected in automated WSL bootstrap.' >&2
             exit 1
           fi
 
+          grep -Fq -- '--target-user' "$terminal"
+          grep -Fq 'runuser --user "$target_user"' "$terminal"
+          grep -Fq 'apt-get install -y --no-install-recommends' "$terminal"
+          grep -Fq 'apt-get remove -y' "$terminal"
+          grep -Fq 'aucun prompt sudo interactif' "$terminal"
+
           grep -Fq 'as_root()' "$quality"
           grep -Fq 'if [[ ${EUID} -eq 0 ]]' "$quality"
+          grep -Fq 'verify_github_attestation_if_authenticated()' "$quality"
+          grep -Fq 'gh auth status' "$quality"
+          grep -Fq 'la vérification SHA-256 épinglée reste obligatoire' "$quality"
 
       - name: Parse PowerShell orchestrator
         shell: pwsh
@@ -75,7 +87,7 @@ jobs:
             throw "08_devops.ps1 parse errors: $($errors.Message -join '; ')"
           }
 
-      - name: Prove installer refuses unprivileged automation before mutation
+      - name: Prove core installer refuses unprivileged automation before mutation
         shell: bash
         run: |
           set -euo pipefail
@@ -86,14 +98,51 @@ jobs:
             code=$?
             set -e
           else
+            sudo useradd --create-home privilegeprobe
             set +e
-            output="$(bash scripts/wsl/install-devops.sh --target-user "$(id -un)" 2>&1)"
+            output="$(sudo runuser -u privilegeprobe -- bash scripts/wsl/install-devops.sh --target-user privilegeprobe 2>&1)"
             code=$?
             set -e
           fi
           test "$code" -eq 1
           grep -Fq 'doit être lancé par l orchestrateur avec le compte root WSL' <<<"$output"
           if grep -Eq 'apt-get|docker-ce|/usr/local/bin' <<<"$output"; then
-            echo 'The unprivileged rejection path must fail before any mutation.' >&2
+            echo 'The unprivileged core rejection path must fail before any mutation.' >&2
             exit 1
           fi
+
+      - name: Prove terminal installer refuses hidden privilege escalation
+        shell: bash
+        run: |
+          set -euo pipefail
+          fakebin="$(mktemp -d)"
+          probe_home="$(mktemp -d)"
+          chmod 0755 "$fakebin" "$probe_home"
+          cat >"$fakebin/dpkg-query" <<'EOF'
+          #!/usr/bin/env bash
+          exit 1
+          EOF
+          chmod 0755 "$fakebin/dpkg-query"
+          printf '# original\n' > "$probe_home/.bashrc"
+          before="$(sha256sum "$probe_home/.bashrc" | awk '{print $1}')"
+
+          if [[ "$(id -u)" -eq 0 ]]; then
+            useradd --create-home terminalprobe
+            chown -R terminalprobe:terminalprobe "$probe_home"
+            set +e
+            output="$(runuser -u terminalprobe -- env HOME="$probe_home" PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            code=$?
+            set -e
+          else
+            set +e
+            output="$(env HOME="$probe_home" PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            code=$?
+            set -e
+          fi
+
+          printf '%s\n' "$output"
+          test "$code" -eq 1
+          grep -Fq 'doit être lancé par l orchestrateur avec root WSL et --target-user' <<<"$output"
+          after="$(sha256sum "$probe_home/.bashrc" | awk '{print $1}')"
+          test "$before" = "$after"
+          test ! -e "$probe_home/.config/windows11-pro-custom/devops.sh"

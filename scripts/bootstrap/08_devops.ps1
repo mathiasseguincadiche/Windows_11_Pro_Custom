@@ -121,7 +121,13 @@ $linuxTerminalScript = (& wsl.exe --distribution $Distribution --user $LinuxUser
 $convertTerminal = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($convertTerminal -ne 0 -or [string]::IsNullOrWhiteSpace($linuxTerminalScript)) { throw 'Impossible de convertir le chemin du gestionnaire Terminal DevOps avec wslpath.' }
-Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxTerminalScript, 'apply') -LogIdentity 'scripts/wsl/manage-devops-terminal.sh' -DisplayName 'manage-devops-terminal.sh'
+
+# Le gestionnaire Terminal possède lui aussi une partie système (APT) et une partie
+# utilisateur (profil Bash/Starship). Comme pour le bootstrap cœur, l’orchestrateur
+# entre par root WSL pour les paquets puis le script redescend explicitement sous
+# $LinuxUser pour tout ce qui touche au HOME. Aucun prompt sudo n’est nécessaire.
+Write-Host "[INFO] Paquets Terminal via root WSL; profil et état utilisateur conservés sous $LinuxUser." -ForegroundColor DarkGray
+Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', 'root', '--exec', 'bash', $linuxTerminalScript, 'apply', '--target-user', $LinuxUser) -LogIdentity 'scripts/wsl/manage-devops-terminal.sh' -DisplayName 'manage-devops-terminal.sh'
 
 Write-Host '[4/4] Extensions VS Code dans WSL (advisory)' -ForegroundColor Cyan
 $linuxVsCodeScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $vscodeWslScript).Trim()
