@@ -47,13 +47,13 @@ function Get-GitHubCredentialStorage {
 
     $plain = Invoke-WslCapture -ArgumentList @(
         'sh','-lc',
-        'f="$HOME/.config/gh/hosts.yml"; if [ -f "$f" ] && grep -Eq "^[[:space:]]*oauth_token:" "$f"; then exit 0; fi; exit 1'
+        'f="$HOME/.config/gh/hosts.yml"; [ -f "$f" ] && grep -Eq "^[[:space:]]*oauth_token:" "$f"'
     ) -IgnoreExitCode
     if ($plain.ExitCode -eq 0) { return 'PlaintextFile' }
 
     $environment = Invoke-WslCapture -ArgumentList @(
         'sh','-lc',
-        'if [ -n "${GH_TOKEN:-}" ] || [ -n "${GITHUB_TOKEN:-}" ]; then exit 0; fi; exit 1'
+        '[ -n "${GH_TOKEN:-}" ] || [ -n "${GITHUB_TOKEN:-}" ]'
     ) -IgnoreExitCode
     if ($environment.ExitCode -eq 0) { return 'Environment' }
 
