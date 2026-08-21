@@ -167,7 +167,10 @@ jobs:
 
           # Force one real system gap so Apply must exercise the root APT path.
           apt-get remove -y tree
-          ! command -v tree >/dev/null 2>&1
+          if command -v tree >/dev/null 2>&1; then
+            echo 'tree should be absent before the root Apply proof.' >&2
+            exit 1
+          fi
 
           first_output="$(bash scripts/wsl/manage-devops-terminal.sh apply --target-user terminaltest)"
           printf '%s\n' "$first_output"
@@ -192,7 +195,10 @@ jobs:
           cmp -s /home/terminaltest/.bashrc /home/terminaltest/original.bashrc
           test ! -e /home/terminaltest/.config/windows11-pro-custom/devops.sh
           test ! -e /home/terminaltest/.config/windows11-pro-custom/starship.toml
-          ! command -v tree >/dev/null 2>&1
+          if command -v tree >/dev/null 2>&1; then
+            echo 'tree should be absent after rollback.' >&2
+            exit 1
+          fi
 
   windows-contract:
     runs-on: windows-latest
