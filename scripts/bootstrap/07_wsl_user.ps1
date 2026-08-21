@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 Import-Module (Join-Path $repoRoot 'scripts\core\runtime.psm1')
 Import-Module (Join-Path $repoRoot 'scripts\core\wsl-detection.psm1')
+Import-Module (Join-Path $repoRoot 'scripts\core\wsl-conf.psm1') -Force
 $context = Get-WpcRunContextFromEnvironment -RepoRoot $repoRoot
 $usernamePattern = '^[a-z_][a-z0-9_-]{0,31}$'
 $runtimeContractPath = Join-Path $repoRoot 'config\wsl\runtime-contract.json'
@@ -40,29 +41,34 @@ if ($registration.Known) {
     if ($installed -notcontains $Distribution) { throw "Distribution WSL absente: $Distribution" }
 }
 
-function Invoke-WslText {
+function Invoke-WslNativeText {
     param(
         [Parameter(Mandatory)][string]$User,
-        [Parameter(Mandatory)][string]$Command
+        [Parameter(Mandatory)][string]$Command,
+        [string[]]$Arguments = @()
     )
-    $text = (& wsl.exe -d $Distribution -u $User -- sh -lc $Command 2>&1 | Out-String).Trim()
+
+    $text = (& wsl.exe -d $Distribution -u $User -- $Command @Arguments 2>&1 | Out-String).Trim()
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($code -ne 0) { throw "Commande WSL échouée (user=$User): $Command`n$text" }
+    if ($code -ne 0) {
+        $renderedArgs = (@($Arguments) -join ' ')
+        throw "Commande WSL échouée (user=$User): $Command $renderedArgs`n$text"
+    }
     return $text
 }
 
 function Get-DefaultLinuxUser {
-    $value = (& wsl.exe -d $Distribution -- sh -lc 'id -un' 2>$null | Out-String).Trim()
+    $value = (& wsl.exe -d $Distribution -- id -un 2>$null | Out-String).Trim()
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($code -ne 0) { return $null }
+    if ($code -ne 0 -or [string]::IsNullOrWhiteSpace($value)) { return $null }
     return $value
 }
 
 function Test-LinuxUserExists {
     param([Parameter(Mandatory)][string]$Name)
-    & wsl.exe -d $Distribution -u root -- sh -lc "getent passwd '$Name' >/dev/null" 2>$null
+    & wsl.exe -d $Distribution -u root -- getent passwd $Name 1>$null 2>$null
     $code = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     return ($code -eq 0)
@@ -71,45 +77,68 @@ function Test-LinuxUserExists {
 function Test-LinuxUserSudo {
     param([Parameter(Mandatory)][string]$Name)
     if (-not (Test-LinuxUserExists -Name $Name)) { return $false }
-    $groups = Invoke-WslText -User root -Command "id -nG '$Name'"
+    $groups = Invoke-WslNativeText -User root -Command 'id' -Arguments @('-nG', $Name)
     return (@($groups -split '\s+') -contains 'sudo')
 }
 
+function Get-WslConfLines {
+    & wsl.exe -d $Distribution -u root -- test -f /etc/wsl.conf 1>$null 2>$null
+    $existsCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($existsCode -ne 0) { return @() }
+
+    $rawLines = @(& wsl.exe -d $Distribution -u root -- cat /etc/wsl.conf 2>&1)
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    $cleanLines = @($rawLines | ForEach-Object { ([string]$_) -replace "`0", '' })
+    if ($code -ne 0) {
+        throw "Impossible de lire /etc/wsl.conf dans $Distribution (code=$code): $($cleanLines -join ' | ')"
+    }
+    return $cleanLines
+}
+
 function Get-ConfiguredDefaultUser {
+    $lines = @(Get-WslConfLines)
+    return (Get-WpcWslConfDefaultUser -Lines $lines)
+}
+
+function Write-WslConfLines {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Lines)
+
+    $desiredText = ConvertTo-WpcWslConfText -Lines $Lines
+    $tempPath = "/etc/.wpc-wsl.conf.$([guid]::NewGuid().ToString('N')).tmp"
     try {
-        $value = Invoke-WslText -User root -Command "awk 'BEGIN{inuser=0} /^\[user\]/{inuser=1;next} /^\[/{inuser=0} inuser && /^default=/{sub(/^default=/,\"\"); print; exit}' /etc/wsl.conf 2>/dev/null || true"
-        if ([string]::IsNullOrWhiteSpace($value)) { return $null }
-        return $value.Trim()
-    } catch { return $null }
+        $desiredText | & wsl.exe -d $Distribution -u root -- tee $tempPath 1>$null
+        $teeCode = $LASTEXITCODE
+        $global:LASTEXITCODE = 0
+        if ($teeCode -ne 0) { throw "Écriture temporaire de /etc/wsl.conf échouée (code=$teeCode)." }
+
+        [void](Invoke-WslNativeText -User root -Command 'chmod' -Arguments @('0644', $tempPath))
+        [void](Invoke-WslNativeText -User root -Command 'chown' -Arguments @('root:root', $tempPath))
+        [void](Invoke-WslNativeText -User root -Command 'mv' -Arguments @('-f', $tempPath, '/etc/wsl.conf'))
+    } finally {
+        & wsl.exe -d $Distribution -u root -- rm -f $tempPath 1>$null 2>$null
+        $global:LASTEXITCODE = 0
+    }
+
+    $afterLines = @(Get-WslConfLines)
+    $afterText = ConvertTo-WpcWslConfText -Lines $afterLines
+    if ($afterText -ne $desiredText) {
+        throw 'Le contenu /etc/wsl.conf ne correspond pas exactement à la cible après écriture atomique.'
+    }
 }
 
 function Set-ConfiguredDefaultUser {
     param([Parameter(Mandatory)][string]$Name)
-    $script = @'
-set -eu
-file=/etc/wsl.conf
-tmp="$(mktemp)"
-user='__USER__'
-touch "$file"
-awk -v user="$user" '
-BEGIN { inuser=0; wrote=0 }
-/^\[user\]$/ {
-  if (!wrote) { print "[user]"; print "default=" user; wrote=1 }
-  inuser=1
-  next
-}
-/^\[/ { inuser=0 }
-{ if (!inuser) print }
-END {
-  if (!wrote) { print ""; print "[user]"; print "default=" user }
-}
-' "$file" > "$tmp"
-install -m 0644 "$tmp" "$file"
-rm -f "$tmp"
-'@
-    $script = $script.Replace('__USER__', $Name)
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
-    [void](Invoke-WslText -User root -Command "printf '%s' '$encoded' | base64 -d | sh")
+
+    $currentLines = @(Get-WslConfLines)
+    $desiredLines = @(Set-WpcWslConfDefaultUser -Lines $currentLines -User $Name)
+    Write-WslConfLines -Lines $desiredLines
+
+    $confirmed = Get-ConfiguredDefaultUser
+    if ($confirmed -ne $Name) {
+        throw "Échec de relecture de /etc/wsl.conf après écriture: default='$confirmed', attendu='$Name'."
+    }
 }
 
 $defaultUser = Get-DefaultLinuxUser
@@ -159,7 +188,7 @@ if (-not (Test-LinuxUserExists -Name $targetUser)) {
 }
 
 if (-not (Test-LinuxUserSudo -Name $targetUser)) {
-    [void](Invoke-WslText -User root -Command "usermod -aG sudo '$targetUser'")
+    [void](Invoke-WslNativeText -User root -Command 'usermod' -Arguments @('-aG', 'sudo', $targetUser))
     if (-not (Test-LinuxUserSudo -Name $targetUser)) { throw "Impossible dʼajouter '$targetUser' au groupe sudo." }
     Write-Host "[FAIT] '$targetUser' ajouté au groupe sudo." -ForegroundColor Green
 } else {
@@ -181,7 +210,14 @@ Write-Host "[EN COURS] Redémarrage logique de $Distribution pour appliquer lʼu
 $terminateCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($terminateCode -ne 0) { throw "Impossible de terminer $Distribution (code=$terminateCode)." }
-Start-Sleep -Milliseconds 500
+Start-Sleep -Milliseconds 750
 $defaultUser = Get-DefaultLinuxUser
 if ($defaultUser -ne $targetUser) { throw "Utilisateur WSL par défaut après redémarrage='$defaultUser', attendu='$targetUser'." }
-Write-Host "[FAIT] Utilisateur WSL '$targetUser' prêt et réellement actif par défaut." -ForegroundColor Green
+
+$finalConfiguredUser = Get-ConfiguredDefaultUser
+if ($finalConfiguredUser -ne $targetUser) {
+    throw "Preuve finale /etc/wsl.conf invalide: default='$finalConfiguredUser', attendu='$targetUser'."
+}
+if (-not (Test-LinuxUserExists -Name $targetUser)) { throw "Preuve finale utilisateur absente: $targetUser" }
+if (-not (Test-LinuxUserSudo -Name $targetUser)) { throw "Preuve finale sudo absente pour '$targetUser'." }
+Write-Host "[FAIT] Utilisateur WSL '$targetUser' prêt: compte présent, sudo, /etc/wsl.conf et démarrage par défaut vérifiés." -ForegroundColor Green

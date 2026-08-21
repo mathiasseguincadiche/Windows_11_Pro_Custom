@@ -1,0 +1,147 @@
+name: WSL default user contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/core/wsl-conf.psm1'
+      - 'scripts/bootstrap/07_wsl_user.ps1'
+      - 'scripts/wsl/apply-wsl-conf.ps1'
+      - 'config/wsl/runtime-contract.json'
+      - '.github/workflows/wsl-default-user-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/core/wsl-conf.psm1'
+      - 'scripts/bootstrap/07_wsl_user.ps1'
+      - 'scripts/wsl/apply-wsl-conf.ps1'
+      - 'config/wsl/runtime-contract.json'
+      - '.github/workflows/wsl-default-user-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Enforce deterministic WSL default-user wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          module='scripts/core/wsl-conf.psm1'
+          user_script='scripts/bootstrap/07_wsl_user.ps1'
+          apply_script='scripts/wsl/apply-wsl-conf.ps1'
+          contract='config/wsl/runtime-contract.json'
+
+          jq -e '.expectedLinuxUser == "mathias"' "$contract" >/dev/null
+          grep -Fq 'scripts\core\wsl-conf.psm1' "$user_script"
+          grep -Fq 'scripts\core\wsl-conf.psm1' "$apply_script"
+          grep -Fq 'Get-WpcWslConfDefaultUser' "$user_script" "$apply_script"
+          grep -Fq 'Set-WpcWslConfDefaultUser' "$user_script" "$apply_script"
+          grep -Fq -- '-- cat /etc/wsl.conf' "$user_script" "$apply_script"
+          grep -Fq -- '-- tee $tempPath' "$user_script" "$apply_script"
+          grep -Fq -- "-Command 'mv'" "$user_script" "$apply_script"
+          grep -Fq 'wsl.exe --terminate $Distribution' "$user_script" "$apply_script"
+
+          if grep -Eq 'awk|sh -lc|base64' "$user_script" "$apply_script"; then
+            echo 'Fragile shell parsing/encoding is forbidden for /etc/wsl.conf default-user management.' >&2
+            exit 1
+          fi
+
+          test -f "$module"
+
+      - name: Parse PowerShell files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            './scripts/core/wsl-conf.psm1',
+            './scripts/bootstrap/07_wsl_user.ps1',
+            './scripts/wsl/apply-wsl-conf.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Test wsl.conf parser and idempotent transform
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/core/wsl-conf.psm1 -Force
+
+          $base = @(
+            '[boot]',
+            'systemd=true',
+            '',
+            '[network]',
+            'generateResolvConf=true'
+          )
+          $withUser = @(Set-WpcWslConfDefaultUser -Lines $base -User 'mathias')
+          if ((Get-WpcWslConfDefaultUser -Lines $withUser) -ne 'mathias') {
+            throw 'Missing [user] section was not created correctly.'
+          }
+          if (@($withUser | Where-Object { $_ -eq 'default=mathias' }).Count -ne 1) {
+            throw 'Expected exactly one default=mathias assignment.'
+          }
+
+          $existing = @(
+            '[boot]',
+            'systemd=true',
+            '',
+            '[user]',
+            'default=root',
+            '',
+            '[interop]',
+            'enabled=true'
+          )
+          $updated = @(Set-WpcWslConfDefaultUser -Lines $existing -User 'mathias')
+          if ((Get-WpcWslConfDefaultUser -Lines $updated) -ne 'mathias') {
+            throw 'Existing default user was not replaced.'
+          }
+          if ($updated -contains 'default=root') {
+            throw 'Stale default=root assignment survived transformation.'
+          }
+          if ($updated -notcontains 'enabled=true') {
+            throw 'Unrelated wsl.conf settings must be preserved.'
+          }
+
+          $duplicates = @(
+            '[user]',
+            'default=root',
+            'default=ubuntu',
+            '',
+            '[boot]',
+            'systemd=true'
+          )
+          $deduped = @(Set-WpcWslConfDefaultUser -Lines $duplicates -User 'mathias')
+          if (@($deduped | Where-Object { $_ -match '^\s*default\s*=' }).Count -ne 1) {
+            throw 'Duplicate default assignments were not normalized.'
+          }
+
+          $once = ConvertTo-WpcWslConfText -Lines $updated
+          $twice = ConvertTo-WpcWslConfText -Lines @(Set-WpcWslConfDefaultUser -Lines $updated -User 'mathias')
+          if ($once -ne $twice) {
+            throw 'wsl.conf default-user transformation must be idempotent.'
+          }
+
+          $invalidRejected = $false
+          try {
+            [void](Set-WpcWslConfDefaultUser -Lines $base -User 'Bad User')
+          } catch {
+            $invalidRejected = $true
+          }
+          if (-not $invalidRejected) {
+            throw 'Invalid Linux usernames must fail closed.'
+          }
+
+          Write-Host '[OK] Deterministic wsl.conf parser/transformer contract passed.'
