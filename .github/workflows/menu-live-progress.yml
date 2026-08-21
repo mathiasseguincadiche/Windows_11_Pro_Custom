@@ -72,3 +72,4 @@ jobs:
             throw "Live child process exit-code propagation failed: expected 23, got $exitCode"
           }
           Write-Host '[OK] Live stdout/stderr streaming preserves the native child exit code.'
+          $global:LASTEXITCODE = 0
