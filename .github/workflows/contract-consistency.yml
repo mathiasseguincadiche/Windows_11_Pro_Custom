@@ -45,13 +45,16 @@ jobs:
 
           install='scripts/wsl/install-devops.sh'
           validate='scripts/wsl/validate-devops.sh'
+          roots='scripts/wsl/manage-wsl-roots.sh'
           powershell='scripts/bootstrap/14_validate_wsl.ps1'
 
-          grep -Fq '.workingRoots' "$install"
-          grep -Fq '.utilityRoots' "$install"
-          grep -Fq '.workingRoots' "$validate"
-          grep -Fq '.utilityRoots' "$validate"
-          grep -Fq '.forbiddenRoots' "$validate"
+          test -f "$roots"
+          grep -Fq 'manage-wsl-roots.sh' "$install"
+          grep -Fq 'manage-wsl-roots.sh' "$validate"
+          grep -Fq '.workingRoots' "$roots"
+          grep -Fq '.utilityRoots' "$roots"
+          grep -Fq '.forbiddenRoots' "$roots"
+          grep -Fq 'relative="${declared:2}"' "$roots"
           grep -Fq 'workingRoots' "$powershell"
           grep -Fq 'utilityRoots' "$powershell"
           grep -Fq 'forbiddenRoots' "$powershell"
@@ -131,6 +134,7 @@ jobs:
           set -euo pipefail
           bash -n scripts/wsl/install-devops.sh
           bash -n scripts/wsl/validate-devops.sh
+          bash -n scripts/wsl/manage-wsl-roots.sh
           python3 -m json.tool config/wsl/runtime-contract.json >/dev/null
 
       - name: Parse PowerShell WSL validator
