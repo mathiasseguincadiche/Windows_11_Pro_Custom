@@ -13,11 +13,11 @@ Pour une vue courte : [`18_GUIDE_MAITRE.md`](18_GUIDE_MAITRE.md). Pour le parcou
         │                     │                         │
         ▼                     ▼                         ▼
  desktop / pilotes       VS Code Windows        Windows Terminal
- PowerShell / WinGet            │                ┌──────┴──────┐
- Windows Update                 │                │             │
-                               ▼                ▼             ▼
-                              WSL2       PowerShell 7       Ubuntu
-                               │           DevOps            WSL2
+ PowerShell / WinGet            │             ┌────────┼────────┐
+ Windows Update                 │             │        │        │
+                               ▼             ▼        ▼        ▼
+                              WSL2      PowerShell  PowerShell  Ubuntu
+                               │        7 DevOps    7 Admin     WSL2
                                └───────────────────────────────┤
                                                                ▼
                                                          Linux DevOps
@@ -31,7 +31,7 @@ La séparation de responsabilités est :
 ```text
 Windows          -> hôte, applications, pilotes, administration et runtime WSL
 Ubuntu           -> backend Linux DevOps et workspaces Linux
-Windows Terminal -> point d'entrée vers PowerShell 7 DevOps et Ubuntu DevOps
+Windows Terminal -> hôte terminal système et routeur PowerShell normal/Admin/Ubuntu
 VS Code          -> interface Windows reliée aux projets WSL2
 ```
 
@@ -79,35 +79,47 @@ outils qualité
 
 Guide : [`06_WSL2.md`](06_WSL2.md).
 
-## Windows Terminal : un point d'entrée, deux contextes
+## Windows Terminal : hôte système et trois profils gérés
 
 Les sources versionnées sont :
 
 ```text
 config/windows-terminal/profiles.fragment.json
 config/windows-terminal/actions.json
+config/windows-terminal/settings.contract.json
 config/windows-terminal/starship.windows.toml
 ```
 
-Le contrat courant expose deux profils gérés :
+Le contrat courant expose trois profils gérés :
 
 ```text
 Windows Terminal
-├── PowerShell 7 - DevOps <- profil par défaut
-└── Ubuntu - DevOps       <- distribution Ubuntu WSL2
+├── PowerShell 7 - DevOps         <- profil par défaut
+├── PowerShell 7 - DevOps (Admin) <- profil élevé via UAC
+└── Ubuntu - DevOps               <- distribution Ubuntu WSL2, démarre dans ~
 ```
+
+Windows Terminal Stable est également la cible de délégation terminal du système Windows. Le composant sauvegarde les valeurs de délégation initiales avant modification afin de pouvoir les restaurer avec `Rollback`.
 
 Raccourcis :
 
 ```text
-Ctrl+Shift+1 -> PowerShell 7 - DevOps
-Ctrl+Shift+2 -> Ubuntu - DevOps
-Ctrl+Shift+O -> PowerShell + Ubuntu en panneaux
+Ctrl+T         -> nouvel onglet PowerShell 7 - DevOps
+Ctrl+Shift+1   -> PowerShell 7 - DevOps
+Ctrl+Shift+2   -> Ubuntu - DevOps
+Ctrl+Shift+3   -> PowerShell 7 - DevOps (Admin)
+Ctrl+Shift+R   -> renommer l'onglet courant
+Ctrl+W         -> fermer l'onglet courant
+Ctrl+Shift+O   -> PowerShell + Ubuntu en panneaux
 ```
 
-Le profil Ubuntu exécute les outils Linux dans la distribution `Ubuntu`. Il ne remplace pas le gestionnaire Bash du dépôt : `scripts/wsl/manage-devops-terminal.sh` et `scripts/wsl/manage-shell-profile.sh` restent propriétaires de Bash, Starship Linux et des outils ergonomiques WSL.
+Le profil Ubuntu exécute les outils Linux dans la distribution `Ubuntu` et démarre explicitement dans le HOME Linux. Il ne remplace pas le gestionnaire Bash du dépôt : `scripts/wsl/manage-devops-terminal.sh` et `scripts/wsl/manage-shell-profile.sh` restent propriétaires de Bash, Starship Linux et des outils ergonomiques WSL.
 
-`scripts/windows/31_windows_terminal.ps1` vérifie et fait converger le contrat Windows Terminal avec les modes `Audit`, `Apply`, `Verify` et `Rollback`. Il sauvegarde l'état initial des fichiers qu'il possède avant la première mutation et ne réinstalle pas lui-même les applications.
+Le profil Admin utilise le mécanisme `elevate` de Windows Terminal et possède un titre, une couleur d'onglet et un schéma distincts. Les trois profils utilisent `suppressApplicationTitle` afin de préserver un titre d'onglet renommé manuellement.
+
+Le contrat global gère le thème `WPC DevOps`, Mica, le menu `+`, les schémas normal/Admin/Ubuntu et les règles de sécurité de collage. Il préserve les réglages utilisateur qui ne sont pas possédés par le dépôt.
+
+`scripts/windows/31_windows_terminal.ps1` reste le point d'entrée compatible avec l'orchestrateur et délègue au moteur `31_windows_terminal_modern.ps1`. Les modes `Audit`, `Apply`, `Verify` et `Rollback` couvrent les fragments, `settings.json`, le profil PowerShell, Starship et la délégation terminal système.
 
 Guide : [`07_DEVOPS_STACK.md`](07_DEVOPS_STACK.md).
 
@@ -165,7 +177,7 @@ Guides : [`14_ORCHESTRATION.md`](14_ORCHESTRATION.md) et [`17_CONTROL_CENTER.md`
 | Ressources WSL | `config/wsl/*.wslconfig` |
 | Versions DevOps | `config/devops/tool-versions.env` |
 | Windows Terminal | `config/windows-terminal/` |
-| Déploiement Windows Terminal | `scripts/windows/31_windows_terminal.ps1` |
+| Déploiement Windows Terminal | `scripts/windows/31_windows_terminal.ps1` + `31_windows_terminal_modern.ps1` |
 | Shell terminal Ubuntu | `config/wsl/bashrc.d/devops.sh` + `config/wsl/starship.toml` |
 | Applications Windows | `manifests/winget/apps-core.json` |
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
