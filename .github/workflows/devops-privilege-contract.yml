@@ -7,6 +7,7 @@ on:
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
       - 'scripts/wsl/manage-devops-terminal.sh'
+      - 'scripts/wsl/manage-wsl-roots.sh'
       - '.github/workflows/devops-privilege-contract.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
       - 'scripts/wsl/manage-devops-terminal.sh'
+      - 'scripts/wsl/manage-wsl-roots.sh'
       - '.github/workflows/devops-privilege-contract.yml'
 
 permissions:
@@ -33,6 +35,7 @@ jobs:
           bash -n scripts/wsl/install-devops.sh
           bash -n scripts/wsl/install-quality-tools.sh
           bash -n scripts/wsl/manage-devops-terminal.sh
+          bash -n scripts/wsl/manage-wsl-roots.sh
 
       - name: Enforce root system boundary and target-user ownership
         shell: bash
@@ -42,11 +45,13 @@ jobs:
           install='scripts/wsl/install-devops.sh'
           quality='scripts/wsl/install-quality-tools.sh'
           terminal='scripts/wsl/manage-devops-terminal.sh'
+          roots='scripts/wsl/manage-wsl-roots.sh'
 
           test "$(grep -Fc "'--user', 'root'" "$ps")" -ge 2
           test "$(grep -Fc "'--target-user', \$LinuxUser" "$ps")" -ge 2
           grep -Fq "Aucun mot de passe n'est transmis" "$ps"
           grep -Fq 'Paquets Terminal via root WSL' "$ps"
+          grep -Fq 'manage-wsl-roots.sh' "$ps"
 
           grep -Fq 'if [[ ${EUID} -ne 0 ]]' "$install"
           grep -Fq -- '--target-user' "$install"
@@ -54,9 +59,16 @@ jobs:
           grep -Fq 'runuser -u "$TARGET_USER"' "$install"
           grep -Fq 'usermod -aG docker "$TARGET_USER"' "$install"
           grep -Fq 'TARGET_HOME' "$install"
-          grep -Fq 'install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP"' "$install"
+          grep -Fq 'manage-wsl-roots.sh' "$install"
 
-          if grep -En '^[[:space:]]*sudo([[:space:]]|$)' "$install" "$terminal"; then
+          grep -Fq "[[ \"\$MODE\" == 'apply' && \${EUID} -ne 0 ]]" "$roots"
+          grep -Fq -- '--target-user' "$roots"
+          grep -Fq 'TARGET_HOME' "$roots"
+          grep -Fq 'TARGET_GROUP' "$roots"
+          grep -Fq 'install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP"' "$roots"
+          grep -Fq 'chown "$TARGET_USER:$TARGET_GROUP" "$target"' "$roots"
+
+          if grep -En '^[[:space:]]*sudo([[:space:]]|$)' "$install" "$terminal" "$roots"; then
             echo 'Interactive sudo dependency detected in automated WSL bootstrap.' >&2
             exit 1
           fi
@@ -110,6 +122,21 @@ jobs:
             echo 'The unprivileged core rejection path must fail before any mutation.' >&2
             exit 1
           fi
+
+      - name: Prove roots Apply refuses unprivileged mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home rootsprivilegeprobe
+          set +e
+          output="$(sudo runuser -u rootsprivilegeprobe -- bash scripts/wsl/manage-wsl-roots.sh apply --target-user rootsprivilegeprobe 2>&1)"
+          code=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$code" -eq 1
+          grep -Fq 'doit être lancée via root WSL' <<<"$output"
+          test ! -e /home/rootsprivilegeprobe/projects
+          test ! -e /home/rootsprivilegeprobe/~
 
       - name: Prove terminal installer refuses hidden privilege escalation
         shell: bash
