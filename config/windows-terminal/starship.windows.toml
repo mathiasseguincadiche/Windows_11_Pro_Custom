@@ -1,63 +1,99 @@
-add_newline = true
-command_timeout = 1000
+add_newline = false
+command_timeout = 1200
+scan_timeout = 30
 
 format = """
 $os\
-$username\
-$hostname\
+$env_var\
 $directory\
 $git_branch\
 $git_status\
+$fill\
+$cmd_duration\
+$line_break\
+$character"""
+
+right_format = """
 $docker_context\
 $kubernetes\
 $terraform\
 $azure\
 $aws\
 $python\
-$nodejs\
-$cmd_duration\
-$line_break\
-$character"""
+$nodejs"""
+
+[fill]
+symbol = " "
 
 [os]
 disabled = false
+style = "bold blue"
 
-[username]
-show_always = false
+[os.symbols]
+Windows = " "
 
-[hostname]
-ssh_only = true
+[env_var.WPC_ELEVATED]
+variable = "WPC_ELEVATED"
+format = "[󰒃 $env_value]($style) "
+style = "bold red"
 
 [directory]
 truncation_length = 4
 truncate_to_repo = true
+truncation_symbol = "…/"
+style = "bold cyan"
+read_only = " 󰌾"
 
 [git_branch]
-symbol = "git:"
+symbol = " "
+style = "bold purple"
 
 [git_status]
 disabled = false
+style = "yellow"
+format = "([$all_status$ahead_behind]($style) )"
 
 [docker_context]
-symbol = "docker:"
+symbol = " "
 disabled = false
+format = "[$symbol$context]($style) "
+style = "blue bold"
 
 [kubernetes]
-symbol = "k8s:"
+symbol = "󱃾 "
 disabled = false
+format = "[$symbol$context( \\($namespace\\))]($style) "
+style = "cyan bold"
 
 [terraform]
-symbol = "tf:"
+symbol = "󱁢 "
+format = "[$symbol$workspace]($style) "
+style = "purple bold"
 
 [azure]
-symbol = "azure:"
+symbol = "󰠅 "
+format = "[$symbol$subscription]($style) "
+style = "blue bold"
 
 [aws]
-symbol = "aws:"
+symbol = "󰸏 "
+format = "[$symbol$profile( \\($region\\))]($style) "
+style = "yellow bold"
+
+[python]
+symbol = " "
+format = "[$symbol$version]($style) "
+style = "yellow bold"
+
+[nodejs]
+symbol = " "
+format = "[$symbol$version]($style) "
+style = "green bold"
 
 [cmd_duration]
-min_time = 2000
+min_time = 1500
 format = "[$duration]($style) "
+style = "dimmed white"
 
 [character]
 success_symbol = "[❯](bold green)"
