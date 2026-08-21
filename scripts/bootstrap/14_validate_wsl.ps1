@@ -71,13 +71,19 @@ function Get-WslRelease {
     }
 }
 
+function Get-LinuxHome {
+    $value = (& wsl.exe -d $Distribution -- printenv HOME 2>&1 | Out-String).Trim()
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ne 0) { throw "Impossible de déterminer HOME dans $Distribution (code=$code): $value" }
+    if ([string]::IsNullOrWhiteSpace($value) -or -not $value.StartsWith('/')) { throw "HOME Linux invalide pour ${Distribution}: $value" }
+    return $value.TrimEnd('/')
+}
+
+$linuxHome = Get-LinuxHome
 function Resolve-ManagedLinuxRoot {
     param([Parameter(Mandatory)][string]$DeclaredRoot)
     $relative=$DeclaredRoot.Substring(2)
-    $linuxHome = (Invoke-LinuxValue 'printf "%s" "$HOME"').TrimEnd('/')
-    if ([string]::IsNullOrWhiteSpace($linuxHome) -or -not $linuxHome.StartsWith('/')) {
-        throw "HOME Linux invalide pour $Distribution: $linuxHome"
-    }
     return "$linuxHome/$relative"
 }
 
@@ -89,7 +95,7 @@ if ($codename -ne [string]$runtimeContract.expectedCodename) { throw "Ubuntu VER
 $processors=[int](Invoke-LinuxValue 'nproc')
 $memoryBytes=[int64](Invoke-LinuxValue "free -b | sed -n '2p' | tr -s ' ' | cut -d ' ' -f 2"); $memoryGB=[math]::Round($memoryBytes/1GB,2)
 $swapBytes=[int64](Invoke-LinuxValue "free -b | sed -n '3p' | tr -s ' ' | cut -d ' ' -f 2"); $swapGB=[math]::Round($swapBytes/1GB,2)
-$pid1=Invoke-LinuxValue 'ps -p 1 -o comm='; $homeFs=Invoke-LinuxValue 'findmnt -T "$HOME" -n -o FSTYPE'
+$pid1=Invoke-LinuxValue 'ps -p 1 -o comm='; $homeFs=Invoke-LinuxValue "findmnt -T '$linuxHome' -n -o FSTYPE"
 if ($processors -ne $expected.Processors) { throw "CPU WSL inattendu: $processors threads vus, attendu $($expected.Processors). Exécuter wsl --shutdown puis relancer." }
 if ($memoryGB -lt ($expected.MemoryGB-1) -or $memoryGB -gt ($expected.MemoryGB+1)) { throw "RAM WSL inattendue: $memoryGB Go vus, cible $($expected.MemoryGB) Go." }
 if ($swapGB -lt ($expected.SwapGB-1) -or $swapGB -gt ($expected.SwapGB+1)) { throw "Swap WSL inattendu: $swapGB Go vus, cible $($expected.SwapGB) Go." }
