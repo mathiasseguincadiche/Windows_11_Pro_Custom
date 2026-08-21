@@ -155,6 +155,7 @@ jobs:
           STARSHIP_CONFIG="$PWD/config/windows-terminal/starship.windows.toml" starship prompt >/dev/null
 
       - name: Prove Linux terminal root/user split, idempotence and rollback
+        shell: bash
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
