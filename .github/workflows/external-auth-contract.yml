@@ -85,7 +85,7 @@ jobs:
             if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
           }
 
-          if ($interactive -match "default\s*\{\s*throw\s+['\"]Choix AWS") {
+          if ($interactive -match 'default\s*\{\s*throw\s+.*Choix AWS') {
             throw 'Invalid AWS menu input must re-display the menu instead of terminating the assistant.'
           }
           if ($interactive -notmatch 'while\s*\(\$true\)[\s\S]*Choix \[0-3\]') {
