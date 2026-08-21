@@ -220,22 +220,38 @@ jobs:
           grep -Fq "minimumVersion='7.6.4'" scripts/backup/60_create_backup.ps1
           grep -Fq 'restorePointExitCode=$RestorePointExitCode' scripts/backup/60_create_backup.ps1
 
-      - name: Validate Windows Terminal configuration contract
+      - name: Validate Windows Terminal modern configuration contract
         shell: bash
         run: |
           set -euo pipefail
           profiles='config/windows-terminal/profiles.fragment.json'
           actions='config/windows-terminal/actions.json'
+          settings='config/windows-terminal/settings.contract.json'
           starship='config/windows-terminal/starship.windows.toml'
-          test -f "$profiles" && test -f "$actions" && test -s "$starship"
+          test -f "$profiles" && test -f "$actions" && test -f "$settings" && test -s "$starship"
           test ! -e config/wezterm/wezterm.lua
           test ! -e scripts/windows/31_wezterm.ps1
-          jq -e '.profiles | length == 2' "$profiles" >/dev/null
-          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font")' "$profiles" >/dev/null
-          jq -e '.profiles[] | select(.name == "Ubuntu - DevOps") | (.commandline == "wsl.exe -d \"__WPC_DISTRIBUTION__\"" and .font.face == "JetBrainsMono Nerd Font")' "$profiles" >/dev/null
-          jq -e '.actions | length == 3' "$actions" >/dev/null
-          grep -qx 'add_newline = true' "$starship"
-          grep -qx 'command_timeout = 1000' "$starship"
+
+          jq -e '.profiles | length == 3' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font" and .elevate == false and .suppressApplicationTitle == true and .colorScheme == "WPC DevOps")' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps (Admin)") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font" and .elevate == true and .suppressApplicationTitle == true and .colorScheme == "WPC DevOps Admin")' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "Ubuntu - DevOps") | (.commandline == "wsl.exe -d \"__WPC_DISTRIBUTION__\"" and .startingDirectory == "~" and .font.face == "JetBrainsMono Nerd Font" and .elevate == false and .suppressApplicationTitle == true and .colorScheme == "WPC Ubuntu")' "$profiles" >/dev/null
+
+          jq -e '.actions | length == 7' "$actions" >/dev/null
+          jq -e '.actions[] | select(.keys == "ctrl+t") | (.command.action == "newTab" and .command.profile == "PowerShell 7 - DevOps")' "$actions" >/dev/null
+          jq -e '.actions[] | select(.keys == "ctrl+shift+3") | (.command.action == "newTab" and .command.profile == "PowerShell 7 - DevOps (Admin)" and .command.elevate == true)' "$actions" >/dev/null
+          jq -e '.actions[] | select(.keys == "ctrl+shift+r") | (.command == "openTabRenamer")' "$actions" >/dev/null
+          jq -e '.actions[] | select(.keys == "ctrl+w") | (.command.action == "closeTab")' "$actions" >/dev/null
+
+          jq -e '(.globals.theme == "WPC DevOps") and (.globals.launchMode == "maximized") and (.globals.windowingBehavior == "useExisting") and (.globals.multiLinePasteWarning == true) and (.globals.largePasteWarning == true)' "$settings" >/dev/null
+          jq -e '.themes[] | select(.name == "WPC DevOps") | (.window.applicationTheme == "dark" and .window.useMica == true)' "$settings" >/dev/null
+          jq -e '[.schemes[].name] | sort == ["WPC DevOps", "WPC DevOps Admin", "WPC Ubuntu"] | sort' "$settings" >/dev/null
+          jq -e '.newTabMenu | tostring | contains("Windows 11 Pro Custom") and contains("remainingProfiles")' "$settings" >/dev/null
+
+          grep -qx 'add_newline = false' "$starship"
+          grep -qx 'command_timeout = 1200' "$starship"
+          grep -qx 'scan_timeout = 30' "$starship"
+          grep -Fq '[env_var.WPC_ELEVATED]' "$starship"
 
   actionlint:
     runs-on: ubuntu-latest
