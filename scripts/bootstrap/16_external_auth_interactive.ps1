@@ -81,11 +81,29 @@ function Read-AwsProfileFromList {
 }
 
 function Read-AwsProfileName {
-    param([string]$Prompt = 'Nom du profil AWS (Entrée = default)')
+    param([string]$Prompt = 'Nom personnalisé du profil AWS CLI')
+
+    Write-Host ''
+    Write-Host 'PROFIL AWS CLI LOCAL' -ForegroundColor Cyan
+    Write-Host 'Le profil est seulement un alias enregistré sur cette machine pour réutiliser une connexion AWS.' -ForegroundColor DarkGray
+    Write-Host 'Ce n est PAS le nom d un projet AWS, d un compte AWS, d un service ou d une ressource cloud.' -ForegroundColor Yellow
+    Write-Host 'Le profil recommandé pour une configuration simple avec un seul compte est: default' -ForegroundColor DarkGray
+
+    if (Read-YesNoLoop -Prompt 'Utiliser le profil local recommandé "default"') {
+        Write-Host '[INFO] Profil AWS CLI local sélectionné: default.' -ForegroundColor Cyan
+        return 'default'
+    }
+
     while ($true) {
         $value = (Read-Host $Prompt).Trim()
-        if ([string]::IsNullOrWhiteSpace($value)) { return 'default' }
-        if ($value -match '^[A-Za-z0-9_.@+-]+$') { return $value }
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            Write-Host '[INFO] Le nom personnalisé ne peut pas être vide. Réessaie ou utilise le profil default.' -ForegroundColor Yellow
+            continue
+        }
+        if ($value -match '^[A-Za-z0-9_.@+-]+$') {
+            Write-Host ("[INFO] Profil AWS CLI local sélectionné: {0}." -f $value) -ForegroundColor Cyan
+            return $value
+        }
         Write-Host '[INFO] Nom de profil AWS invalide. Caractères autorisés: lettres, chiffres, . _ @ + -' -ForegroundColor Yellow
     }
 }
@@ -275,10 +293,13 @@ Choisis la méthode AWS :
        - un utilisateur IAM ;
        - ou une identité fédérée IAM.
      Ce que tu fais :
-       - tu choisis le nom du profil (Entrée = default) ;
+       - le script te propose le profil AWS CLI local "default" ;
+       - ce profil est seulement un alias local, PAS le nom d un projet AWS ;
+       - tu peux choisir un nom personnalisé si tu gères plusieurs comptes ou rôles ;
        - AWS CLI lance "aws login --profile <profil>" ;
        - ton navigateur s ouvre et tu te connectes avec tes identifiants AWS habituels.
      Ce que tu N AS PAS besoin de connaître :
+       - aucun nom de projet AWS ;
        - aucune URL de portail SSO ;
        - aucune région SSO ;
        - aucune Secret Access Key statique.
@@ -346,8 +367,9 @@ function Configure-Aws {
                     continue
                 }
                 $profile = Read-AwsProfileName
-                Write-Host ("[ACTION REQUISE] Ouverture de la connexion AWS Console pour le profil '{0}'." -f $profile) -ForegroundColor Magenta
-                Write-Host 'Connecte-toi dans le navigateur avec tes identifiants AWS habituels. Aucune URL SSO n est demandée.' -ForegroundColor DarkGray
+                Write-Host ("[ACTION REQUISE] Ouverture de la connexion AWS Console pour le profil local '{0}'." -f $profile) -ForegroundColor Magenta
+                Write-Host 'Le compte et l identité AWS réels seront choisis dans le navigateur puis vérifiés avec AWS STS.' -ForegroundColor DarkGray
+                Write-Host 'Aucune URL SSO, clé statique ou nom de projet AWS n est demandé par ce flux.' -ForegroundColor DarkGray
                 if ((Invoke-WslInteractive -ArgumentList @('aws','login','--profile',$profile)) -ne 0) { throw 'aws login a échoué ou a été interrompu.' }
                 Set-AwsCredentialPermissions
                 if (-not (Test-AwsProfile -Profile $profile)) { throw "La session AWS du profil '$profile' n est pas valide après aws login." }
@@ -404,7 +426,7 @@ function Configure-Aws {
             }
             '4' {
                 Write-Host '[AVERTISSEMENT] Mode legacy: AWS CLI gère directement la saisie des clés IAM statiques.' -ForegroundColor Yellow
-                $profile = Read-AwsProfileName -Prompt 'Nom du profil AWS pour les clés statiques (Entrée = default)'
+                $profile = Read-AwsProfileName -Prompt 'Nom personnalisé du profil AWS CLI pour les clés statiques'
                 if ((Invoke-WslInteractive -ArgumentList @('aws','configure','--profile',$profile)) -ne 0) { throw 'aws configure a échoué.' }
                 Set-AwsCredentialPermissions
                 if (-not (Test-AwsProfile -Profile $profile)) { throw "Le profil AWS '$profile' est configuré mais STS ne le valide pas." }
