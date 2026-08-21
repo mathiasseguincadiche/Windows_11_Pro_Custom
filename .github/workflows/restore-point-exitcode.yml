@@ -41,8 +41,8 @@ jobs:
           grep -Fq 'ForEach-Object { [string]$_.Name }' "$readiness" "$restore"
           grep -Fq 'Release=$release' "$readiness"
           grep -Fq 'SchemaVersion=2' "$readiness"
-          grep -Fq "SystemRestorePointCreationFrequency" "$restore"
-          grep -Fq "-PropertyType DWord -Value 0 -Force" "$restore"
+          grep -Fq 'SystemRestorePointCreationFrequency' "$restore"
+          grep -Fq -- '-PropertyType DWord -Value 0 -Force' "$restore"
           grep -Fq 'Wait-WpcRestorePointEvidence' "$restore"
           grep -Fq 'TimeoutSeconds = 90' "$restore"
           grep -Fq 'Restore-WpcRestorePointFrequencyState' "$restore"
@@ -54,10 +54,6 @@ jobs:
           fi
           if grep -Fq 'Checkpoint-Computer' "$restore" "$readiness"; then
             echo 'Checkpoint-Computer fallback is forbidden.' >&2
-            exit 1
-          fi
-          if grep -Fq -- '-SkipFoundationRestorePoint' "$restore" | grep -Fq 'return'; then
-            echo 'Restore-point script must not silently bypass the safety guard.' >&2
             exit 1
           fi
 
