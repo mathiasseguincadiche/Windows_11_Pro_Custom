@@ -166,6 +166,13 @@ function Get-SettingsEvidence {
     return Get-WpcTerminalSettingsEvidence -Settings $settings -ExpectedDefaultProfile $psProfileGuid -LegacyImportName $actionsFileName
 }
 
+# Compatibility probe retained for orchestration contracts and callers that only
+# need a Boolean. The factual implementation remains centralized in the module.
+function Test-SettingsMatch {
+    param([Parameter(Mandatory)][string]$Path)
+    return [bool](Get-SettingsEvidence -Path $Path).IsCompliant
+}
+
 function Get-Contract {
     $targets = Get-Targets
     $settingsEvidence = Get-SettingsEvidence -Path $targets.Settings
@@ -180,7 +187,7 @@ function Get-Contract {
         'Ancien import actions retiré' = -not (Test-Path -LiteralPath $targets.Actions)
         'Starship Windows config' = Test-FileMatch -Source $sourceStarship -Target $targets.Starship
         'Profil PowerShell géré' = Test-PowerShellProfileMatch -Path $targets.PowerShellProfile
-        'settings.json Windows Terminal' = [bool]$settingsEvidence.IsCompliant
+        'settings.json Windows Terminal' = Test-SettingsMatch -Path $targets.Settings
     }
     return [pscustomobject]@{ Targets=$targets; Checks=$checks; SettingsEvidence=$settingsEvidence }
 }
