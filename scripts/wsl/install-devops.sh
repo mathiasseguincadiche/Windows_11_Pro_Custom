@@ -69,6 +69,7 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 DOCKER_DAEMON_CONFIG="$REPO_ROOT/config/wsl/docker-daemon.json"
 VERSIONS_FILE="$REPO_ROOT/config/devops/tool-versions.env"
 RUNTIME_CONTRACT="$REPO_ROOT/config/wsl/runtime-contract.json"
+MANAGED_ROOTS_SCRIPT="$SCRIPT_DIR/manage-wsl-roots.sh"
 
 # shellcheck disable=SC1091
 source /etc/os-release
@@ -89,6 +90,10 @@ fi
 
 if [[ ! -r "$RUNTIME_CONTRACT" ]]; then
   echo "[ERREUR] Contrat runtime WSL absent: $RUNTIME_CONTRACT" >&2
+  exit 1
+fi
+if [[ ! -r "$MANAGED_ROOTS_SCRIPT" ]]; then
+  echo "[ERREUR] Gestionnaire de racines WSL absent: $MANAGED_ROOTS_SCRIPT" >&2
   exit 1
 fi
 
@@ -251,7 +256,7 @@ log "Outils qualité IaC (complément non bloquant)"
 if bash "$SCRIPT_DIR/install-quality-tools.sh"; then
   echo '[OK] Outils qualité IaC installés.'
 else
-  echo '[AVERTISSEMENT] Les outils qualité additionnels n ont pas tous pu être installés. La stack DevOps cœur continue; relance le composant plus tard.' >&2
+  echo "[AVERTISSEMENT] Les outils qualité additionnels n ont pas tous pu être installés. La stack DevOps cœur continue; relance le composant plus tard." >&2
 fi
 
 log "Profil shell DevOps (complément non bloquant)"
@@ -262,24 +267,12 @@ else
 fi
 
 log "Répertoires Linux gérés"
-managed_roots_raw="$(jq -er '
-  [(.workingRoots // []), (.utilityRoots // [])]
-  | add
-  | if type == "array"
-       and length > 0
-       and all(.[]; type == "string" and startswith("~/") and length > 2)
-    then .[]
-    else error("managed roots invalides")
-    end
-' "$RUNTIME_CONTRACT")" || {
-  echo '[ERREUR] Contrat WSL invalide: workingRoots/utilityRoots.' >&2
+if bash "$MANAGED_ROOTS_SCRIPT" apply --target-user "$TARGET_USER"; then
+  echo "[OK] Racines Linux gérées convergées et anciennes formes '~/...' migrées sans perte."
+else
+  echo '[ERREUR] Impossible de converger les racines Linux gérées sans risque de perte de données.' >&2
   exit 1
-}
-mapfile -t managed_roots <<< "$managed_roots_raw"
-for root in "${managed_roots[@]}"; do
-  target="$TARGET_HOME/${root#~/}"
-  install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP" "$target"
-done
+fi
 
 log "Contrat runtime des versions épinglées"
 kubectl version --client --output=json | jq -e --arg expected "$KUBECTL_VERSION" '.clientVersion.gitVersion == $expected' >/dev/null
