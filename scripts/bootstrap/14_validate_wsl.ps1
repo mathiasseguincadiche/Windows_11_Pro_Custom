@@ -9,6 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+Import-Module (Join-Path $repoRoot 'scripts\core\wsl-release.psm1')
 $release = (Get-Content -Raw (Join-Path $repoRoot 'VERSION')).Trim()
 if ($release -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION invalide: $release" }
 $configSource = Join-Path $repoRoot "config\wsl\$WslProfile.wslconfig"
@@ -45,17 +46,44 @@ if ($listVerbose -notmatch "(?m)^\s*\*?\s*$([regex]::Escape($Distribution))\s+\S
 function Invoke-LinuxValue {
     param([Parameter(Mandatory)][string]$Command)
     $value=(& wsl.exe -d $Distribution -- bash -lc $Command 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Commande Linux échouée: $Command`n$value" }
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ne 0) { throw "Commande Linux échouée: $Command`n$value" }
     return $value
 }
+
+function Get-WslRelease {
+    $rawLines = @(& wsl.exe -d $Distribution -u root -- cat /etc/os-release 2>&1)
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    $cleanLines = @($rawLines | ForEach-Object { ([string]$_) -replace "`0", '' })
+
+    if ($code -ne 0) {
+        $detail = ($cleanLines -join ' | ').Trim()
+        throw "Impossible de lire /etc/os-release dans $Distribution (code=$code). Sortie: $detail"
+    }
+
+    try {
+        return ConvertFrom-WpcOsRelease -Lines $cleanLines
+    } catch {
+        $detail = ($cleanLines -join ' | ').Trim()
+        throw "Impossible de parser /etc/os-release dans ${Distribution}: $($_.Exception.Message) Sortie: $detail"
+    }
+}
+
 function Resolve-ManagedLinuxRoot {
     param([Parameter(Mandatory)][string]$DeclaredRoot)
     $relative=$DeclaredRoot.Substring(2)
-    return Invoke-LinuxValue "printf '%s' \"`$HOME/$relative\""
+    $linuxHome = (Invoke-LinuxValue 'printf "%s" "$HOME"').TrimEnd('/')
+    if ([string]::IsNullOrWhiteSpace($linuxHome) -or -not $linuxHome.StartsWith('/')) {
+        throw "HOME Linux invalide pour $Distribution: $linuxHome"
+    }
+    return "$linuxHome/$relative"
 }
 
-$versionId=Invoke-LinuxValue ". /etc/os-release; printf '%s' \"`$VERSION_ID\""
-$codename=Invoke-LinuxValue ". /etc/os-release; printf '%s' \"`$VERSION_CODENAME\""
+$releaseInfo = Get-WslRelease
+$versionId=[string]$releaseInfo.VersionId
+$codename=[string]$releaseInfo.Codename
 if ($versionId -ne [string]$runtimeContract.expectedVersionId) { throw "Ubuntu VERSION_ID inattendu: $versionId ; attendu $($runtimeContract.expectedVersionId)." }
 if ($codename -ne [string]$runtimeContract.expectedCodename) { throw "Ubuntu VERSION_CODENAME inattendu: $codename ; attendu $($runtimeContract.expectedCodename)." }
 $processors=[int](Invoke-LinuxValue 'nproc')
