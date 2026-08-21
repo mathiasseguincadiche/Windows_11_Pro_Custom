@@ -51,7 +51,8 @@ jobs:
           fi
 
           declared='~/projects'
-          # shellcheck disable=SC2088 # Intentional regression fixture for the historical Bash bug.
+          # Intentional regression fixture for the historical Bash bug.
+          # shellcheck disable=SC2088
           wrong="$HOME/${declared#~/}"
           test "$wrong" = "$HOME/~/projects"
           relative="${declared:2}"
