@@ -56,6 +56,35 @@ function Assert-WpcRebootStateCommands {
 }
 function Clear-WpcScreen {if (-not $NoClear -and -not $DryRun) {Clear-Host}}
 function Write-Line {param([string]$Text='',[ConsoleColor]$Color=[ConsoleColor]::Gray);Write-Host $Text -ForegroundColor $Color}
+function Write-WpcLiveChildLine {
+    param([AllowEmptyString()][string]$Line='')
+    if ([string]::IsNullOrWhiteSpace($Line)) { Write-Host ''; return }
+    $plain = $Line -replace "`e\[[0-9;?]*[ -/]*[@-~]", ''
+    $trimmed = $plain.TrimStart()
+    $color = [ConsoleColor]::Gray
+    if ($trimmed -match '^={8,}$') { $color = [ConsoleColor]::DarkCyan }
+    elseif ($trimmed -match '^(ETAPE|SOUS-ETAPE|COMPOSANT)\b') { $color = [ConsoleColor]::Cyan }
+    elseif ($trimmed -match '^\[(OK|DEJA OK|DÉJÀ OK|FAIT|READY|TERMINE)\]') { $color = [ConsoleColor]::Green }
+    elseif ($trimmed -match '^\[(ERREUR|ERROR|KO|FAILED)\]') { $color = [ConsoleColor]::Red }
+    elseif ($trimmed -match '^\[(A FAIRE|À FAIRE|AVERTISSEMENT|WARN|WARNING|ATTENTE|EN ATTENTE)\]') { $color = [ConsoleColor]::Yellow }
+    elseif ($trimmed -match '^\[(ACTION REQUISE|ACTION|USER ACTION)\]') { $color = [ConsoleColor]::Magenta }
+    elseif ($trimmed -match '^\[(EN COURS|ANALYSE|INFO|ACTIF)\]') { $color = [ConsoleColor]::Cyan }
+    elseif ($trimmed -match '^(Objectif|Script|Journal|Demarre|Démarré|Temps total|Run|Logs|Release|PowerShell)\s*:') { $color = [ConsoleColor]::DarkGray }
+    Write-Host $plain -ForegroundColor $color
+}
+function Invoke-WpcVisibleChildProcess {
+    param(
+        [Parameter(Mandatory)][string]$Executable,
+        [Parameter(Mandatory)][string[]]$ArgumentList
+    )
+    & $Executable @ArgumentList 2>&1 | ForEach-Object {
+        $text = [string]$_
+        $parts = @($text -split "`r?`n")
+        if ($parts.Count -eq 0) { Write-WpcLiveChildLine -Line ''; return }
+        foreach ($line in $parts) { Write-WpcLiveChildLine -Line $line }
+    }
+    return [int]$LASTEXITCODE
+}
 function Write-Header {
     Clear-WpcScreen
     $admin=Test-IsAdministrator;$adminText=if ($admin) {'OUI'} else {'NON'};$adminColor=if ($admin) {[ConsoleColor]::Green} else {[ConsoleColor]::Yellow}
@@ -194,14 +223,31 @@ function Format-WpcProcessFailure {
 }
 function Invoke-WpcRepoScript {
     param([Parameter(Mandatory)][string]$DisplayName,[Parameter(Mandatory)][string]$Path,[hashtable]$Arguments=@{},[switch]$RequiresAdmin)
-    Write-Host '';Write-Line ("[ACTION] {0}" -f $DisplayName) Cyan;Write-Line ("Commande: {0}" -f (Format-WpcCommand -Path $Path -Arguments $Arguments)) DarkGray;$script:LastActionRequiresReboot=$false
+    Write-Host ''
+    Write-Line ("[ACTION] {0}" -f $DisplayName) Cyan
+    Write-Line ("Commande: {0}" -f (Format-WpcCommand -Path $Path -Arguments $Arguments)) DarkGray
+    Write-Line ('-'*78) DarkCyan
+    Write-Line (" SUIVI EN DIRECT | {0}" -f $DisplayName) Cyan
+    Write-Line (" Demarre : {0}" -f (Get-Date -Format 'HH:mm:ss')) DarkGray
+    Write-Line ' Les phases, sous-etapes, statuts et durees de l orchestrateur apparaissent ci-dessous.' DarkGray
+    Write-Line ('-'*78) DarkCyan
+    $script:LastActionRequiresReboot=$false
     if ($DryRun) {Write-Line '[DRY-RUN] Aucune commande executee.' Green;return $true}
     $actionStartedAt=Get-Date
     try {
         $exe=Get-PowerShellExecutable;$argList=New-Object System.Collections.Generic.List[string];$argList.Add('-NoProfile');$argList.Add('-ExecutionPolicy');$argList.Add('Bypass');$argList.Add('-File');$argList.Add($Path);foreach ($arg in (Convert-ArgumentsForElevation -Arguments $Arguments)) {$argList.Add($arg)};$childArgs=$argList.ToArray();$exitCode=0
-        if ($RequiresAdmin -and -not (Test-IsAdministrator)) {Write-Line '[ADMIN] Elevation UAC requise. Une fenetre PowerShell 7 admin va etre ouverte.' Yellow;$process=Start-Process -FilePath $exe -Verb RunAs -ArgumentList $childArgs -Wait -PassThru;$exitCode=$process.ExitCode} else {& $exe @childArgs;$exitCode=$LASTEXITCODE}
+        if ($RequiresAdmin -and -not (Test-IsAdministrator)) {
+            Write-Line '[ADMIN] Elevation UAC requise. Le suivi live se poursuivra dans la fenetre PowerShell 7 elevee.' Yellow
+            $process=Start-Process -FilePath $exe -Verb RunAs -ArgumentList $childArgs -Wait -PassThru
+            $exitCode=$process.ExitCode
+        } else {
+            $exitCode=Invoke-WpcVisibleChildProcess -Executable $exe -ArgumentList $childArgs
+        }
         if ($exitCode -ne 0) {Assert-WpcRebootStateCommands;$state=Get-WpcPendingRebootState;if ($state.Pending) {$script:LastActionRequiresReboot=$true;throw "REDÉMARRAGE REQUIS: le processus PowerShell 7 isolé s'est arrêté avec un redémarrage Windows en attente ($($state.Reasons -join ', '))."};throw (Format-WpcProcessFailure -DisplayName $DisplayName -ExitCode $exitCode -StartedAt $actionStartedAt)}
-        Write-Line '[TERMINE] Action terminee.' Green;return $true
+        $elapsed=(Get-Date)-$actionStartedAt
+        Write-Line ('-'*78) DarkCyan
+        Write-Line ("[TERMINE] Action terminee | Duree: {0:hh\:mm\:ss}" -f $elapsed) Green
+        return $true
     } catch {$message=$_.Exception.Message;Assert-WpcRebootStateCommands;if (Test-WpcRebootRequiredMessage -Message $message) {$script:LastActionRequiresReboot=$true;Write-Line ("[ACTION REQUISE] {0}" -f $message) Yellow;return $false};Write-Line ("[ERREUR] {0}" -f $message) Red;return $false}
 }
 function Invoke-OpenFolder {param([Parameter(Mandatory)][string]$Path,[Parameter(Mandatory)][string]$Label);Write-Host '';Write-Line ("[ACTION] Ouvrir {0}" -f $Label) Cyan;if ($DryRun) {Write-Line ("[DRY-RUN] explorer.exe '$Path'") Green;return};New-Item -ItemType Directory -Force -Path $Path|Out-Null;Start-Process explorer.exe -ArgumentList @($Path)}
@@ -240,7 +286,7 @@ function Show-LogsMenu {while ($true) {Write-Header;Write-Line ' JOURNAUX ET RAP
 function Show-Help {
     Write-Header;Write-Line ' AIDE RAPIDE' White;Write-Line ''
     Write-Line 'PowerShell' Cyan;Write-Line '  Runtime unique: PowerShell 7.6.4 minimum, edition Core, processus x64, executable pwsh.exe.' DarkGray;Write-Line '  Windows PowerShell 5.1 peut rester installe dans Windows mais ce depot ne l execute jamais et ne l utilise pas comme fallback.' DarkGray
-    Write-Line 'Installation complete' Cyan;Write-Line '  Converge toute la workstation avec install.ps1 -FullInstall.' DarkGray;Write-Line '  Si Windows exige un reboot, le menu bloque proprement puis propose le redemarrage; relancer ensuite la meme option reprend idempotemment.' DarkGray
+    Write-Line 'Installation complete' Cyan;Write-Line '  Converge toute la workstation avec install.ps1 -FullInstall.' DarkGray;Write-Line '  Le menu relaie en direct les phases, sous-etapes, statuts, durees et sorties de l orchestrateur.' DarkGray;Write-Line '  Si Windows exige un reboot, le menu bloque proprement puis propose le redemarrage; relancer ensuite la meme option reprend idempotemment.' DarkGray
     Write-Line 'Logiciels' Cyan;Write-Line '  Installe uniquement les applications WinGet manquantes ou non conformes.' DarkGray
     Write-Line 'Mises a jour' Cyan;Write-Line '  Gere Windows Update, WinGet, WSL, Ubuntu/APT, VS Code et les outils DevOps epingles.' DarkGray
     Write-Line 'Sauvegarde' Cyan;Write-Line '  Cree ou valide la sauvegarde de reference de la workstation.' DarkGray
