@@ -71,8 +71,10 @@ resolve_managed_root() {
   local declared="$1"
   local relative=''
   local segment=''
+  local tilde_char='~'
+  local managed_prefix="${tilde_char}/"
 
-  if [[ "$declared" != '~/'* || ${#declared} -le 2 ]]; then
+  if [[ "$declared" != "$managed_prefix"* || ${#declared} -le 2 ]]; then
     echo "[ERREUR] Racine gérée invalide: $declared" >&2
     return 1
   fi
