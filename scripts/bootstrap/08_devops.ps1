@@ -62,12 +62,14 @@ function Invoke-WslUserCommand {
 function Convert-WindowsScriptToWslPath {
     param(
         [Parameter(Mandatory)][string]$WindowsPath,
-        [Parameter(Mandatory)][string]$Label
+        [Parameter(Mandatory)][string]$Label,
+        [switch]$AllowFailure
     )
     $linuxPath = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec wslpath -a -u $WindowsPath).Trim()
     $convertCode = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($convertCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxPath)) {
+        if ($AllowFailure) { return '' }
         throw "Impossible de convertir le chemin $Label avec wslpath."
     }
     return $linuxPath
@@ -151,7 +153,7 @@ Write-Host "[INFO] Paquets Terminal via root WSL; profil et état utilisateur co
 Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', 'root', '--exec', 'bash', $linuxTerminalScript, 'apply', '--target-user', $LinuxUser) -LogIdentity 'scripts/wsl/manage-devops-terminal.sh' -DisplayName 'manage-devops-terminal.sh'
 
 Write-Host '[4/4] Extensions VS Code dans WSL (advisory)' -ForegroundColor Cyan
-$linuxVsCodeScript = Convert-WindowsScriptToWslPath -WindowsPath $vscodeWslScript -Label 'du gestionnaire VS Code WSL'
+$linuxVsCodeScript = Convert-WindowsScriptToWslPath -WindowsPath $vscodeWslScript -Label 'du gestionnaire VS Code WSL' -AllowFailure
 if ([string]::IsNullOrWhiteSpace($linuxVsCodeScript)) {
     Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Intégration VS Code WSL non exécutée' -Detail 'wslpath n a pas pu convertir le chemin. La stack DevOps cœur reste valide.' -Context $context
 } else {
