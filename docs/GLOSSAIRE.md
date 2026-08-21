@@ -154,14 +154,17 @@ Contrairement à `Audit`, `Verify` peut échouer parce qu'un écart réel existe
 
 ### Windows Terminal
 
-Terminal Windows utilisé comme point d'entrée vers les deux contextes gérés :
+Application terminal système Windows et point d'entrée vers les trois profils gérés :
 
 ```text
 PowerShell 7 - DevOps
+PowerShell 7 - DevOps (Admin)
 Ubuntu - DevOps
 ```
 
-Il ne remplace pas le shell Bash d'Ubuntu.
+Le profil normal est le profil Windows Terminal par défaut, le profil Admin utilise l'élévation UAC native de Windows Terminal et le profil Ubuntu démarre dans le HOME Linux. Windows Terminal ne remplace pas le shell Bash d'Ubuntu.
+
+Le contrat gère également les onglets, le renommage natif, le thème Mica, les raccourcis, la délégation terminal système et le rollback de l'état initial.
 
 ### Workstation-as-code
 
