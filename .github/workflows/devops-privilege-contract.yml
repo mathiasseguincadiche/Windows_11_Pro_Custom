@@ -56,7 +56,6 @@ jobs:
           grep -Fq 'TARGET_HOME' "$install"
           grep -Fq 'install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP"' "$install"
 
-          # Les deux chemins automatisés doivent être exempts de vraies commandes sudo.
           if grep -En '^[[:space:]]*sudo([[:space:]]|$)' "$install" "$terminal"; then
             echo 'Interactive sudo dependency detected in automated WSL bootstrap.' >&2
             exit 1
@@ -117,34 +116,33 @@ jobs:
         run: |
           set -euo pipefail
           fakebin="$(mktemp -d)"
-          chmod 0755 "$fakebin"
+          probe_home="$(mktemp -d)"
+          chmod 0755 "$fakebin" "$probe_home"
           cat >"$fakebin/dpkg-query" <<'EOF'
           #!/usr/bin/env bash
           exit 1
           EOF
           chmod 0755 "$fakebin/dpkg-query"
+          printf '# original\n' > "$probe_home/.bashrc"
+          before="$(sha256sum "$probe_home/.bashrc" | awk '{print $1}')"
 
           if [[ "$(id -u)" -eq 0 ]]; then
             useradd --create-home terminalprobe
-            printf '# original\n' > /home/terminalprobe/.bashrc
-            chown -R terminalprobe:terminalprobe /home/terminalprobe
-            before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
+            chown -R terminalprobe:terminalprobe "$probe_home"
             set +e
-            output="$(runuser -u terminalprobe -- env HOME=/home/terminalprobe PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            output="$(runuser -u terminalprobe -- env HOME="$probe_home" PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
             code=$?
             set -e
           else
-            sudo useradd --create-home terminalprobe
-            printf '# original\n' | sudo tee /home/terminalprobe/.bashrc >/dev/null
-            sudo chown -R terminalprobe:terminalprobe /home/terminalprobe
-            before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
             set +e
-            output="$(sudo runuser -u terminalprobe -- env HOME=/home/terminalprobe PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            output="$(env HOME="$probe_home" PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
             code=$?
             set -e
           fi
+
+          printf '%s\n' "$output"
           test "$code" -eq 1
           grep -Fq 'doit être lancé par l orchestrateur avec root WSL et --target-user' <<<"$output"
-          after="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
+          after="$(sha256sum "$probe_home/.bashrc" | awk '{print $1}')"
           test "$before" = "$after"
-          test ! -e /home/terminalprobe/.config/windows11-pro-custom/devops.sh
+          test ! -e "$probe_home/.config/windows11-pro-custom/devops.sh"
