@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 RUNTIME_CONTRACT="$REPO_ROOT/config/wsl/runtime-contract.json"
+MANAGED_ROOTS_SCRIPT="$SCRIPT_DIR/manage-wsl-roots.sh"
 required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind)
 advisory_required=(terraform-docs actionlint yq tflint)
 failed=0
@@ -74,83 +75,12 @@ fi
 printf '\nFilesystem de travail\n'
 if [[ ! -f "$RUNTIME_CONTRACT" ]]; then
   ko "Contrat WSL introuvable: $RUNTIME_CONTRACT"
-elif ! command -v jq >/dev/null 2>&1; then
-  ko 'Impossible de vérifier le contrat WSL: jq est absent.'
+elif [[ ! -f "$MANAGED_ROOTS_SCRIPT" ]]; then
+  ko "Gestionnaire de racines WSL introuvable: $MANAGED_ROOTS_SCRIPT"
+elif bash "$MANAGED_ROOTS_SCRIPT" verify --target-user "$(id -un)"; then
+  ok 'Racines Linux gérées conformes au contrat runtime.'
 else
-  forbidden_roots_raw=''
-  managed_roots_raw=''
-
-  if forbidden_roots_raw="$(
-    jq -er '
-      .forbiddenRoots
-      | if type == "array"
-           and length > 0
-           and all(.[]; type == "string" and startswith("/") and length > 1)
-        then .[]
-        else error("forbiddenRoots invalide")
-        end
-    ' "$RUNTIME_CONTRACT"
-  )"; then
-    mapfile -t forbidden_roots <<< "$forbidden_roots_raw"
-  else
-    ko 'Contrat WSL invalide: forbiddenRoots est absent ou mal formé.'
-    forbidden_roots=()
-  fi
-
-  if managed_roots_raw="$(
-    jq -er '
-      [(.workingRoots // []), (.utilityRoots // [])]
-      | add
-      | if type == "array"
-           and length > 0
-           and all(.[]; type == "string" and startswith("~/") and length > 2)
-        then .[]
-        else error("workingRoots/utilityRoots invalides")
-        end
-    ' "$RUNTIME_CONTRACT"
-  )"; then
-    mapfile -t managed_roots <<< "$managed_roots_raw"
-  else
-    ko 'Contrat WSL invalide: workingRoots/utilityRoots sont absents ou mal formés.'
-    managed_roots=()
-  fi
-
-  home_forbidden=0
-  for root in "${forbidden_roots[@]}"; do
-    if [[ "$HOME" == "$root" || "$HOME" == "$root/"* ]]; then
-      ko "HOME est sous une racine interdite par le contrat WSL: $HOME"
-      home_forbidden=1
-      break
-    fi
-  done
-  if (( home_forbidden == 0 )); then
-    ok "HOME Linux: $HOME"
-  fi
-
-  for declared_root in "${managed_roots[@]}"; do
-    path="$HOME/${declared_root#~/}"
-    if [[ ! -d "$path" ]]; then
-      ko "Répertoire géré absent: $path"
-      continue
-    fi
-
-    path_forbidden=0
-    for root in "${forbidden_roots[@]}"; do
-      if [[ "$path" == "$root" || "$path" == "$root/"* ]]; then
-        ko "Racine Linux gérée sous un montage Windows interdit: $path"
-        path_forbidden=1
-        break
-      fi
-    done
-    (( path_forbidden == 1 )) && continue
-
-    fs_type="$(findmnt -T "$path" -n -o FSTYPE 2>/dev/null || true)"
-    if [[ "$fs_type" == ext4* ]]; then
-      ok "$path ($fs_type)"
-    else
-      ko "Racine Linux gérée hors ext4: $path (${fs_type:-inconnu})"
-    fi
-  done
+  ko 'Racines Linux gérées non conformes; Apply doit corriger/migrer les chemins.'
 fi
 
 printf '\nProfil shell\n'
