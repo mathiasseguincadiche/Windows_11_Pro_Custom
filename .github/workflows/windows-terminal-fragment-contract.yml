@@ -1,0 +1,167 @@
+name: Windows Terminal fragment contract
+
+on:
+  pull_request:
+    paths:
+      - 'config/windows-terminal/**'
+      - 'scripts/core/windows-terminal-settings.psm1'
+      - 'scripts/windows/31_windows_terminal.ps1'
+      - '.github/workflows/windows-terminal-fragment-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'config/windows-terminal/**'
+      - 'scripts/core/windows-terminal-settings.psm1'
+      - 'scripts/windows/31_windows_terminal.ps1'
+      - '.github/workflows/windows-terminal-fragment-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse managed JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool config/windows-terminal/profiles.fragment.json >/dev/null
+          python3 -m json.tool config/windows-terminal/actions.json >/dev/null
+
+      - name: Enforce native fragment wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/windows/31_windows_terminal.ps1'
+          module='scripts/core/windows-terminal-settings.psm1'
+
+          grep -Fq 'scripts\core\windows-terminal-settings.psm1' "$script"
+          grep -Fq "terminal-devops.profiles.json" "$script"
+          grep -Fq "terminal-devops.actions.json" "$script"
+          grep -Fq "'Fragment actions'" "$script"
+          grep -Fq 'Set-WpcTerminalSettingsContract' "$script"
+          grep -Fq 'LegacyImportName $actionsFileName' "$script"
+          grep -Fq 'Remove-Item -LiteralPath $contract.Targets.Actions' "$script"
+          grep -Fq "ActionsFragment =" "$script"
+          grep -Fq 'Save-InitialState' "$script"
+          grep -Fq 'Restore-InitialState' "$script"
+
+          test -f "$module"
+          if grep -Eq "Set-WpcObjectProperty.*-Name 'import'.*LegacyImportName|imports.*\+=.*LegacyImportName" "$module"; then
+            echo 'The legacy Windows Terminal action import must never be re-added.' >&2
+            exit 1
+          fi
+
+      - name: Parse PowerShell files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            './scripts/core/windows-terminal-settings.psm1',
+            './scripts/windows/31_windows_terminal.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Test settings migration and idempotence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/core/windows-terminal-settings.psm1 -Force
+
+          $expected = '{a3cc45a8-6e2f-4f3d-bca6-7d6df942da41}'
+          $legacy = 'windows11-pro-custom.actions.json'
+
+          $fixture = @'
+          {
+            // Existing user configuration must survive migration.
+            "defaultProfile": "{old-profile}",
+            "import": [
+              "windows11-pro-custom.actions.json",
+              "keep-user-import.json",
+            ],
+            "disabledProfileSources": [
+              "Windows.Terminal.Azure",
+            ],
+            "profiles": { "list": [] },
+          }
+          '@
+
+          $settings = ConvertFrom-WpcTerminalSettingsText -Text $fixture
+          $updated = Set-WpcTerminalSettingsContract `
+            -Settings $settings `
+            -ExpectedDefaultProfile $expected `
+            -LegacyImportName $legacy
+          $evidence = Get-WpcTerminalSettingsEvidence `
+            -Settings $updated `
+            -ExpectedDefaultProfile $expected `
+            -LegacyImportName $legacy
+
+          if (-not $evidence.IsCompliant) {
+            throw "Migrated settings are not compliant: $($evidence | ConvertTo-Json -Compress)"
+          }
+          if ($evidence.Imports -contains $legacy) {
+            throw 'Legacy action import survived migration.'
+          }
+          if ($evidence.Imports -notcontains 'keep-user-import.json') {
+            throw 'An unrelated user import was removed.'
+          }
+          foreach ($source in @('Windows.Terminal.Azure', 'Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')) {
+            if ($evidence.DisabledProfileSources -notcontains $source) {
+              throw "Expected disabled profile source missing after merge: $source"
+            }
+          }
+
+          $once = ConvertTo-WpcTerminalSettingsText -Settings $updated
+          $reparsed = ConvertFrom-WpcTerminalSettingsText -Text $once
+          $twiceObject = Set-WpcTerminalSettingsContract `
+            -Settings $reparsed `
+            -ExpectedDefaultProfile $expected `
+            -LegacyImportName $legacy
+          $twice = ConvertTo-WpcTerminalSettingsText -Settings $twiceObject
+          if ($once -ne $twice) {
+            throw 'Windows Terminal settings transformation must be idempotent.'
+          }
+
+          $fresh = Set-WpcTerminalSettingsContract `
+            -Settings $null `
+            -ExpectedDefaultProfile $expected `
+            -LegacyImportName $legacy
+          $freshEvidence = Get-WpcTerminalSettingsEvidence `
+            -Settings $fresh `
+            -ExpectedDefaultProfile $expected `
+            -LegacyImportName $legacy
+          if (-not $freshEvidence.IsCompliant) {
+            throw 'Fresh settings contract is not compliant.'
+          }
+          if ($fresh.PSObject.Properties['import']) {
+            throw 'Fresh settings must not depend on an import entry.'
+          }
+
+          Write-Host '[OK] Windows Terminal native fragment settings contract passed.'
+
+      - name: Validate action fragment payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actions = Get-Content -Raw ./config/windows-terminal/actions.json | ConvertFrom-Json
+          $profiles = Get-Content -Raw ./config/windows-terminal/profiles.fragment.json | ConvertFrom-Json
+
+          if (@($actions.actions).Count -ne 3) { throw 'Expected exactly three managed Windows Terminal actions.' }
+          if (@($profiles.profiles).Count -ne 2) { throw 'Expected exactly two managed Windows Terminal profiles.' }
+          $keys = @($actions.actions | ForEach-Object { [string]$_.keys })
+          foreach ($key in @('ctrl+shift+1', 'ctrl+shift+2', 'ctrl+shift+o')) {
+            if ($keys -notcontains $key) { throw "Missing managed key binding: $key" }
+          }

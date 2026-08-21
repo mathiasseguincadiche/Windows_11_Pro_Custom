@@ -14,20 +14,20 @@ $repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
 $sourceFragment = Join-Path $repoRoot 'config\windows-terminal\profiles.fragment.json'
 $sourceActions = Join-Path $repoRoot 'config\windows-terminal\actions.json'
 $sourceStarship = Join-Path $repoRoot 'config\windows-terminal\starship.windows.toml'
+$terminalSettingsModule = Join-Path $repoRoot 'scripts\core\windows-terminal-settings.psm1'
 $stateDir = Join-Path $repoRoot 'state\windows-terminal'
 $stateMeta = Join-Path $stateDir 'state.json'
 $backupDir = Join-Path $stateDir 'backup'
 
 $psProfileGuid = '{a3cc45a8-6e2f-4f3d-bca6-7d6df942da41}'
-$psProfileName = 'PowerShell 7 - DevOps'
-$wslProfileName = 'Ubuntu - DevOps'
 $actionsFileName = 'windows11-pro-custom.actions.json'
 $markerBegin = '# BEGIN windows11-pro-custom:windows-terminal'
 $markerEnd = '# END windows11-pro-custom:windows-terminal'
 
-foreach ($source in @($sourceFragment, $sourceActions, $sourceStarship)) {
+foreach ($source in @($sourceFragment, $sourceActions, $sourceStarship, $terminalSettingsModule)) {
     if (-not (Test-Path -LiteralPath $source)) { throw "Source Windows Terminal absente: $source" }
 }
+Import-Module $terminalSettingsModule -Force
 
 function Get-TerminalSettingsPath {
     $candidates = @(
@@ -51,57 +51,15 @@ function Get-PowerShellProfilePath {
     return [string]$resolved[0]
 }
 
-function Remove-JsonComments {
-    param([Parameter(Mandatory)][string]$Text)
-
-    $sb = [System.Text.StringBuilder]::new()
-    $inString = $false
-    $escape = $false
-    $lineComment = $false
-    $blockComment = $false
-
-    for ($i = 0; $i -lt $Text.Length; $i++) {
-        $c = $Text[$i]
-        $next = if ($i + 1 -lt $Text.Length) { $Text[$i + 1] } else { [char]0 }
-
-        if ($lineComment) {
-            if ($c -eq "`n") { $lineComment = $false; [void]$sb.Append($c) }
-            continue
-        }
-        if ($blockComment) {
-            if ($c -eq '*' -and $next -eq '/') { $blockComment = $false; $i++ }
-            continue
-        }
-        if ($inString) {
-            [void]$sb.Append($c)
-            if ($escape) { $escape = $false; continue }
-            if ($c -eq '\') { $escape = $true; continue }
-            if ($c -eq '"') { $inString = $false }
-            continue
-        }
-        if ($c -eq '"') { $inString = $true; [void]$sb.Append($c); continue }
-        if ($c -eq '/' -and $next -eq '/') { $lineComment = $true; $i++; continue }
-        if ($c -eq '/' -and $next -eq '*') { $blockComment = $true; $i++; continue }
-        [void]$sb.Append($c)
-    }
-    return $sb.ToString()
-}
-
 function Read-TerminalSettings {
     param([Parameter(Mandatory)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
     $raw = Get-Content -Raw -LiteralPath $Path -Encoding UTF8
-    $clean = Remove-JsonComments -Text $raw
-    $clean = [regex]::Replace($clean, ',\s*(?=[}\]])', '')
-    try { return ($clean | ConvertFrom-Json) }
-    catch { throw "settings.json Windows Terminal invalide ou non analysable: $Path. $($_.Exception.Message)" }
-}
-
-function Set-ObjectProperty {
-    param([Parameter(Mandatory)]$Object, [Parameter(Mandatory)][string]$Name, $Value)
-    $prop = $Object.PSObject.Properties[$Name]
-    if ($null -eq $prop) { $Object | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
-    else { $prop.Value = $Value }
+    try {
+        return ConvertFrom-WpcTerminalSettingsText -Text $raw
+    } catch {
+        throw "settings.json Windows Terminal invalide ou non analysable: $Path. $($_.Exception.Message)"
+    }
 }
 
 function Test-WslDistribution {
@@ -168,10 +126,12 @@ function Get-WslList {
 function Get-Targets {
     $settings = Get-TerminalSettingsPath
     $settingsDir = Split-Path $settings -Parent
+    $fragmentRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows Terminal\Fragments\Windows11ProCustom'
     return [pscustomobject]@{
         Settings = $settings
         Actions = Join-Path $settingsDir $actionsFileName
-        Fragment = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows Terminal\Fragments\Windows11ProCustom\terminal-devops.profiles.json'
+        Fragment = Join-Path $fragmentRoot 'terminal-devops.profiles.json'
+        ActionsFragment = Join-Path $fragmentRoot 'terminal-devops.actions.json'
         Starship = Join-Path $HOME '.config\windows11-pro-custom\starship.windows.toml'
         PowerShellProfile = Get-PowerShellProfilePath
     }
@@ -200,19 +160,22 @@ function Test-PowerShellProfileMatch {
     return ($match.Success -and $match.Value.Trim() -eq (Get-ManagedPowerShellBlock))
 }
 
-function Test-SettingsMatch {
+function Get-SettingsEvidence {
     param([Parameter(Mandatory)][string]$Path)
     $settings = Read-TerminalSettings -Path $Path
-    if ($null -eq $settings) { return $false }
+    return Get-WpcTerminalSettingsEvidence -Settings $settings -ExpectedDefaultProfile $psProfileGuid -LegacyImportName $actionsFileName
+}
 
-    $defaultOk = ($settings.PSObject.Properties['defaultProfile'] -and [string]$settings.defaultProfile -eq $psProfileGuid)
-    $imports = if ($settings.PSObject.Properties['import']) { @($settings.PSObject.Properties['import'].Value) } else { @() }
-    $disabled = if ($settings.PSObject.Properties['disabledProfileSources']) { @($settings.PSObject.Properties['disabledProfileSources'].Value) } else { @() }
-    return ($defaultOk -and ($imports -contains $actionsFileName) -and ($disabled -contains 'Windows.Terminal.PowershellCore') -and ($disabled -contains 'Windows.Terminal.Wsl'))
+# Compatibility probe retained for orchestration contracts and callers that only
+# need a Boolean. The factual implementation remains centralized in the module.
+function Test-SettingsMatch {
+    param([Parameter(Mandatory)][string]$Path)
+    return [bool](Get-SettingsEvidence -Path $Path).IsCompliant
 }
 
 function Get-Contract {
     $targets = Get-Targets
+    $settingsEvidence = Get-SettingsEvidence -Path $targets.Settings
     $checks = [ordered]@{
         'Windows Terminal' = [bool](Get-Command wt.exe -ErrorAction SilentlyContinue)
         'PowerShell 7' = [bool](Get-Command pwsh.exe -ErrorAction SilentlyContinue)
@@ -220,73 +183,102 @@ function Get-Contract {
         'JetBrainsMono Nerd Font' = Test-NerdFont
         "WSL distribution $Distribution" = Test-WslDistribution
         'Fragment profils' = Test-FragmentMatch -Target $targets.Fragment
-        'Actions importées' = Test-FileMatch -Source $sourceActions -Target $targets.Actions
+        'Fragment actions' = Test-FileMatch -Source $sourceActions -Target $targets.ActionsFragment
+        'Ancien import actions retiré' = -not (Test-Path -LiteralPath $targets.Actions)
         'Starship Windows config' = Test-FileMatch -Source $sourceStarship -Target $targets.Starship
         'Profil PowerShell géré' = Test-PowerShellProfileMatch -Path $targets.PowerShellProfile
         'settings.json Windows Terminal' = Test-SettingsMatch -Path $targets.Settings
     }
-    return [pscustomobject]@{ Targets=$targets; Checks=$checks }
+    return [pscustomobject]@{ Targets=$targets; Checks=$checks; SettingsEvidence=$settingsEvidence }
 }
 
 function Show-Contract {
     param([Parameter(Mandatory)]$Contract, [switch]$FailOnError)
     $failed = [System.Collections.Generic.List[string]]::new()
     foreach ($check in $Contract.Checks.GetEnumerator()) {
-        if ($check.Value) { Write-Host "[OK] $($check.Key)" -ForegroundColor Green }
-        else { Write-Host "[KO] $($check.Key)" -ForegroundColor $(if ($FailOnError) { 'Red' } else { 'Yellow' }); $failed.Add([string]$check.Key) }
+        if ($check.Value) {
+            Write-Host "[OK] $($check.Key)" -ForegroundColor Green
+        } else {
+            Write-Host "[KO] $($check.Key)" -ForegroundColor $(if ($FailOnError) { 'Red' } else { 'Yellow' })
+            if ($check.Key -eq 'settings.json Windows Terminal') {
+                $e = $Contract.SettingsEvidence
+                Write-Host "     defaultProfile='$($e.DefaultProfile)' attendu='$psProfileGuid' | legacyImportAbsent=$($e.LegacyImportAbsent) | PowerShellCoreDisabled=$($e.PowerShellCoreDisabled) | WslDisabled=$($e.WslDisabled)" -ForegroundColor DarkGray
+            }
+            $failed.Add([string]$check.Key)
+        }
     }
     if ($FailOnError -and $failed.Count -gt 0) { throw "Windows Terminal DevOps non conforme: $($failed -join ', ')" }
     return $failed.Count
 }
 
-function Save-InitialState {
+function Get-StateTargetMap {
     param([Parameter(Mandatory)]$Targets)
-    if (Test-Path -LiteralPath $stateMeta) { return }
-    New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
-
-    $map = [ordered]@{
+    return [ordered]@{
         Settings = [ordered]@{ Path=$Targets.Settings; Backup=(Join-Path $backupDir 'settings.json') }
         Actions = [ordered]@{ Path=$Targets.Actions; Backup=(Join-Path $backupDir 'actions.json') }
         Fragment = [ordered]@{ Path=$Targets.Fragment; Backup=(Join-Path $backupDir 'profiles.fragment.json') }
+        ActionsFragment = [ordered]@{ Path=$Targets.ActionsFragment; Backup=(Join-Path $backupDir 'actions.fragment.json') }
         Starship = [ordered]@{ Path=$Targets.Starship; Backup=(Join-Path $backupDir 'starship.windows.toml') }
         PowerShellProfile = [ordered]@{ Path=$Targets.PowerShellProfile; Backup=(Join-Path $backupDir 'Microsoft.PowerShell_profile.ps1') }
     }
-    foreach ($entry in $map.GetEnumerator()) {
+}
+
+function Save-InitialState {
+    param([Parameter(Mandatory)]$Targets)
+
+    New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+    $existing = if (Test-Path -LiteralPath $stateMeta) {
+        Get-Content -Raw -LiteralPath $stateMeta -Encoding UTF8 | ConvertFrom-Json
+    } else {
+        $null
+    }
+
+    $files = [ordered]@{}
+    if ($existing -and $existing.PSObject.Properties['Files']) {
+        foreach ($prop in $existing.Files.PSObject.Properties) {
+            $entry = $prop.Value
+            $files[$prop.Name] = [ordered]@{
+                Path = [string]$entry.Path
+                Backup = [string]$entry.Backup
+                Existed = [bool]$entry.Existed
+            }
+        }
+    }
+
+    $extended = $false
+    foreach ($entry in (Get-StateTargetMap -Targets $Targets).GetEnumerator()) {
+        if ($files.Contains($entry.Key)) { continue }
         $existed = Test-Path -LiteralPath $entry.Value.Path
         $entry.Value.Existed = $existed
         if ($existed) { Copy-Item -LiteralPath $entry.Value.Path -Destination $entry.Value.Backup -Force }
+        $files[$entry.Key] = $entry.Value
+        $extended = $true
     }
-    $state = [ordered]@{ RecordedAt=(Get-Date).ToString('o'); Distribution=$Distribution; Files=$map }
+
+    $state = [ordered]@{
+        RecordedAt = if ($existing -and $existing.PSObject.Properties['RecordedAt']) { [string]$existing.RecordedAt } else { (Get-Date).ToString('o') }
+        LastExtendedAt = (Get-Date).ToString('o')
+        Distribution = $Distribution
+        Files = $files
+    }
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $stateMeta -Encoding UTF8
-    Write-Host "[OK] État initial Windows Terminal sauvegardé: $stateMeta" -ForegroundColor Green
+
+    if ($existing -and $extended) {
+        Write-Host "[OK] État initial Windows Terminal conservé et étendu pour le fragment d'actions: $stateMeta" -ForegroundColor Green
+    } elseif (-not $existing) {
+        Write-Host "[OK] État initial Windows Terminal sauvegardé: $stateMeta" -ForegroundColor Green
+    }
 }
 
 function Set-TerminalSettings {
     param([Parameter(Mandatory)][string]$Path)
-    $settings = Read-TerminalSettings -Path $Path
-    if ($null -eq $settings) {
-        $settings = [pscustomobject][ordered]@{
-            '$schema' = 'https://aka.ms/terminal-profiles-schema'
-            defaultProfile = $psProfileGuid
-            import = @($actionsFileName)
-            disabledProfileSources = @('Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')
-            profiles = [pscustomobject][ordered]@{ list=@() }
-        }
-    } else {
-        Set-ObjectProperty -Object $settings -Name 'defaultProfile' -Value $psProfileGuid
-        $imports = if ($settings.PSObject.Properties['import']) { @($settings.PSObject.Properties['import'].Value) } else { @() }
-        if ($imports -notcontains $actionsFileName) { $imports += $actionsFileName }
-        Set-ObjectProperty -Object $settings -Name 'import' -Value $imports
 
-        $disabled = if ($settings.PSObject.Properties['disabledProfileSources']) { @($settings.PSObject.Properties['disabledProfileSources'].Value) } else { @() }
-        foreach ($source in @('Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')) {
-            if ($disabled -notcontains $source) { $disabled += $source }
-        }
-        Set-ObjectProperty -Object $settings -Name 'disabledProfileSources' -Value $disabled
-    }
+    $settings = Read-TerminalSettings -Path $Path
+    $settings = Set-WpcTerminalSettingsContract -Settings $settings -ExpectedDefaultProfile $psProfileGuid -LegacyImportName $actionsFileName
+    $text = ConvertTo-WpcTerminalSettingsText -Settings $settings
 
     New-Item -ItemType Directory -Force -Path (Split-Path $Path -Parent) | Out-Null
-    $settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $Path -Encoding UTF8
+    [System.IO.File]::WriteAllText($Path, $text, [System.Text.UTF8Encoding]::new($false))
 }
 
 function Set-PowerShellProfile {
@@ -295,8 +287,9 @@ function Set-PowerShellProfile {
     $content = if (Test-Path -LiteralPath $Path) { Get-Content -Raw -LiteralPath $Path -Encoding UTF8 } else { '' }
     $pattern = '(?s)' + [regex]::Escape($markerBegin) + '.*?' + [regex]::Escape($markerEnd)
     $block = Get-ManagedPowerShellBlock
-    if ([regex]::IsMatch($content, $pattern)) { $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $block }) }
-    else {
+    if ([regex]::IsMatch($content, $pattern)) {
+        $content = [regex]::Replace($content, $pattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $block })
+    } else {
         if ($content -and -not $content.EndsWith("`n")) { $content += "`r`n" }
         $content += "`r`n$block`r`n"
     }
@@ -357,8 +350,12 @@ Save-InitialState -Targets $contract.Targets
 New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.Fragment -Parent) | Out-Null
 [System.IO.File]::WriteAllText($contract.Targets.Fragment, (Get-RenderedFragment), [System.Text.UTF8Encoding]::new($false))
 
-New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.Actions -Parent) | Out-Null
-Copy-Item -LiteralPath $sourceActions -Destination $contract.Targets.Actions -Force
+New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.ActionsFragment -Parent) | Out-Null
+Copy-Item -LiteralPath $sourceActions -Destination $contract.Targets.ActionsFragment -Force
+
+# Migration depuis l'ancien mécanisme settings.json -> import -> fichier voisin du settings.json.
+# Les actions sont maintenant un fragment natif Windows Terminal (supporté depuis Terminal 1.21).
+Remove-Item -LiteralPath $contract.Targets.Actions -Force -ErrorAction SilentlyContinue
 
 New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.Starship -Parent) | Out-Null
 Copy-Item -LiteralPath $sourceStarship -Destination $contract.Targets.Starship -Force
@@ -368,4 +365,4 @@ Set-TerminalSettings -Path $contract.Targets.Settings
 
 $verified = Get-Contract
 [void](Show-Contract -Contract $verified -FailOnError)
-Write-Host '[FAIT] Windows Terminal DevOps configuré et revalidé.' -ForegroundColor Green
+Write-Host '[FAIT] Windows Terminal DevOps configuré et revalidé via fragments natifs (profils + actions).' -ForegroundColor Green
