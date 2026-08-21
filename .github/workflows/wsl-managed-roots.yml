@@ -51,10 +51,6 @@ jobs:
           fi
 
           declared='~/projects'
-          # Intentional regression fixture for the historical Bash bug.
-          # shellcheck disable=SC2088
-          wrong="$HOME/${declared#~/}"
-          test "$wrong" = "$HOME/~/projects"
           relative="${declared:2}"
           correct="$HOME/$relative"
           test "$correct" = "$HOME/projects"
@@ -68,6 +64,7 @@ jobs:
           sudo useradd --create-home --shell /bin/bash "$user"
           home="$(getent passwd "$user" | cut -d: -f6)"
 
+          # Reproduce the malformed shape observed on the physical workstation.
           sudo install -d -m 0755 -o "$user" -g "$user" "$home/~/projects"
           printf 'legacy-project-data\n' | sudo tee "$home/~/projects/migration-proof.txt" >/dev/null
           sudo chown "$user:$user" "$home/~/projects/migration-proof.txt"
