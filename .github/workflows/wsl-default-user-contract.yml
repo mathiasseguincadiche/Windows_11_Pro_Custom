@@ -52,7 +52,7 @@ jobs:
 
           test -f "$module"
 
-      - name: Parse PowerShell files
+      - name: Parse PowerShell files and enforce blank-line writers
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -63,7 +63,7 @@ jobs:
           )) {
             $tokens = $null
             $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile(
               (Resolve-Path $path),
               [ref]$tokens,
               [ref]$errors
@@ -71,9 +71,28 @@ jobs:
             if (@($errors).Count -gt 0) {
               throw "$path parse errors: $($errors.Message -join '; ')"
             }
+
+            if ($path -like '*07_wsl_user.ps1' -or $path -like '*apply-wsl-conf.ps1') {
+              $writer = $ast.Find({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                  $node.Name -eq 'Write-WslConfLines'
+              }, $true) | Select-Object -First 1
+              if ($null -eq $writer) { throw "$path : Write-WslConfLines missing." }
+              $linesParameter = @($writer.Body.ParamBlock.Parameters | Where-Object {
+                $_.Name.VariablePath.UserPath -eq 'Lines'
+              }) | Select-Object -First 1
+              if ($null -eq $linesParameter) { throw "$path : Lines parameter missing." }
+              $attributeText = @($linesParameter.Attributes | ForEach-Object { $_.Extent.Text }) -join ' '
+              foreach ($requiredAttribute in @('AllowEmptyCollection', 'AllowEmptyString')) {
+                if ($attributeText -notmatch [regex]::Escape($requiredAttribute)) {
+                  throw "$path : Lines must explicitly allow $requiredAttribute because canonical wsl.conf contains blank separator lines."
+                }
+              }
+            }
           }
 
-      - name: Test wsl.conf parser and idempotent transform
+      - name: Test wsl.conf parser, blank lines and idempotent transform
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -86,12 +105,21 @@ jobs:
             '[network]',
             'generateResolvConf=true'
           )
+          $baseText = ConvertTo-WpcWslConfText -Lines $base
+          $expectedBaseText = "[boot]`nsystemd=true`n`n[network]`ngenerateResolvConf=true`n"
+          if ($baseText -ne $expectedBaseText) {
+            throw 'Blank separator lines were not preserved by wsl.conf serialization.'
+          }
+
           $withUser = @(Set-WpcWslConfDefaultUser -Lines $base -User 'mathias')
           if ((Get-WpcWslConfDefaultUser -Lines $withUser) -ne 'mathias') {
             throw 'Missing [user] section was not created correctly.'
           }
           if (@($withUser | Where-Object { $_ -eq 'default=mathias' }).Count -ne 1) {
             throw 'Expected exactly one default=mathias assignment.'
+          }
+          if ($withUser -notcontains '') {
+            throw 'Blank separator lines must survive default-user transformation.'
           }
 
           $existing = @(
@@ -144,4 +172,4 @@ jobs:
             throw 'Invalid Linux usernames must fail closed.'
           }
 
-          Write-Host '[OK] Deterministic wsl.conf parser/transformer contract passed.'
+          Write-Host '[OK] Deterministic wsl.conf blank-line parser/transformer contract passed.'

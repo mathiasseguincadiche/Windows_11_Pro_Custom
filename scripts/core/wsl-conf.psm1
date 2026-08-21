@@ -5,6 +5,7 @@ function Get-WpcWslConfDefaultUser {
     [CmdletBinding()]
     param(
         [AllowEmptyCollection()]
+        [AllowEmptyString()]
         [string[]]$Lines = @()
     )
 
@@ -27,6 +28,7 @@ function Set-WpcWslConfDefaultUser {
     [CmdletBinding()]
     param(
         [AllowEmptyCollection()]
+        [AllowEmptyString()]
         [string[]]$Lines = @(),
         [Parameter(Mandatory)]
         [ValidatePattern('^[a-z_][a-z0-9_-]{0,31}$')]
@@ -75,6 +77,7 @@ function ConvertTo-WpcWslConfText {
     [CmdletBinding()]
     param(
         [AllowEmptyCollection()]
+        [AllowEmptyString()]
         [string[]]$Lines = @()
     )
 
