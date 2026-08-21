@@ -245,7 +245,7 @@ jobs:
 
           jq -e '(.globals.theme == "WPC DevOps") and (.globals.launchMode == "maximized") and (.globals.windowingBehavior == "useExisting") and (.globals.multiLinePasteWarning == true) and (.globals.largePasteWarning == true)' "$settings" >/dev/null
           jq -e '.themes[] | select(.name == "WPC DevOps") | (.window.applicationTheme == "dark" and .window.useMica == true)' "$settings" >/dev/null
-          jq -e '[.schemes[].name] | sort == ["WPC DevOps", "WPC DevOps Admin", "WPC Ubuntu"] | sort' "$settings" >/dev/null
+          jq -e '([.schemes[].name] | sort) == (["WPC DevOps", "WPC DevOps Admin", "WPC Ubuntu"] | sort)' "$settings" >/dev/null
           jq -e '.newTabMenu | tostring | contains("Windows 11 Pro Custom") and contains("remainingProfiles")' "$settings" >/dev/null
 
           grep -qx 'add_newline = false' "$starship"
