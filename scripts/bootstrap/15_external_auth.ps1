@@ -120,10 +120,10 @@ $report = [ordered]@{
     Aws = [ordered]@{
         Installed = $awsInstalled
         Profiles = @($awsProfiles)
-        AuthenticatedProfiles = @($awsAuthenticatedProfiles)
+        AuthenticatedProfiles = $awsAuthenticatedProfiles.ToArray()
         AnyAuthenticated = $awsAnyAuthenticated
     }
-    ActionRequired = @($actions)
+    ActionRequired = $actions.ToArray()
     SecretMaterialRecorded = $false
 }
 $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportPath -Encoding UTF8
