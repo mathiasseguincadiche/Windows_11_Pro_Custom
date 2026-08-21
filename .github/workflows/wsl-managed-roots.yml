@@ -1,0 +1,110 @@
+name: WSL managed roots
+
+on:
+  pull_request:
+    paths:
+      - 'config/wsl/runtime-contract.json'
+      - 'scripts/bootstrap/08_devops.ps1'
+      - 'scripts/wsl/install-devops.sh'
+      - 'scripts/wsl/validate-devops.sh'
+      - 'scripts/wsl/manage-wsl-roots.sh'
+      - '.github/workflows/wsl-managed-roots.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'config/wsl/runtime-contract.json'
+      - 'scripts/bootstrap/08_devops.ps1'
+      - 'scripts/wsl/install-devops.sh'
+      - 'scripts/wsl/validate-devops.sh'
+      - 'scripts/wsl/manage-wsl-roots.sh'
+      - '.github/workflows/wsl-managed-roots.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse and enforce canonical tilde handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper='scripts/wsl/manage-wsl-roots.sh'
+          installer='scripts/wsl/install-devops.sh'
+          validator='scripts/wsl/validate-devops.sh'
+
+          bash -n "$helper"
+          bash -n "$installer"
+          bash -n "$validator"
+
+          grep -Fq 'relative="${declared:2}"' "$helper"
+          grep -Fq 'manage-wsl-roots.sh' "$installer"
+          grep -Fq 'manage-wsl-roots.sh' "$validator"
+
+          if grep -nE '\$\{[^}]+#~/' "$installer" "$validator"; then
+            echo "Unsafe Bash tilde-prefix removal detected. Use literal substring removal after contract validation." >&2
+            exit 1
+          fi
+
+          declared='~/projects'
+          wrong="$HOME/${declared#~/}"
+          test "$wrong" = "$HOME/~/projects"
+          relative="${declared:2}"
+          correct="$HOME/$relative"
+          test "$correct" = "$HOME/projects"
+
+      - name: Prove legacy malformed roots migrate to canonical HOME paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper='scripts/wsl/manage-wsl-roots.sh'
+          user='managedrootsprobe'
+          sudo useradd --create-home --shell /bin/bash "$user"
+          home="$(getent passwd "$user" | cut -d: -f6)"
+
+          sudo install -d -m 0755 -o "$user" -g "$user" "$home/~/projects"
+          printf 'legacy-project-data\n' | sudo tee "$home/~/projects/migration-proof.txt" >/dev/null
+          sudo chown "$user:$user" "$home/~/projects/migration-proof.txt"
+
+          sudo bash "$helper" apply --target-user "$user"
+          sudo -u "$user" bash "$helper" verify --target-user "$user"
+
+          test -f "$home/projects/migration-proof.txt"
+          grep -Fq 'legacy-project-data' "$home/projects/migration-proof.txt"
+          test ! -e "$home/~/projects"
+          test ! -e "$home/~"
+
+          for path in projects labs repositories scripts workspace backups; do
+            test -d "$home/$path"
+            test "$(stat -c '%U' "$home/$path")" = "$user"
+            findmnt -T "$home/$path" -n -o FSTYPE | grep -E '^ext4'
+          done
+
+      - name: Prove conflicting data fails closed without deletion
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper='scripts/wsl/manage-wsl-roots.sh'
+          user='managedrootsconflict'
+          sudo useradd --create-home --shell /bin/bash "$user"
+          home="$(getent passwd "$user" | cut -d: -f6)"
+
+          sudo install -d -m 0755 -o "$user" -g "$user" "$home/projects" "$home/~/projects"
+          printf 'canonical\n' | sudo tee "$home/projects/canonical.txt" >/dev/null
+          printf 'legacy\n' | sudo tee "$home/~/projects/legacy.txt" >/dev/null
+          sudo chown -R "$user:$user" "$home/projects" "$home/~"
+
+          set +e
+          output="$(sudo bash "$helper" apply --target-user "$user" 2>&1)"
+          code=$?
+          set -e
+          printf '%s\n' "$output"
+
+          test "$code" -eq 1
+          grep -Fq 'Migration automatique refusée' <<<"$output"
+          test -f "$home/projects/canonical.txt"
+          test -f "$home/~/projects/legacy.txt"
