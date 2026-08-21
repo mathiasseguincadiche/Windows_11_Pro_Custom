@@ -79,7 +79,7 @@ function Invoke-WpcVisibleChildProcess {
     )
     & $Executable @ArgumentList 2>&1 | ForEach-Object {
         $text = [string]$_
-        $parts = @($text -split "`r?`n", 0, 'RegexMatch')
+        $parts = @($text -split "`r?`n")
         if ($parts.Count -eq 0) { Write-WpcLiveChildLine -Line ''; return }
         foreach ($line in $parts) { Write-WpcLiveChildLine -Line $line }
     }
