@@ -116,13 +116,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          fakebin="$(mktemp -d)"
+          cat >"$fakebin/dpkg-query" <<'EOF'
+          #!/usr/bin/env bash
+          exit 1
+          EOF
+          chmod +x "$fakebin/dpkg-query"
+
           if [[ "$(id -u)" -eq 0 ]]; then
             useradd --create-home terminalprobe
             printf '# original\n' > /home/terminalprobe/.bashrc
             chown -R terminalprobe:terminalprobe /home/terminalprobe
             before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
             set +e
-            output="$(runuser -u terminalprobe -- env HOME=/home/terminalprobe bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            output="$(runuser -u terminalprobe -- env HOME=/home/terminalprobe PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
             code=$?
             set -e
           else
@@ -131,7 +138,7 @@ jobs:
             sudo chown -R terminalprobe:terminalprobe /home/terminalprobe
             before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
             set +e
-            output="$(sudo runuser -u terminalprobe -- env HOME=/home/terminalprobe bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            output="$(sudo runuser -u terminalprobe -- env HOME=/home/terminalprobe PATH="$fakebin:$PATH" bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
             code=$?
             set -e
           fi
