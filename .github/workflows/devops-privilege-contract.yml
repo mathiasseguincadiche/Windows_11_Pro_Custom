@@ -92,11 +92,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          useradd --create-home privilegeprobe
-          set +e
-          output="$(runuser -u privilegeprobe -- bash scripts/wsl/install-devops.sh --target-user privilegeprobe 2>&1)"
-          code=$?
-          set -e
+          if [[ "$(id -u)" -eq 0 ]]; then
+            useradd --create-home privilegeprobe
+            set +e
+            output="$(runuser -u privilegeprobe -- bash scripts/wsl/install-devops.sh --target-user privilegeprobe 2>&1)"
+            code=$?
+            set -e
+          else
+            sudo useradd --create-home privilegeprobe
+            set +e
+            output="$(sudo runuser -u privilegeprobe -- bash scripts/wsl/install-devops.sh --target-user privilegeprobe 2>&1)"
+            code=$?
+            set -e
+          fi
           test "$code" -eq 1
           grep -Fq 'doit être lancé par l orchestrateur avec le compte root WSL' <<<"$output"
           if grep -Eq 'apt-get|docker-ce|/usr/local/bin' <<<"$output"; then
@@ -108,14 +116,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          useradd --create-home terminalprobe
-          printf '# original\n' > /home/terminalprobe/.bashrc
-          chown -R terminalprobe:terminalprobe /home/terminalprobe
-          before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
-          set +e
-          output="$(runuser -u terminalprobe -- env HOME=/home/terminalprobe bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
-          code=$?
-          set -e
+          if [[ "$(id -u)" -eq 0 ]]; then
+            useradd --create-home terminalprobe
+            printf '# original\n' > /home/terminalprobe/.bashrc
+            chown -R terminalprobe:terminalprobe /home/terminalprobe
+            before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
+            set +e
+            output="$(runuser -u terminalprobe -- env HOME=/home/terminalprobe bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            code=$?
+            set -e
+          else
+            sudo useradd --create-home terminalprobe
+            printf '# original\n' | sudo tee /home/terminalprobe/.bashrc >/dev/null
+            sudo chown -R terminalprobe:terminalprobe /home/terminalprobe
+            before="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
+            set +e
+            output="$(sudo runuser -u terminalprobe -- env HOME=/home/terminalprobe bash scripts/wsl/manage-devops-terminal.sh apply 2>&1)"
+            code=$?
+            set -e
+          fi
           test "$code" -eq 1
           grep -Fq 'doit être lancé par l orchestrateur avec root WSL et --target-user' <<<"$output"
           after="$(sha256sum /home/terminalprobe/.bashrc | awk '{print $1}')"
