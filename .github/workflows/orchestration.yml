@@ -121,9 +121,12 @@ jobs:
           grep -Fq 'Get-PendingChanges' scripts/windows/40_optimize.ps1
           grep -Fq 'Test-SettingsMatch' scripts/windows/30_vscode.ps1
           grep -Fq "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')" scripts/windows/31_windows_terminal.ps1
-          grep -Fq 'Test-SettingsMatch' scripts/windows/31_windows_terminal.ps1
-          grep -Fq 'Save-InitialState' scripts/windows/31_windows_terminal.ps1
-          grep -Fq 'Restore-InitialState' scripts/windows/31_windows_terminal.ps1
+          grep -Fq '31_windows_terminal_modern.ps1' scripts/windows/31_windows_terminal.ps1
+          grep -Fq "ValidateSet('Audit', 'Apply', 'Verify', 'Rollback')" scripts/windows/31_windows_terminal_modern.ps1
+          grep -Fq 'Get-SettingsEvidence' scripts/windows/31_windows_terminal_modern.ps1
+          grep -Fq 'Save-InitialState' scripts/windows/31_windows_terminal_modern.ps1
+          grep -Fq 'Restore-InitialState' scripts/windows/31_windows_terminal_modern.ps1
+          grep -Fq 'Set-WpcDefaultTerminalApplication' scripts/windows/31_windows_terminal_modern.ps1
           test ! -e scripts/windows/31_wezterm.ps1
           grep -Fq 'Get-OpenSshClientCapability' scripts/windows/32_openssh_client.ps1
           grep -Fq 'Get-OneDriveState' scripts/windows/33_onedrive.ps1
