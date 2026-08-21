@@ -79,7 +79,7 @@ function Set-WpcObjectProperty {
     param(
         [Parameter(Mandatory)]$Object,
         [Parameter(Mandatory)][string]$Name,
-        $Value
+        [AllowNull()][object]$Value
     )
 
     $prop = $Object.PSObject.Properties[$Name]
@@ -122,16 +122,19 @@ function Get-WpcTerminalSettingsEvidence {
         }
     }
 
-    $imports = if ($Settings.PSObject.Properties['import']) {
-        @($Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ })
-    } else {
-        @()
-    }
-    $disabled = if ($Settings.PSObject.Properties['disabledProfileSources']) {
-        @($Settings.PSObject.Properties['disabledProfileSources'].Value | ForEach-Object { [string]$_ })
-    } else {
-        @()
-    }
+    # Wrap the whole conditional in @(...). PowerShell unwraps single-element
+    # pipeline output from an if statement; keeping the outer array boundary
+    # prevents += from becoming string concatenation when only one value exists.
+    $imports = @(
+        if ($Settings.PSObject.Properties['import']) {
+            $Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ }
+        }
+    )
+    $disabled = @(
+        if ($Settings.PSObject.Properties['disabledProfileSources']) {
+            $Settings.PSObject.Properties['disabledProfileSources'].Value | ForEach-Object { [string]$_ }
+        }
+    )
     $defaultProfile = if ($Settings.PSObject.Properties['defaultProfile']) { [string]$Settings.defaultProfile } else { $null }
     $defaultOk = (-not [string]::IsNullOrWhiteSpace($defaultProfile) -and $defaultProfile -eq $ExpectedDefaultProfile)
     $legacyImportAbsent = ($imports -notcontains $LegacyImportName)
@@ -170,11 +173,11 @@ function Set-WpcTerminalSettingsContract {
 
     Set-WpcObjectProperty -Object $Settings -Name 'defaultProfile' -Value $ExpectedDefaultProfile
 
-    $imports = if ($Settings.PSObject.Properties['import']) {
-        @($Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ })
-    } else {
-        @()
-    }
+    $imports = @(
+        if ($Settings.PSObject.Properties['import']) {
+            $Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ }
+        }
+    )
     $imports = @($imports | Where-Object { $_ -and $_ -ne $LegacyImportName })
     if ($imports.Count -eq 0) {
         Remove-WpcObjectProperty -Object $Settings -Name 'import'
@@ -182,11 +185,11 @@ function Set-WpcTerminalSettingsContract {
         Set-WpcObjectProperty -Object $Settings -Name 'import' -Value $imports
     }
 
-    $disabled = if ($Settings.PSObject.Properties['disabledProfileSources']) {
-        @($Settings.PSObject.Properties['disabledProfileSources'].Value | ForEach-Object { [string]$_ })
-    } else {
-        @()
-    }
+    $disabled = @(
+        if ($Settings.PSObject.Properties['disabledProfileSources']) {
+            $Settings.PSObject.Properties['disabledProfileSources'].Value | ForEach-Object { [string]$_ }
+        }
+    )
     foreach ($source in @('Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')) {
         if ($disabled -notcontains $source) { $disabled += $source }
     }
