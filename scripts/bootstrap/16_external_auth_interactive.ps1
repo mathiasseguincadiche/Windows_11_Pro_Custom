@@ -240,37 +240,120 @@ function Set-AwsCredentialPermissions {
     [void](Invoke-WslSimple -ArgumentList @('sh','-lc','if [ -d "$HOME/.aws" ]; then chmod 700 "$HOME/.aws"; find "$HOME/.aws" -maxdepth 1 -type f -exec chmod 600 {} +; fi') -IgnoreExitCode)
 }
 
+function Get-AwsOfferPrompt {
+    param([int]$ExistingProfileCount = 0)
+    $existing = if ($ExistingProfileCount -gt 0) {
+        "AWS possède déjà $ExistingProfileCount profil(s). Si ce sont des profils SSO dont la session a expiré, l option 2 est généralement la bonne."
+    } else {
+        'Aucun profil AWS n est encore configuré.'
+    }
+
+    return @"
+$existing
+
+Avant de décider, voici tes possibilités :
+  1. IAM Identity Center / SSO — recommandé pour un utilisateur humain.
+     Connexion via navigateur/device code, sans clé secrète statique à saisir dans ce script.
+  2. Reconnecter un profil SSO existant.
+     À utiliser si ~/.aws/config contient déjà ton profil et que la session a expiré.
+  3. Access Key / Secret Key — legacy.
+     À utiliser seulement si AWS ou un administrateur t a fourni des clés IAM statiques.
+  0. Ne rien configurer maintenant.
+
+Si tu n utilises pas encore AWS, tu peux répondre N sans rendre la workstation non conforme.
+Veux-tu configurer AWS maintenant
+"@
+}
+
+function Get-AwsMethodPrompt {
+    return @"
+Choisis la méthode AWS :
+
+  1. IAM Identity Center / SSO — RECOMMANDÉ
+     Quand la choisir :
+       - compte AWS d entreprise, d école, de client ou d organisation utilisant IAM Identity Center / SSO ;
+       - tu disposes généralement d une URL de portail SSO et d une région SSO.
+     Ce que tu vas faire :
+       - AWS CLI lance "aws configure sso" ;
+       - tu renseignes la session SSO, l URL de démarrage et la région SSO ;
+       - le navigateur ou un device code gère la connexion ;
+       - tu sélectionnes le compte et le rôle autorisés ;
+       - tu donnes un nom au profil AWS.
+     Ce que le script fait ensuite :
+       - lance "aws sso login --profile <profil>" ;
+       - vérifie l identité avec "aws sts get-caller-identity".
+     Stockage : configuration dans ~/.aws/config ; pas de Secret Access Key statique gérée par ce dépôt.
+
+  2. Reconnecter un profil SSO existant
+     Quand la choisir :
+       - ton profil AWS existe déjà dans ~/.aws/config ;
+       - la configuration est correcte mais la session SSO a expiré.
+     Ce que tu vas faire :
+       - choisir un profil dans la liste détectée.
+     Ce que le script fait ensuite :
+       - lance seulement "aws sso login --profile <profil>" ;
+       - vérifie la session avec STS ;
+       - ne recrée pas inutilement le profil.
+
+  3. Access Key / Secret Key — LEGACY
+     Quand la choisir :
+       - uniquement si AWS ou un administrateur t a explicitement fourni des clés IAM statiques ;
+       - à éviter pour un utilisateur humain lorsque SSO est disponible.
+     Ce que tu vas faire dans AWS CLI :
+       - saisir AWS Access Key ID ;
+       - saisir AWS Secret Access Key ;
+       - choisir la région par défaut et éventuellement le format de sortie.
+     Ce que le script fait ensuite :
+       - ne lit ni ne journalise la valeur des clés ;
+       - protège ~/.aws en 0700 et ses fichiers en 0600 ;
+       - vérifie le profil avec STS.
+     Stockage : AWS CLI utilise ~/.aws/credentials pour les clés statiques.
+
+  0. Retour / plus tard
+     Aucun changement AWS. La workstation reste READY.
+
+Choix [0-3]
+"@
+}
+
+function Read-AwsMethodChoice {
+    while ($true) {
+        $choice = (Read-Host (Get-AwsMethodPrompt)).Trim()
+        if ($choice -in @('0','1','2','3')) { return $choice }
+        Write-Host '[INFO] Choix invalide. Entre 0, 1, 2 ou 3.' -ForegroundColor Yellow
+    }
+}
+
 function Configure-Aws {
     Write-Section -Title 'AWS CLI'
     $profiles = @(Get-AwsProfiles)
     $valid = @($profiles | Where-Object { Test-AwsProfile -Profile $_ })
 
     if ($valid.Count -gt 0) {
-        Write-Host ("[DEJA OK] AWS possède {0} profil(s) avec une session valide." -f $valid.Count) -ForegroundColor Green
-        if (-not (Read-YesNoLoop -Prompt 'Veux-tu configurer ou reconnecter un profil AWS')) {
+        $validNames = ($valid -join ', ')
+        $managePrompt = @"
+AWS possède déjà $($valid.Count) profil(s) avec une session valide : $validNames
+
+Tu peux :
+  - répondre N pour ne rien changer ;
+  - répondre O puis choisir 1 pour créer/configurer un autre SSO ;
+  - répondre O puis choisir 2 pour reconnecter un profil SSO ;
+  - répondre O puis choisir 3 seulement si tu dois utiliser des clés IAM statiques.
+Veux-tu configurer ou reconnecter un profil AWS
+"@
+        if (-not (Read-YesNoLoop -Prompt $managePrompt)) {
             Write-Host '[OK] AWS déjà configuré.' -ForegroundColor Green
             return
         }
     } else {
-        if ($profiles.Count -gt 0) {
-            Write-Host ("AWS possède {0} profil(s), mais aucune session n est actuellement valide." -f $profiles.Count) -ForegroundColor Yellow
-        } else {
-            Write-Host 'AWS n est pas encore configuré.' -ForegroundColor White
-        }
-        if (-not (Read-YesNoLoop -Prompt 'Veux-tu configurer AWS maintenant')) {
+        if (-not (Read-YesNoLoop -Prompt (Get-AwsOfferPrompt -ExistingProfileCount $profiles.Count))) {
             Write-Host '[IGNORE] AWS non configuré pour le moment.' -ForegroundColor Yellow
             return
         }
     }
 
     while ($true) {
-        Write-Host ''
-        Write-Host 'Choisis la méthode AWS :' -ForegroundColor Cyan
-        Write-Host '  1. IAM Identity Center / SSO — recommandé' -ForegroundColor White
-        Write-Host '  2. Reconnecter un profil SSO existant' -ForegroundColor White
-        Write-Host '  3. Access Key / Secret Key — legacy' -ForegroundColor Yellow
-        Write-Host '  0. Retour' -ForegroundColor DarkGray
-        $choice = (Read-Host 'Choix [0-3]').Trim()
+        $choice = Read-AwsMethodChoice
 
         switch ($choice) {
             '0' {
@@ -313,10 +396,6 @@ function Configure-Aws {
                 if (-not (Test-AwsProfile -Profile $profile)) { throw "Le profil AWS '$profile' est configuré mais STS ne le valide pas." }
                 Write-Host "[OK] Profil AWS '$profile' configuré et vérifié." -ForegroundColor Green
                 return
-            }
-            default {
-                Write-Host '[INFO] Choix invalide. Entre 0, 1, 2 ou 3.' -ForegroundColor Yellow
-                continue
             }
         }
     }

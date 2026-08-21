@@ -73,7 +73,19 @@ jobs:
             'chmod 600',
             'Read-YesNoLoop',
             'Veux-tu configurer AWS maintenant',
+            'Avant de décider, voici tes possibilités',
+            'Read-AwsMethodChoice',
+            'Get-AwsMethodPrompt',
+            'Read-Host (Get-AwsMethodPrompt)',
             'Choisis la méthode AWS',
+            'Quand la choisir',
+            'Ce que tu vas faire',
+            'Ce que le script fait ensuite',
+            'Stockage',
+            'IAM Identity Center / SSO — RECOMMANDÉ',
+            'AWS Access Key ID',
+            'AWS Secret Access Key',
+            '~/.aws/credentials',
             'Choix [0-3]',
             'Choix invalide. Entre 0, 1, 2 ou 3.',
             "'aws','configure','sso'",
@@ -88,7 +100,10 @@ jobs:
           if ($interactive -match 'default\s*\{\s*throw\s+.*Choix AWS') {
             throw 'Invalid AWS menu input must re-display the menu instead of terminating the assistant.'
           }
-          if ($interactive -notmatch 'while\s*\(\$true\)[\s\S]*Choix \[0-3\]') {
+          if ($interactive -notmatch 'function\s+Read-AwsMethodChoice[\s\S]*while\s*\(\$true\)[\s\S]*Read-Host\s+\(Get-AwsMethodPrompt\)') {
+            throw 'AWS choices and their explanations must be embedded in the visible Read-Host prompt.'
+          }
+          if ($interactive -notmatch 'function\s+Read-AwsMethodChoice[\s\S]*Choix invalide\. Entre 0, 1, 2 ou 3') {
             throw 'AWS choice must be protected by an explicit retry loop.'
           }
           if ($interactive -notmatch 'while\s*\(\$true\)[\s\S]*Réponse invalide\. Entre O pour oui ou N pour non') {
