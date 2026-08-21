@@ -1,10 +1,63 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-if [[ ${EUID} -eq 0 ]]; then
-  echo "[ERREUR] Lance ce script avec ton utilisateur WSL, pas root." >&2
+TARGET_USER=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target-user)
+      [[ $# -ge 2 ]] || { echo '[ERREUR] --target-user exige une valeur.' >&2; exit 2; }
+      TARGET_USER="$2"
+      shift 2
+      ;;
+    -h|--help)
+      echo "Usage: $0 --target-user <utilisateur-linux>"
+      exit 0
+      ;;
+    *)
+      echo "[ERREUR] Argument inconnu: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo '[ERREUR] Ce bootstrap système doit être lancé par l orchestrateur avec le compte root WSL.' >&2
+  echo 'Il ne demande ni ne stocke le mot de passe sudo de l utilisateur cible.' >&2
   exit 1
 fi
+
+if [[ ! "$TARGET_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+  echo "[ERREUR] Utilisateur cible Linux invalide: ${TARGET_USER:-<absent>}" >&2
+  exit 1
+fi
+if ! getent passwd "$TARGET_USER" >/dev/null; then
+  echo "[ERREUR] Utilisateur cible Linux absent: $TARGET_USER" >&2
+  exit 1
+fi
+if [[ "$TARGET_USER" == 'root' ]]; then
+  echo '[ERREUR] root ne peut pas être l utilisateur DevOps cible.' >&2
+  exit 1
+fi
+if ! command -v runuser >/dev/null 2>&1; then
+  echo '[ERREUR] runuser est requis pour les opérations appartenant à l utilisateur cible.' >&2
+  exit 1
+fi
+
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+TARGET_GROUP="$(id -gn "$TARGET_USER")"
+if [[ -z "$TARGET_HOME" || ! -d "$TARGET_HOME" ]]; then
+  echo "[ERREUR] HOME Linux invalide pour $TARGET_USER: ${TARGET_HOME:-<absent>}" >&2
+  exit 1
+fi
+
+run_as_target() {
+  runuser -u "$TARGET_USER" -- env \
+    HOME="$TARGET_HOME" \
+    USER="$TARGET_USER" \
+    LOGNAME="$TARGET_USER" \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    "$@"
+}
 
 if [[ ! -r /etc/os-release ]]; then
   echo "[ERREUR] /etc/os-release introuvable." >&2
@@ -55,26 +108,29 @@ if [[ ${ARCH} != "amd64" ]]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo install -m 0755 -d /etc/apt/sources.list.d
+install -m 0755 -d /etc/apt/keyrings
+install -m 0755 -d /etc/apt/sources.list.d
 
 log() { printf '\n==> %s\n' "$*"; }
 curl_retry() { curl --retry 5 --retry-all-errors --connect-timeout 15 "$@"; }
 
+log "Contexte d élévation"
+echo "[OK] Phase système exécutée comme root WSL sans prompt sudo; utilisateur cible=$TARGET_USER home=$TARGET_HOME"
+
 log "Paquets de base"
-sudo apt-get update
-sudo apt-get install -y \
+apt-get update
+apt-get install -y \
   ca-certificates curl wget gnupg dirmngr lsb-release unzip jq git openssh-client rsync tar gzip \
   python3 python3-pip python3-venv pipx shellcheck shfmt ansible-core bash-completion
 
 log "Docker Engine + Buildx + Compose depuis le dépôt Docker officiel"
 for pkg in docker.io docker-compose docker-compose-v2 docker-doc docker-buildx podman-docker containerd runc; do
-  sudo apt-get remove -y "$pkg" >/dev/null 2>&1 || true
+  apt-get remove -y "$pkg" >/dev/null 2>&1 || true
 done
 curl_retry -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/windows11-pro-custom-docker.asc
-sudo install -m 0644 /tmp/windows11-pro-custom-docker.asc /etc/apt/keyrings/docker.asc
+install -m 0644 /tmp/windows11-pro-custom-docker.asc /etc/apt/keyrings/docker.asc
 rm -f /tmp/windows11-pro-custom-docker.asc
-sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
+tee /etc/apt/sources.list.d/docker.sources >/dev/null <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
 Suites: ${UBUNTU_CODENAME:-$VERSION_CODENAME}
@@ -82,13 +138,13 @@ Components: stable
 Architectures: ${ARCH}
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo install -m 0755 -d /etc/docker
-sudo install -m 0644 "$DOCKER_DAEMON_CONFIG" /etc/docker/daemon.json
-sudo systemctl enable --now docker
-sudo systemctl restart docker
-sudo usermod -aG docker "$USER"
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+install -m 0755 -d /etc/docker
+install -m 0644 "$DOCKER_DAEMON_CONFIG" /etc/docker/daemon.json
+systemctl enable --now docker
+systemctl restart docker
+usermod -aG docker "$TARGET_USER"
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -97,7 +153,7 @@ log "kubectl ${KUBECTL_VERSION} avec checksum upstream"
 curl_retry -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o "$tmpdir/kubectl"
 curl_retry -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" -o "$tmpdir/kubectl.sha256"
 echo "$(cat "$tmpdir/kubectl.sha256")  $tmpdir/kubectl" | sha256sum -c -
-sudo install -m 0755 "$tmpdir/kubectl" /usr/local/bin/kubectl
+install -m 0755 "$tmpdir/kubectl" /usr/local/bin/kubectl
 
 log "Helm ${HELM_VERSION} avec checksum upstream"
 helm_archive="helm-${HELM_VERSION}-linux-amd64.tar.gz"
@@ -106,7 +162,7 @@ curl_retry -fsSL "https://get.helm.sh/${helm_archive}.sha256sum" -o "$tmpdir/$he
 helm_sha="$(awk '{print $1}' "$tmpdir/$helm_archive.sha256sum")"
 echo "$helm_sha  $tmpdir/$helm_archive" | sha256sum -c -
 tar -xzf "$tmpdir/$helm_archive" -C "$tmpdir"
-sudo install -m 0755 "$tmpdir/linux-amd64/helm" /usr/local/bin/helm
+install -m 0755 "$tmpdir/linux-amd64/helm" /usr/local/bin/helm
 
 log "Terraform ${TERRAFORM_VERSION} avec checksum HashiCorp"
 terraform_archive="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
@@ -117,23 +173,23 @@ curl_retry -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/
   grep " ${terraform_archive}$" terraform_SHA256SUMS | sha256sum -c -
   unzip -qo "$terraform_archive"
 )
-sudo install -m 0755 "$tmpdir/terraform" /usr/local/bin/terraform
+install -m 0755 "$tmpdir/terraform" /usr/local/bin/terraform
 
 log "GitHub CLI depuis le dépôt officiel"
 curl_retry -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-  | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
-sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-  | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+  | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
 
 log "Trivy depuis le dépôt officiel Aqua Security"
 wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key \
-  | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg >/dev/null
+  | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
-  | sudo tee /etc/apt/sources.list.d/trivy.list >/dev/null
+  | tee /etc/apt/sources.list.d/trivy.list >/dev/null
 
-sudo apt-get update
-sudo apt-get install -y gh trivy
+apt-get update
+apt-get install -y gh trivy
 
 log "AWS CLI v2 ${AWS_CLI_VERSION} avec signature PGP officielle"
 aws_archive="awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip"
@@ -169,9 +225,9 @@ fi
 gpg --batch --homedir "$aws_gnupg" --verify "$aws_sig" "$aws_zip"
 unzip -q "$aws_zip" -d "$tmpdir/aws-cli"
 if command -v aws >/dev/null 2>&1; then
-  sudo "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+  "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
 else
-  sudo "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
+  "$tmpdir/aws-cli/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
 fi
 
 log "Minikube ${MINIKUBE_VERSION} avec checksum upstream"
@@ -179,7 +235,7 @@ minikube_url="https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSIO
 curl_retry -fsSL "$minikube_url" -o "$tmpdir/minikube"
 curl_retry -fsSL "${minikube_url}.sha256" -o "$tmpdir/minikube.sha256"
 echo "$(cat "$tmpdir/minikube.sha256")  $tmpdir/minikube" | sha256sum -c -
-sudo install -m 0755 "$tmpdir/minikube" /usr/local/bin/minikube
+install -m 0755 "$tmpdir/minikube" /usr/local/bin/minikube
 
 log "kind ${KIND_VERSION} avec checksum upstream"
 kind_url="https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
@@ -189,7 +245,7 @@ curl_retry -fsSL "${kind_url}.sha256sum" -o "$tmpdir/kind-linux-amd64.sha256sum"
   cd "$tmpdir"
   sha256sum -c kind-linux-amd64.sha256sum
 )
-sudo install -m 0755 "$tmpdir/kind-linux-amd64" /usr/local/bin/kind
+install -m 0755 "$tmpdir/kind-linux-amd64" /usr/local/bin/kind
 
 log "Outils qualité IaC (complément non bloquant)"
 if bash "$SCRIPT_DIR/install-quality-tools.sh"; then
@@ -199,10 +255,10 @@ else
 fi
 
 log "Profil shell DevOps (complément non bloquant)"
-if bash "$SCRIPT_DIR/manage-shell-profile.sh" apply; then
-  echo '[OK] Profil shell DevOps appliqué.'
+if run_as_target bash "$SCRIPT_DIR/manage-shell-profile.sh" apply; then
+  echo "[OK] Profil shell DevOps appliqué pour $TARGET_USER."
 else
-  echo '[AVERTISSEMENT] Profil shell DevOps non appliqué complètement. Les outils cœur restent installés.' >&2
+  echo "[AVERTISSEMENT] Profil shell DevOps non appliqué complètement pour $TARGET_USER. Les outils cœur restent installés." >&2
 fi
 
 log "Répertoires Linux gérés"
@@ -221,8 +277,8 @@ managed_roots_raw="$(jq -er '
 }
 mapfile -t managed_roots <<< "$managed_roots_raw"
 for root in "${managed_roots[@]}"; do
-  target="$HOME/${root#~/}"
-  mkdir -p "$target"
+  target="$TARGET_HOME/${root#~/}"
+  install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP" "$target"
 done
 
 log "Contrat runtime des versions épinglées"
@@ -233,14 +289,14 @@ aws --version 2>&1 | grep -F "aws-cli/${AWS_CLI_VERSION}" >/dev/null
 minikube version --short | grep -F "$MINIKUBE_VERSION" >/dev/null
 kind version | grep -F "$KIND_VERSION" >/dev/null
 
-cat <<'EOF'
+cat <<EOF
 
 [OK] Stack DevOps cœur installée avec versions épinglées et artefacts sensibles vérifiés.
 
 Docker utilise le driver de logs local avec rotation 10 MiB x 3 fichiers par conteneur.
 Les versions kubectl, Helm, Terraform, AWS CLI, Minikube et kind sont pilotées par config/devops/tool-versions.env.
 AWS CLI est vérifié par signature PGP et kind par checksum SHA-256 upstream avant installation.
-Les outils qualité additionnels et le profil shell sont des compléments: leurs anomalies sont signalées mais ne rendent pas la stack cœur inutilisable.
-Les répertoires Linux définis par le contrat runtime sont créés sur le filesystem Linux.
-Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL; l orchestrateur gère ce redémarrage de session et revalide Docker.
+Les outils qualité additionnels sont installés au niveau système; le profil shell et les répertoires Linux restent gérés sous l'utilisateur $TARGET_USER.
+Aucun mot de passe sudo n'est demandé, transmis ou persisté par ce bootstrap: l'orchestrateur utilise la frontière root native de WSL pour les mutations système.
+Important : l'ajout au groupe docker prend effet après ouverture d'une nouvelle session WSL; l orchestrateur gère ce redémarrage de session et revalide Docker sous $TARGET_USER.
 EOF
