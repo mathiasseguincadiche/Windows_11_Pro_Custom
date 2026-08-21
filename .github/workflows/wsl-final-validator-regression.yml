@@ -1,0 +1,85 @@
+name: WSL final validator regression
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'scripts/bootstrap/14_validate_wsl.ps1'
+      - 'scripts/core/wsl-release.psm1'
+      - '.github/workflows/wsl-final-validator-regression.yml'
+  pull_request:
+    paths:
+      - 'scripts/bootstrap/14_validate_wsl.ps1'
+      - 'scripts/core/wsl-release.psm1'
+      - '.github/workflows/wsl-final-validator-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Enforce direct os-release parsing in final WSL validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          validator='scripts/bootstrap/14_validate_wsl.ps1'
+
+          grep -Fq 'scripts\core\wsl-release.psm1' "$validator"
+          grep -Fq -- '-- cat /etc/os-release' "$validator"
+          grep -Fq 'ConvertFrom-WpcOsRelease' "$validator"
+          grep -Fq -- '-- printenv HOME' "$validator"
+
+          if grep -Fq '. /etc/os-release' "$validator"; then
+            echo 'Final WSL validator must not source /etc/os-release through bash.' >&2
+            exit 1
+          fi
+          if grep -Fq "\$VERSION_ID" "$validator" || grep -Fq "\$VERSION_CODENAME" "$validator"; then
+            echo 'Final WSL validator must not expand release variables through nested shells.' >&2
+            exit 1
+          fi
+          if grep -Fq "\$HOME" "$validator"; then
+            echo 'Final WSL validator must obtain HOME directly from WSL instead of nested shell expansion.' >&2
+            exit 1
+          fi
+
+      - name: Test shared os-release parser
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/core/wsl-release.psm1 -Force
+          $release = ConvertFrom-WpcOsRelease -Lines @(
+              'NAME="Ubuntu"',
+              'VERSION_ID="26.04"',
+              'VERSION_CODENAME=resolute'
+          )
+          if ($release.VersionId -ne '26.04' -or $release.Codename -ne 'resolute') {
+              throw "Unexpected os-release parse result: $($release | ConvertTo-Json -Compress)"
+          }
+
+  powershell-parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse final WSL validator and parser module
+        shell: pwsh
+        run: |
+          foreach ($path in @(
+              '.\scripts\bootstrap\14_validate_wsl.ps1',
+              '.\scripts\core\wsl-release.psm1'
+          )) {
+              $tokens = $null
+              $errors = $null
+              [void][System.Management.Automation.Language.Parser]::ParseFile(
+                  (Resolve-Path $path),
+                  [ref]$tokens,
+                  [ref]$errors
+              )
+              if (@($errors).Count -gt 0) {
+                  throw "$path parse errors: $($errors.Message -join '; ')"
+              }
+          }
