@@ -42,7 +42,7 @@ jobs:
           grep -Fq 'Set-WpcWslConfDefaultUser' "$user_script" "$apply_script"
           grep -Fq -- '-- cat /etc/wsl.conf' "$user_script" "$apply_script"
           grep -Fq -- '-- tee $tempPath' "$user_script" "$apply_script"
-          grep -Fq "-Command 'mv'" "$user_script" "$apply_script"
+          grep -Fq -- "-Command 'mv'" "$user_script" "$apply_script"
           grep -Fq 'wsl.exe --terminate $Distribution' "$user_script" "$apply_script"
 
           if grep -Eq 'awk|sh -lc|base64' "$user_script" "$apply_script"; then
