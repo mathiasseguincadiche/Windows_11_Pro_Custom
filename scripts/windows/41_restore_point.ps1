@@ -19,6 +19,9 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw "La création du point de restauration exige une session PowerShell 7 administrateur."
 }
 
+$restoreRegistryPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+$restoreFrequencyName = 'SystemRestorePointCreationFrequency'
+
 function ConvertFrom-WpcRestorePointTime {
     param([Parameter(Mandatory)]$Value)
 
@@ -69,6 +72,38 @@ function Get-WpcLatestRestorePoint {
     }
 }
 
+function Get-WpcRestorePointFrequencyState {
+    if (-not (Test-Path -LiteralPath $restoreRegistryPath)) {
+        throw "Clé System Restore introuvable: $restoreRegistryPath"
+    }
+
+    $item = Get-ItemProperty -LiteralPath $restoreRegistryPath -ErrorAction Stop
+    $exists = $item.PSObject.Properties.Name -contains $restoreFrequencyName
+    $value = if ($exists) { [uint32]$item.$restoreFrequencyName } else { $null }
+
+    [pscustomobject]@{
+        Exists = $exists
+        Value = $value
+    }
+}
+
+function Enable-WpcDeterministicRestorePointCreation {
+    New-ItemProperty -LiteralPath $restoreRegistryPath -Name $restoreFrequencyName -PropertyType DWord -Value 0 -Force -ErrorAction Stop | Out-Null
+    Write-Host '[EN COURS] Fréquence System Restore temporairement forcée à 0 minute pour garantir un nouveau point...' -ForegroundColor Cyan
+}
+
+function Restore-WpcRestorePointFrequencyState {
+    param([Parameter(Mandatory)]$State)
+
+    if ($State.Exists) {
+        New-ItemProperty -LiteralPath $restoreRegistryPath -Name $restoreFrequencyName -PropertyType DWord -Value ([uint32]$State.Value) -Force -ErrorAction Stop | Out-Null
+        Write-Host "[OK] Fréquence System Restore restaurée à sa valeur précédente: $($State.Value) minute(s)." -ForegroundColor DarkGray
+    } else {
+        Remove-ItemProperty -LiteralPath $restoreRegistryPath -Name $restoreFrequencyName -ErrorAction SilentlyContinue
+        Write-Host '[OK] Fréquence System Restore restaurée à son état précédent: valeur personnalisée absente.' -ForegroundColor DarkGray
+    }
+}
+
 function Invoke-WpcSystemRestoreMethod {
     param(
         [Parameter(Mandatory)][string]$MethodName,
@@ -109,6 +144,41 @@ function New-WpcRestorePointPowerShell7 {
     })
 }
 
+function Wait-WpcRestorePointEvidence {
+    param(
+        [Parameter(Mandatory)][datetime]$StartedAt,
+        [AllowNull()]$BeforeSequence,
+        [int]$TimeoutSeconds = 90
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastQuery = $null
+
+    do {
+        $lastQuery = Get-WpcLatestRestorePoint
+        if ($lastQuery.QuerySucceeded -and $lastQuery.Point) {
+            $point = $lastQuery.Point
+            $isRecent = $point.CreationTime -ge $StartedAt.AddMinutes(-2)
+            $isNewSequence = ($null -eq $BeforeSequence) -or ([uint32]$point.SequenceNumber -gt [uint32]$BeforeSequence)
+            if ($isRecent -and $isNewSequence) {
+                return $point
+            }
+        }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+
+    if ($lastQuery -and -not $lastQuery.QuerySucceeded) {
+        throw "La création a été demandée, mais la preuve CIM reste indisponible après ${TimeoutSeconds}s: $($lastQuery.Error)"
+    }
+
+    $observed = if ($lastQuery -and $lastQuery.Point) {
+        "dernier point=$($lastQuery.Point.CreationTime.ToString('yyyy-MM-dd HH:mm:ss')) séquence=$($lastQuery.Point.SequenceNumber) description='$($lastQuery.Point.Description)'"
+    } else {
+        'aucun point visible via CIM'
+    }
+    throw "SystemRestore.CreateRestorePoint a retourné S_OK, mais aucun nouveau point récent n'a été confirmé après ${TimeoutSeconds}s ($observed)."
+}
+
 try {
     $before = Get-WpcLatestRestorePoint
     $recentThreshold = (Get-Date).AddHours(-24)
@@ -117,17 +187,16 @@ try {
         return
     }
 
-    $startedAt = Get-Date
-    New-WpcRestorePointPowerShell7 -RestorePointDescription $Description
-
-    $after = Get-WpcLatestRestorePoint
-    if ($after.QuerySucceeded) {
-        if (-not $after.Point -or $after.Point.CreationTime -lt $startedAt.AddMinutes(-1)) {
-            throw "SystemRestore.CreateRestorePoint a terminé sans qu'un point de restauration récent puisse être confirmé."
-        }
-        Write-Host ("[OK] Point de restauration Windows créé et vérifié via PowerShell 7/CIM ({0:yyyy-MM-dd HH:mm}, séquence {1})." -f $after.Point.CreationTime, $after.Point.SequenceNumber) -ForegroundColor Green
-    } else {
-        throw "Le point de restauration a été demandé mais la vérification CIM est indisponible: $($after.Error)"
+    $frequencyState = Get-WpcRestorePointFrequencyState
+    try {
+        Enable-WpcDeterministicRestorePointCreation
+        $startedAt = Get-Date
+        $beforeSequence = if ($before.QuerySucceeded -and $before.Point) { [uint32]$before.Point.SequenceNumber } else { $null }
+        New-WpcRestorePointPowerShell7 -RestorePointDescription $Description
+        $createdPoint = Wait-WpcRestorePointEvidence -StartedAt $startedAt -BeforeSequence $beforeSequence -TimeoutSeconds 90
+        Write-Host ("[OK] Point de restauration Windows créé et vérifié via PowerShell 7/CIM ({0:yyyy-MM-dd HH:mm}, séquence {1}, description='{2}')." -f $createdPoint.CreationTime, $createdPoint.SequenceNumber, $createdPoint.Description) -ForegroundColor Green
+    } finally {
+        Restore-WpcRestorePointFrequencyState -State $frequencyState
     }
 } catch {
     throw "Impossible de créer ou confirmer le point de restauration de sécurité depuis PowerShell 7. Aucune optimisation ne doit continuer sans ce garde-fou, sauf choix explicite de l'orchestrateur via -SkipFoundationRestorePoint. Détail: $($_.Exception.Message)"
