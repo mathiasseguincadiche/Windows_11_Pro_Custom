@@ -1,6 +1,15 @@
 {
   "actions": [
     {
+      "id": "User.WpcNewTab",
+      "name": "Nouvel onglet PowerShell DevOps",
+      "command": {
+        "action": "newTab",
+        "profile": "PowerShell 7 - DevOps"
+      },
+      "keys": "ctrl+t"
+    },
+    {
       "id": "User.WpcPowerShellDevOps",
       "name": "PowerShell 7 - DevOps",
       "command": {
@@ -17,6 +26,30 @@
         "profile": "Ubuntu - DevOps"
       },
       "keys": "ctrl+shift+2"
+    },
+    {
+      "id": "User.WpcPowerShellAdmin",
+      "name": "PowerShell 7 - DevOps (Admin)",
+      "command": {
+        "action": "newTab",
+        "profile": "PowerShell 7 - DevOps (Admin)",
+        "elevate": true
+      },
+      "keys": "ctrl+shift+3"
+    },
+    {
+      "id": "User.WpcRenameTab",
+      "name": "Renommer l'onglet courant",
+      "command": "openTabRenamer",
+      "keys": "ctrl+shift+r"
+    },
+    {
+      "id": "User.WpcCloseTab",
+      "name": "Fermer l'onglet courant",
+      "command": {
+        "action": "closeTab"
+      },
+      "keys": "ctrl+w"
     },
     {
       "id": "User.WpcSplitDevOps",
