@@ -1,0 +1,128 @@
+name: External auth contract
+
+on:
+  pull_request:
+    paths:
+      - 'menu.ps1'
+      - 'scripts/bootstrap/15_external_auth.ps1'
+      - 'scripts/bootstrap/16_external_auth_interactive.ps1'
+      - 'docs/07_DEVOPS_STACK.md'
+      - '.github/workflows/external-auth-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'menu.ps1'
+      - 'scripts/bootstrap/15_external_auth.ps1'
+      - 'scripts/bootstrap/16_external_auth_interactive.ps1'
+      - 'docs/07_DEVOPS_STACK.md'
+      - '.github/workflows/external-auth-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse PowerShell
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            '.\menu.ps1',
+            '.\scripts\bootstrap\15_external_auth.ps1',
+            '.\scripts\bootstrap\16_external_auth_interactive.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path), [ref]$tokens, [ref]$errors
+            )
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Enforce direct interactive boundary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $menu = Get-Content -Raw '.\menu.ps1'
+          $interactive = Get-Content -Raw '.\scripts\bootstrap\16_external_auth_interactive.ps1'
+          $audit = Get-Content -Raw '.\scripts\bootstrap\15_external_auth.ps1'
+
+          foreach ($needle in @(
+            'Invoke-WpcInteractiveRepoScript',
+            '16_external_auth_interactive.ps1',
+            '15_external_auth.ps1',
+            'Connexions externes'
+          )) {
+            if (-not $menu.Contains($needle)) { throw "menu.ps1 missing external auth wiring: $needle" }
+          }
+
+          foreach ($needle in @(
+            "'gh','auth','login'",
+            "'--web'",
+            "'aws','configure','sso'",
+            "'aws','sso','login'",
+            "'aws','configure','--profile'",
+            'Read-Host'
+          )) {
+            if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
+          }
+
+          if ($interactive -match 'Invoke-WpcExternalCommand|Tee-Object|Start-Transcript') {
+            throw 'Interactive authentication must never traverse the managed logger/transcript pipeline.'
+          }
+          if ($menu -notmatch '&\s*\$exe\s+@childArgs') {
+            throw 'Interactive menu helper must invoke the child directly instead of the captured live relay.'
+          }
+          if ($menu -match 'Invoke-WpcVisibleChildProcess[^\r\n]*ExternalAuthInteractive') {
+            throw 'Interactive auth must not use the captured child-process relay.'
+          }
+
+          foreach ($needle in @(
+            'SecretMaterialRecorded = $false',
+            "'gh','auth','status'",
+            "'aws','configure','list-profiles'",
+            "'aws','sts','get-caller-identity'"
+          )) {
+            if (-not $audit.Contains($needle)) { throw "non-secret audit contract missing: $needle" }
+          }
+
+      - name: Reject credential persistence patterns
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths = @(
+            '.\menu.ps1',
+            '.\scripts\bootstrap\15_external_auth.ps1',
+            '.\scripts\bootstrap\16_external_auth_interactive.ps1'
+          )
+          $combined = ($paths | ForEach-Object { Get-Content -Raw $_ }) -join "`n"
+          $forbidden = @(
+            '--with-token',
+            'AWS_SECRET_ACCESS_KEY=',
+            'AWS_ACCESS_KEY_ID=',
+            'GH_TOKEN=',
+            'GITHUB_TOKEN=',
+            'Set-Content.*credentials',
+            'Add-Content.*credentials',
+            'ConvertFrom-SecureString',
+            'Export-Clixml'
+          )
+          foreach ($pattern in $forbidden) {
+            if ($combined -match $pattern) { throw "Forbidden credential persistence/injection pattern: $pattern" }
+          }
+
+      - name: Dry-run external auth menu entries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($choice in @('8.8','8.9')) {
+            $output = & pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\menu.ps1 -Choice $choice -DryRun -NoClear -NoPause 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) { throw "menu choice $choice failed: $output" }
+            if ($output -notmatch '\[DRY-RUN\]') { throw "menu choice $choice was not non-mutating in DryRun." }
+          }
