@@ -1,0 +1,140 @@
+{
+  "globals": {
+    "theme": "WPC DevOps",
+    "launchMode": "maximized",
+    "firstWindowPreference": "defaultProfile",
+    "windowingBehavior": "useExisting",
+    "alwaysShowTabs": true,
+    "showTabsInTitlebar": true,
+    "showTerminalTitleInTitlebar": false,
+    "tabWidthMode": "titleLength",
+    "tabSwitcherMode": "inOrder",
+    "confirmCloseAllTabs": true,
+    "copyOnSelect": false,
+    "copyFormatting": "none",
+    "multiLinePasteWarning": true,
+    "largePasteWarning": true,
+    "snapToGridOnResize": false
+  },
+  "themes": [
+    {
+      "name": "WPC DevOps",
+      "tab": {
+        "background": "terminalBackground",
+        "unfocusedBackground": "#151A22"
+      },
+      "tabRow": {
+        "background": "#00000000",
+        "unfocusedBackground": "#0D1117CC"
+      },
+      "window": {
+        "applicationTheme": "dark",
+        "useMica": true
+      }
+    }
+  ],
+  "schemes": [
+    {
+      "name": "WPC DevOps",
+      "background": "#0D1117",
+      "foreground": "#E6EDF3",
+      "cursorColor": "#58A6FF",
+      "selectionBackground": "#264F78",
+      "black": "#0D1117",
+      "red": "#FF7B72",
+      "green": "#3FB950",
+      "yellow": "#D29922",
+      "blue": "#58A6FF",
+      "purple": "#BC8CFF",
+      "cyan": "#39C5CF",
+      "white": "#B1BAC4",
+      "brightBlack": "#6E7681",
+      "brightRed": "#FFA198",
+      "brightGreen": "#56D364",
+      "brightYellow": "#E3B341",
+      "brightBlue": "#79C0FF",
+      "brightPurple": "#D2A8FF",
+      "brightCyan": "#56D4DD",
+      "brightWhite": "#F0F6FC"
+    },
+    {
+      "name": "WPC DevOps Admin",
+      "background": "#120D0D",
+      "foreground": "#F0F6FC",
+      "cursorColor": "#F85149",
+      "selectionBackground": "#5A1E1E",
+      "black": "#120D0D",
+      "red": "#FF7B72",
+      "green": "#3FB950",
+      "yellow": "#D29922",
+      "blue": "#58A6FF",
+      "purple": "#BC8CFF",
+      "cyan": "#39C5CF",
+      "white": "#B1BAC4",
+      "brightBlack": "#6E7681",
+      "brightRed": "#FFA198",
+      "brightGreen": "#56D364",
+      "brightYellow": "#E3B341",
+      "brightBlue": "#79C0FF",
+      "brightPurple": "#D2A8FF",
+      "brightCyan": "#56D4DD",
+      "brightWhite": "#F0F6FC"
+    },
+    {
+      "name": "WPC Ubuntu",
+      "background": "#0D1117",
+      "foreground": "#E6EDF3",
+      "cursorColor": "#E95420",
+      "selectionBackground": "#5A2A18",
+      "black": "#0D1117",
+      "red": "#FF7B72",
+      "green": "#3FB950",
+      "yellow": "#D29922",
+      "blue": "#58A6FF",
+      "purple": "#BC8CFF",
+      "cyan": "#39C5CF",
+      "white": "#B1BAC4",
+      "brightBlack": "#6E7681",
+      "brightRed": "#FFA198",
+      "brightGreen": "#56D364",
+      "brightYellow": "#E3B341",
+      "brightBlue": "#79C0FF",
+      "brightPurple": "#D2A8FF",
+      "brightCyan": "#56D4DD",
+      "brightWhite": "#F0F6FC"
+    }
+  ],
+  "newTabMenu": [
+    {
+      "type": "folder",
+      "name": "Windows 11 Pro Custom",
+      "entries": [
+        {
+          "type": "profile",
+          "profile": "PowerShell 7 - DevOps"
+        },
+        {
+          "type": "profile",
+          "profile": "PowerShell 7 - DevOps (Admin)"
+        },
+        {
+          "type": "profile",
+          "profile": "Ubuntu - DevOps"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "type": "action",
+          "id": "User.WpcSplitDevOps"
+        }
+      ]
+    },
+    {
+      "type": "separator"
+    },
+    {
+      "type": "remainingProfiles"
+    }
+  ]
+}
