@@ -32,10 +32,13 @@ if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     if ($userCode -ne 0 -or [string]::IsNullOrWhiteSpace($LinuxUser)) { throw 'Impossible de déterminer lʼutilisateur WSL par défaut.' }
 }
 if ($LinuxUser -eq 'root') {
-    throw 'Le bootstrap DevOps refuse root. Exécute dʼabord la préparation utilisateur WSL; elle crée/configure un utilisateur normal de façon guidée.'
+    throw 'Le bootstrap DevOps refuse root comme utilisateur cible. Exécute dʼabord la préparation utilisateur WSL; elle crée/configure un utilisateur normal de façon guidée.'
+}
+if ($LinuxUser -notmatch '^[a-z_][a-z0-9_-]{0,31}$') {
+    throw "Utilisateur WSL cible invalide: $LinuxUser"
 }
 
-& wsl.exe -d $Distribution -u root -- sh -lc "getent passwd '$LinuxUser' >/dev/null"
+& wsl.exe -d $Distribution -u root -- getent passwd $LinuxUser 1>$null 2>$null
 $userExistsCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($userExistsCode -ne 0) { throw "Utilisateur WSL absent: $LinuxUser" }
@@ -98,7 +101,14 @@ $linuxScript = (& wsl.exe --distribution $Distribution --user $LinuxUser --exec 
 $convertCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($convertCode -ne 0 -or [string]::IsNullOrWhiteSpace($linuxScript)) { throw 'Impossible de convertir le chemin du bootstrap DevOps avec wslpath.' }
-Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', $LinuxUser, '--exec', 'bash', $linuxScript) -LogIdentity 'scripts/wsl/install-devops.sh' -DisplayName 'install-devops.sh'
+
+# Le runtime externe capture stdout/stderr pour le suivi live et les journaux. Ce flux
+# n'est pas un TTY Linux interactif fiable pour un prompt sudo. La partie système est
+# donc exécutée explicitement via le compte root WSL, sans mot de passe transmis ou
+# persistant. install-devops.sh reçoit uniquement le nom de l'utilisateur cible et
+# redescend sous ce compte pour les opérations de profil/home qui lui appartiennent.
+Write-Host "[INFO] Phase système DevOps via root WSL; utilisateur cible conservé: $LinuxUser. Aucun mot de passe n'est transmis au script." -ForegroundColor DarkGray
+Invoke-WpcExternalCommand -Context $context -FilePath 'wsl.exe' -ArgumentList @('--distribution', $Distribution, '--user', 'root', '--exec', 'bash', $linuxScript, '--target-user', $LinuxUser) -LogIdentity 'scripts/wsl/install-devops.sh' -DisplayName 'install-devops.sh'
 
 # install-devops.sh ajoute l’utilisateur au groupe docker. Les groupes auxiliaires d’une
 # session Linux déjà ouverte ne sont pas recalculés dynamiquement. La revalidation
