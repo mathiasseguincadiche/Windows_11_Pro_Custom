@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-if [[ ${EUID} -eq 0 ]]; then
-  echo "[ERREUR] Lance ce script avec ton utilisateur WSL, pas root." >&2
-  exit 1
-fi
+as_root() {
+  if [[ ${EUID} -eq 0 ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
 
 for cmd in curl sha256sum tar unzip gh jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -12,6 +15,10 @@ for cmd in curl sha256sum tar unzip gh jq; do
     exit 1
   fi
 done
+
+if [[ ${EUID} -eq 0 ]]; then
+  echo '[INFO] Outils qualité exécutés dans la phase système root WSL; aucun prompt sudo requis.'
+fi
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -38,7 +45,7 @@ terraform_docs_archive="$tmpdir/terraform-docs.tar.gz"
 curl --retry 5 --retry-all-errors -fsSL "https://github.com/terraform-docs/terraform-docs/releases/download/${TERRAFORM_DOCS_VERSION}/terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" -o "$terraform_docs_archive"
 verify_sha256 "$terraform_docs_archive" "$TERRAFORM_DOCS_SHA256"
 tar -xzf "$terraform_docs_archive" -C "$tmpdir" terraform-docs
-sudo install -m 0755 "$tmpdir/terraform-docs" /usr/local/bin/terraform-docs
+as_root install -m 0755 "$tmpdir/terraform-docs" /usr/local/bin/terraform-docs
 
 log "actionlint"
 ACTIONLINT_VERSION="1.7.12"
@@ -48,7 +55,7 @@ curl --retry 5 --retry-all-errors -fsSL "https://github.com/rhysd/actionlint/rel
 verify_sha256 "$actionlint_archive" "$ACTIONLINT_SHA256"
 gh attestation verify "$actionlint_archive" -R rhysd/actionlint
 tar -xzf "$actionlint_archive" -C "$tmpdir" actionlint
-sudo install -m 0755 "$tmpdir/actionlint" /usr/local/bin/actionlint
+as_root install -m 0755 "$tmpdir/actionlint" /usr/local/bin/actionlint
 
 log "yq"
 YQ_VERSION="v4.53.3"
@@ -76,7 +83,7 @@ curl --retry 5 --retry-all-errors -fsSL \
   "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
   -o "$yq_binary"
 verify_sha256 "$yq_binary" "$yq_expected"
-sudo install -m 0755 "$yq_binary" /usr/local/bin/yq
+as_root install -m 0755 "$yq_binary" /usr/local/bin/yq
 
 log "TFLint v0.64.0 avec GitHub Artifact Attestations"
 TFLINT_VERSION="v0.64.0"
@@ -91,7 +98,7 @@ gh attestation verify "$tflint_checksums" -R terraform-linters/tflint
   cd "$tmpdir"
   sha256sum --ignore-missing -c checksums.txt
   unzip -oq tflint_linux_amd64.zip
-  sudo install -m 0755 tflint /usr/local/bin/tflint
+  as_root install -m 0755 tflint /usr/local/bin/tflint
 )
 
 printf '\n[OK] Outils qualité IaC installés.\n'
