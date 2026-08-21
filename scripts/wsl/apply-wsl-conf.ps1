@@ -47,7 +47,12 @@ function Get-WslConfLines {
 }
 
 function Write-WslConfLines {
-    param([Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Lines)
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [AllowEmptyString()]
+        [string[]]$Lines
+    )
 
     $desiredText = ConvertTo-WpcWslConfText -Lines $Lines
     $tempPath = "/etc/.wpc-wsl.conf.$([guid]::NewGuid().ToString('N')).tmp"
