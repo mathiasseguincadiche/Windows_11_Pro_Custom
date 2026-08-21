@@ -173,8 +173,8 @@ function Get-WpcManagedArrayEvidence {
 
     return [pscustomobject]@{
         Label = $Label
-        Missing = @($missing)
-        Mismatched = @($mismatched)
+        Missing = $missing.ToArray()
+        Mismatched = $mismatched.ToArray()
         IsCompliant = ($missing.Count -eq 0 -and $mismatched.Count -eq 0)
     }
 }
@@ -245,7 +245,7 @@ function Get-WpcTerminalSettingsEvidence {
         DisabledProfileSources = $disabled
         PowerShellCoreDisabled = $powershellCoreDisabled
         WslDisabled = $wslDisabled
-        GlobalMismatches = @($globalMismatches)
+        GlobalMismatches = $globalMismatches.ToArray()
         ThemeEvidence = $themeEvidence
         SchemeEvidence = $schemeEvidence
         NewTabMenuOk = $newTabMenuOk
