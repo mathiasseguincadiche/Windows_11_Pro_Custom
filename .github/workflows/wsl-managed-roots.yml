@@ -71,7 +71,7 @@ jobs:
           sudo chown "$user:$user" "$home/~/projects/migration-proof.txt"
 
           sudo bash "$helper" apply --target-user "$user"
-          sudo -u "$user" bash "$helper" verify --target-user "$user"
+          sudo bash "$helper" verify --target-user "$user"
 
           test -f "$home/projects/migration-proof.txt"
           grep -Fq 'legacy-project-data' "$home/projects/migration-proof.txt"
