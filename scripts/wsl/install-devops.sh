@@ -44,7 +44,6 @@ if ! command -v runuser >/dev/null 2>&1; then
 fi
 
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
-TARGET_GROUP="$(id -gn "$TARGET_USER")"
 if [[ -z "$TARGET_HOME" || ! -d "$TARGET_HOME" ]]; then
   echo "[ERREUR] HOME Linux invalide pour $TARGET_USER: ${TARGET_HOME:-<absent>}" >&2
   exit 1
