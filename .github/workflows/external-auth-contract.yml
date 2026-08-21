@@ -74,7 +74,10 @@ jobs:
             'Read-YesNoLoop',
             'Veux-tu configurer AWS maintenant',
             'CONNEXION AWS CONSOLE PAR NAVIGATEUR — RECOMMANDÉE',
-            'Aucune URL SSO n est demandée',
+            'PROFIL AWS CLI LOCAL',
+            'Ce n est PAS le nom d un projet AWS',
+            'Utiliser le profil local recommandé "default"',
+            'Profil AWS CLI local sélectionné',
             'Test-AwsLoginSupported',
             "[version]'2.32.0'",
             "'aws','login','--profile'",
@@ -102,6 +105,12 @@ jobs:
 
           if ($interactive -match 'IAM Identity Center / SSO — RECOMMANDÉ') {
             throw 'IAM Identity Center must not be presented as the universal recommended path.'
+          }
+          if ($interactive -match 'Read-AwsProfileName[\s\S]*IsNullOrWhiteSpace\(\$value\)[\s\S]*return ''default''') {
+            throw 'AWS profile selection must not silently convert an empty prompt into default; the user must explicitly choose default.'
+          }
+          if ($interactive -notmatch "Read-AwsProfileName[\s\S]*Read-YesNoLoop[\s\S]*profil local recommandé.*default") {
+            throw 'AWS default profile selection must be explicit and visible before aws login.'
           }
           if ($interactive -notmatch "'1'\s*\{[\s\S]*'aws','login','--profile'") {
             throw 'AWS option 1 must execute aws login with a named/default profile.'
