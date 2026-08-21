@@ -112,6 +112,16 @@ function Test-WpcEquivalent {
     return (ConvertTo-WpcComparableJson -Value $Actual) -ceq (ConvertTo-WpcComparableJson -Value $Expected)
 }
 
+function Get-WpcSafeObjectName {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return '' }
+    try {
+        return [string]$Value.name
+    } catch {
+        return ''
+    }
+}
+
 function Merge-WpcNamedObjects {
     param(
         [AllowNull()][object[]]$Existing,
@@ -119,16 +129,16 @@ function Merge-WpcNamedObjects {
     )
 
     $managedList = @($Managed)
-    $managedNames = @($managedList | ForEach-Object { [string]$_.name })
+    $managedNames = @($managedList | ForEach-Object { Get-WpcSafeObjectName -Value $_ } | Where-Object { $_ })
     $result = [System.Collections.Generic.List[object]]::new()
 
     foreach ($entry in @($Existing)) {
-        $name = if ($entry -and $entry.PSObject.Properties['name']) { [string]$entry.name } else { '' }
+        $name = Get-WpcSafeObjectName -Value $entry
         if ($name -and $managedNames -contains $name) { continue }
-        $result.Add($entry)
+        if ($null -ne $entry) { $result.Add($entry) }
     }
     foreach ($entry in $managedList) {
-        $result.Add($entry)
+        if ($null -ne $entry) { $result.Add($entry) }
     }
     return @($result.ToArray())
 }
@@ -143,8 +153,15 @@ function Get-WpcManagedArrayEvidence {
     $missing = [System.Collections.Generic.List[string]]::new()
     $mismatched = [System.Collections.Generic.List[string]]::new()
     foreach ($expectedEntry in @($Expected)) {
-        $name = [string]$expectedEntry.name
-        $actualEntry = @($Actual | Where-Object { $_.PSObject.Properties['name'] -and [string]$_.name -eq $name } | Select-Object -First 1)
+        $name = Get-WpcSafeObjectName -Value $expectedEntry
+        $actualEntry = @(
+            foreach ($candidate in @($Actual)) {
+                if ((Get-WpcSafeObjectName -Value $candidate) -eq $name) {
+                    $candidate
+                    break
+                }
+            }
+        )
         if ($actualEntry.Count -eq 0) {
             $missing.Add($name)
             continue
