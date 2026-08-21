@@ -40,7 +40,9 @@ if ($menu.Contains('& $Path @Arguments')) {
 
 $requiredMenuPatterns = @(
     @{ Pattern = '\$childArgs\s*=\s*\$argList\.ToArray\(\)'; Label = '$childArgs = $argList.ToArray()' },
-    @{ Pattern = '&\s*\$exe\s+@childArgs'; Label = '& $exe @childArgs' },
+    @{ Pattern = 'function\s+Invoke-WpcVisibleChildProcess'; Label = 'Invoke-WpcVisibleChildProcess helper' },
+    @{ Pattern = '&\s*\$Executable\s+@ArgumentList'; Label = '& $Executable @ArgumentList' },
+    @{ Pattern = 'Invoke-WpcVisibleChildProcess\s+-Executable\s+\$exe\s+-ArgumentList\s+\$childArgs'; Label = 'Invoke-WpcVisibleChildProcess -Executable $exe -ArgumentList $childArgs' },
     @{ Pattern = 'Assert-WpcRebootStateCommands'; Label = 'Assert-WpcRebootStateCommands' },
     @{ Pattern = 'Le processus PowerShell isolé'; Label = 'Le processus PowerShell isolé' }
 )
@@ -105,6 +107,6 @@ foreach ($command in @('Get-WpcPendingRebootState', 'Test-WpcRebootRequiredMessa
 $global:LASTEXITCODE = 0
 
 Write-Host '[OK] Syntaxe PowerShell valide.' -ForegroundColor Green
-Write-Host '[OK] Scripts du dépôt isolés du scope du menu.' -ForegroundColor Green
+Write-Host '[OK] Scripts du dépôt isolés du scope du menu, y compris via le relais live.' -ForegroundColor Green
 Write-Host '[OK] Contrat reboot-state intact après rechargement -Force dans un enfant.' -ForegroundColor Green
 Write-Host '[OK] Baseline héritée reste fail-closed avec ré-enrôlement explicitement guidé.' -ForegroundColor Green
