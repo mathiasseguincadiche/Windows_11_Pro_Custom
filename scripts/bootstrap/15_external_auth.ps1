@@ -42,6 +42,25 @@ function Test-WslCommand {
     return ($probe.ExitCode -eq 0)
 }
 
+function Get-GitHubCredentialStorage {
+    if (-not $ghInstalled) { return 'Unavailable' }
+
+    $plain = Invoke-WslCapture -ArgumentList @(
+        'sh','-lc',
+        'f="$HOME/.config/gh/hosts.yml"; [ -f "$f" ] && grep -Eq "^[[:space:]]*oauth_token:" "$f"'
+    ) -IgnoreExitCode
+    if ($plain.ExitCode -eq 0) { return 'PlaintextFile' }
+
+    $environment = Invoke-WslCapture -ArgumentList @(
+        'sh','-lc',
+        '[ -n "${GH_TOKEN:-}" ] || [ -n "${GITHUB_TOKEN:-}" ]'
+    ) -IgnoreExitCode
+    if ($environment.ExitCode -eq 0) { return 'Environment' }
+
+    if ($githubAuthenticated) { return 'CredentialStore' }
+    return 'None'
+}
+
 if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $defaultUser = @(& wsl.exe --distribution $Distribution --exec id -un 2>&1)
     $defaultCode = $LASTEXITCODE
@@ -77,6 +96,8 @@ if ($ghInstalled) {
     $ghProbe = Invoke-WslCapture -ArgumentList @('gh','auth','status','--hostname','github.com') -IgnoreExitCode
     $githubAuthenticated = ($ghProbe.ExitCode -eq 0)
 }
+$githubCredentialStorage = Get-GitHubCredentialStorage
+$githubSecureEnough = ($githubAuthenticated -and $githubCredentialStorage -ne 'PlaintextFile')
 
 $awsProfiles = @()
 $awsAuthenticatedProfiles = [System.Collections.Generic.List[string]]::new()
@@ -99,11 +120,12 @@ $awsAnyAuthenticated = ($awsAuthenticatedProfiles.Count -gt 0)
 $actions = [System.Collections.Generic.List[string]]::new()
 if (-not $gitIdentityConfigured) { $actions.Add('Git identity') }
 if (-not $githubAuthenticated) { $actions.Add('GitHub CLI') }
+elseif ($githubCredentialStorage -eq 'PlaintextFile') { $actions.Add('GitHub credential storage') }
 if (-not $awsAnyAuthenticated) { $actions.Add('AWS') }
 
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $report = [ordered]@{
-    SchemaVersion = 1
+    SchemaVersion = 2
     Timestamp = (Get-Date).ToString('o')
     Distribution = $Distribution
     LinuxUser = $LinuxUser
@@ -116,6 +138,9 @@ $report = [ordered]@{
     GitHub = [ordered]@{
         Installed = $ghInstalled
         Authenticated = $githubAuthenticated
+        CredentialStorage = $githubCredentialStorage
+        PlaintextCredentialDetected = ($githubCredentialStorage -eq 'PlaintextFile')
+        SecureEnoughForRequiredVerify = $githubSecureEnough
     }
     Aws = [ordered]@{
         Installed = $awsInstalled
@@ -132,8 +157,20 @@ Write-Host ''
 Write-Host 'Connexions externes utilisateur' -ForegroundColor Cyan
 if ($gitIdentityConfigured) { Write-Host '[DEJA OK] Identité Git globale configurée.' -ForegroundColor Green }
 else { Write-Host '[ACTION REQUISE] Identité Git globale non configurée.' -ForegroundColor Yellow }
-if ($githubAuthenticated) { Write-Host '[DEJA OK] GitHub CLI authentifié sur github.com.' -ForegroundColor Green }
-else { Write-Host '[ACTION REQUISE] GitHub CLI non authentifié sur github.com.' -ForegroundColor Yellow }
+
+if (-not $githubAuthenticated) {
+    Write-Host '[ACTION REQUISE] GitHub CLI non authentifié sur github.com.' -ForegroundColor Yellow
+} elseif ($githubCredentialStorage -eq 'PlaintextFile') {
+    Write-Host '[AVERTISSEMENT] GitHub CLI authentifié, mais un token persistant est détecté dans ~/.config/gh/hosts.yml.' -ForegroundColor Yellow
+    Write-Host '[ACTION REQUISE] Revoir explicitement le stockage GitHub; aucun contenu du token n est lu par cet audit.' -ForegroundColor Yellow
+} elseif ($githubCredentialStorage -eq 'Environment') {
+    Write-Host '[DEJA OK] GitHub CLI authentifié via une variable d environnement externe au dépôt.' -ForegroundColor Green
+} elseif ($githubCredentialStorage -eq 'CredentialStore') {
+    Write-Host '[DEJA OK] GitHub CLI authentifié; aucun token persistant détecté dans hosts.yml.' -ForegroundColor Green
+} else {
+    Write-Host '[DEJA OK] GitHub CLI authentifié sur github.com.' -ForegroundColor Green
+}
+
 if ($awsAnyAuthenticated) {
     Write-Host ("[DEJA OK] AWS CLI possède {0} profil(s) authentifié(s)." -f $awsAuthenticatedProfiles.Count) -ForegroundColor Green
 } elseif ($awsProfiles.Count -gt 0) {
@@ -145,7 +182,7 @@ Write-Host "[INFO] Rapport sans secret: $reportPath" -ForegroundColor DarkGray
 
 $requiredFailures = [System.Collections.Generic.List[string]]::new()
 if ($RequireGitIdentity -and -not $gitIdentityConfigured) { $requiredFailures.Add('Git identity') }
-if ($RequireGitHub -and -not $githubAuthenticated) { $requiredFailures.Add('GitHub CLI') }
+if ($RequireGitHub -and -not $githubSecureEnough) { $requiredFailures.Add('GitHub CLI secure storage') }
 if ($RequireAws -and -not $awsAnyAuthenticated) { $requiredFailures.Add('AWS') }
 
 if ($Mode -eq 'Verify' -and $requiredFailures.Count -gt 0) {

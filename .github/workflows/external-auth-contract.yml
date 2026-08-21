@@ -45,7 +45,7 @@ jobs:
             }
           }
 
-      - name: Enforce direct interactive boundary
+      - name: Enforce direct interactive boundary and explicit UX
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -65,12 +65,34 @@ jobs:
           foreach ($needle in @(
             "'gh','auth','login'",
             "'--web'",
+            "'gh','auth','logout'",
+            'Get-GitHubCredentialStorage',
+            'Resolve-GitHubPlaintextFallback',
+            'PlaintextFile',
+            'hosts.yml',
+            'chmod 600',
+            'Read-YesNoLoop',
+            'Veux-tu configurer AWS maintenant',
+            'Choisis la méthode AWS',
+            'Choix [0-3]',
+            'Choix invalide. Entre 0, 1, 2 ou 3.',
             "'aws','configure','sso'",
             "'aws','sso','login'",
             "'aws','configure','--profile'",
-            'Read-Host'
+            '[IGNORE] AWS non configuré pour le moment.',
+            '[RETOUR] Configuration AWS quittée sans erreur.'
           )) {
             if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
+          }
+
+          if ($interactive -match 'default\s*\{\s*throw\s+.*Choix AWS') {
+            throw 'Invalid AWS menu input must re-display the menu instead of terminating the assistant.'
+          }
+          if ($interactive -notmatch 'while\s*\(\$true\)[\s\S]*Choix \[0-3\]') {
+            throw 'AWS choice must be protected by an explicit retry loop.'
+          }
+          if ($interactive -notmatch 'while\s*\(\$true\)[\s\S]*Réponse invalide\. Entre O pour oui ou N pour non') {
+            throw 'O/N prompts must retry on empty or invalid input.'
           }
 
           if ($interactive -match 'Invoke-WpcExternalCommand|Tee-Object|Start-Transcript') {
@@ -86,13 +108,16 @@ jobs:
           foreach ($needle in @(
             'SecretMaterialRecorded = $false',
             "'gh','auth','status'",
+            'CredentialStorage',
+            'PlaintextCredentialDetected',
+            'SecureEnoughForRequiredVerify',
             "'aws','configure','list-profiles'",
             "'aws','sts','get-caller-identity'"
           )) {
             if (-not $audit.Contains($needle)) { throw "non-secret audit contract missing: $needle" }
           }
 
-      - name: Reject credential persistence patterns
+      - name: Reject credential persistence and insecure-storage patterns
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -104,6 +129,7 @@ jobs:
           $combined = ($paths | ForEach-Object { Get-Content -Raw $_ }) -join "`n"
           $forbidden = @(
             '--with-token',
+            '--insecure-storage',
             'AWS_SECRET_ACCESS_KEY=',
             'AWS_ACCESS_KEY_ID=',
             'GH_TOKEN=',
@@ -111,10 +137,25 @@ jobs:
             'Set-Content.*credentials',
             'Add-Content.*credentials',
             'ConvertFrom-SecureString',
-            'Export-Clixml'
+            'Export-Clixml',
+            'Get-Content.*hosts\.yml'
           )
           foreach ($pattern in $forbidden) {
             if ($combined -match $pattern) { throw "Forbidden credential persistence/injection pattern: $pattern" }
+          }
+
+      - name: Require metadata-only plaintext detection
+        shell: pwsh
+        run: |
+          $interactive = Get-Content -Raw '.\scripts\bootstrap\16_external_auth_interactive.ps1'
+          $audit = Get-Content -Raw '.\scripts\bootstrap\15_external_auth.ps1'
+          foreach ($text in @($interactive, $audit)) {
+            if ($text -notmatch 'grep -Eq .*oauth_token') {
+              throw 'GitHub plaintext detection must inspect only the presence of the oauth_token key.'
+            }
+          }
+          if ($audit -match 'gh\s+auth\s+token|--show-token') {
+            throw 'Audit must never request the GitHub token value.'
           }
 
       - name: Dry-run external auth menu entries
