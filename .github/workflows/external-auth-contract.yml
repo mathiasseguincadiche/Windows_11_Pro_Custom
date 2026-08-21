@@ -45,7 +45,7 @@ jobs:
             }
           }
 
-      - name: Enforce direct interactive boundary and explicit UX
+      - name: Enforce direct interactive boundary and login-first AWS UX
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -73,38 +73,53 @@ jobs:
             'chmod 600',
             'Read-YesNoLoop',
             'Veux-tu configurer AWS maintenant',
-            'Avant de décider, voici tes possibilités',
+            'CONNEXION AWS CONSOLE PAR NAVIGATEUR — RECOMMANDÉE',
+            'Aucune URL SSO n est demandée',
+            'Test-AwsLoginSupported',
+            "[version]'2.32.0'",
+            "'aws','login','--profile'",
+            'login_session',
+            'sso_session',
+            'Get-AwsProfileAuthMode',
+            'IAM IDENTITY CENTER / SSO',
+            'Start URL/Issuer URL',
+            "'aws','configure','sso'",
+            "'aws','sso','login','--profile'",
+            'ACCESS KEY / SECRET KEY — LEGACY',
+            "'aws','configure','--profile'",
+            '~/.aws/login/cache',
+            '~/.aws/credentials',
             'Read-AwsMethodChoice',
             'Get-AwsMethodPrompt',
             'Read-Host (Get-AwsMethodPrompt)',
-            'Choisis la méthode AWS',
-            'Quand la choisir',
-            'Ce que tu vas faire',
-            'Ce que le script fait ensuite',
-            'Stockage',
-            'IAM Identity Center / SSO — RECOMMANDÉ',
-            'AWS Access Key ID',
-            'AWS Secret Access Key',
-            '~/.aws/credentials',
-            'Choix [0-3]',
-            'Choix invalide. Entre 0, 1, 2 ou 3.',
-            "'aws','configure','sso'",
-            "'aws','sso','login'",
-            "'aws','configure','--profile'",
+            'Choix [0-4]',
+            'Choix invalide. Entre 0, 1, 2, 3 ou 4.',
             '[IGNORE] AWS non configuré pour le moment.',
             '[RETOUR] Configuration AWS quittée sans erreur.'
           )) {
             if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
           }
 
+          if ($interactive -match 'IAM Identity Center / SSO — RECOMMANDÉ') {
+            throw 'IAM Identity Center must not be presented as the universal recommended path.'
+          }
+          if ($interactive -notmatch "'1'\s*\{[\s\S]*'aws','login','--profile'") {
+            throw 'AWS option 1 must execute aws login with a named/default profile.'
+          }
+          if ($interactive -notmatch "'2'\s*\{[\s\S]*'aws','configure','sso'") {
+            throw 'AWS option 2 must be the IAM Identity Center configuration path.'
+          }
+          if ($interactive -notmatch "'3'\s*\{[\s\S]*Get-AwsProfileAuthMode") {
+            throw 'AWS option 3 must detect the existing profile authentication mode.'
+          }
+          if ($interactive -notmatch "'4'\s*\{[\s\S]*'aws','configure','--profile'") {
+            throw 'AWS option 4 must remain the explicit legacy static-key path.'
+          }
           if ($interactive -match 'default\s*\{\s*throw\s+.*Choix AWS') {
             throw 'Invalid AWS menu input must re-display the menu instead of terminating the assistant.'
           }
           if ($interactive -notmatch 'function\s+Read-AwsMethodChoice[\s\S]*while\s*\(\$true\)[\s\S]*Read-Host\s+\(Get-AwsMethodPrompt\)') {
-            throw 'AWS choices and their explanations must be embedded in the visible Read-Host prompt.'
-          }
-          if ($interactive -notmatch 'function\s+Read-AwsMethodChoice[\s\S]*Choix invalide\. Entre 0, 1, 2 ou 3') {
-            throw 'AWS choice must be protected by an explicit retry loop.'
+            throw 'AWS choices and explanations must remain embedded in the visible Read-Host prompt.'
           }
           if ($interactive -notmatch 'while\s*\(\$true\)[\s\S]*Réponse invalide\. Entre O pour oui ou N pour non') {
             throw 'O/N prompts must retry on empty or invalid input.'
