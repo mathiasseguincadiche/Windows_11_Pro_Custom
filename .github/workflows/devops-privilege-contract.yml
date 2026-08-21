@@ -51,9 +51,9 @@ jobs:
           grep -Fq 'TARGET_HOME' "$install"
           grep -Fq 'install -d -m 0755 -o "$TARGET_USER" -g "$TARGET_GROUP"' "$install"
 
-          # Le bootstrap cœur ne doit plus dépendre d'un prompt sudo caché derrière
-          # le pipeline de journalisation PowerShell.
-          if grep -En '(^|[[:space:]])sudo([[:space:]]|$)' "$install"; then
+          # Interdire une vraie commande sudo dans le bootstrap cœur, sans confondre
+          # les messages/documentation qui expliquent justement son absence.
+          if grep -En '^[[:space:]]*sudo([[:space:]]|$)' "$install"; then
             echo 'Interactive sudo dependency detected in install-devops.sh.' >&2
             exit 1
           fi
