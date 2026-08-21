@@ -16,6 +16,7 @@ on:
       - 'scripts/backup/63_restore_drill.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
+      - 'scripts/wsl/manage-wsl-roots.sh'
       - 'scripts/wsl/validate-devops.sh'
       - 'docs/07_DEVOPS_STACK.md'
       - '.github/workflows/wsl-runtime-contract.yml'
@@ -33,6 +34,7 @@ on:
       - 'scripts/backup/63_restore_drill.ps1'
       - 'scripts/wsl/install-devops.sh'
       - 'scripts/wsl/install-quality-tools.sh'
+      - 'scripts/wsl/manage-wsl-roots.sh'
       - 'scripts/wsl/validate-devops.sh'
       - 'docs/07_DEVOPS_STACK.md'
       - '.github/workflows/wsl-runtime-contract.yml'
@@ -52,6 +54,7 @@ jobs:
           set -euo pipefail
           contract='config/wsl/runtime-contract.json'
           validator='scripts/wsl/validate-devops.sh'
+          roots_manager='scripts/wsl/manage-wsl-roots.sh'
           devops_doc='docs/07_DEVOPS_STACK.md'
           jq -e '
             (.schemaVersion == "1.1") and
@@ -66,9 +69,12 @@ jobs:
             (.forbiddenRoots == ["/mnt/c", "/mnt/e"])
           ' "$contract" >/dev/null
           test -f "$validator"
-          grep -Fq 'config/wsl/runtime-contract.json' "$validator"
-          grep -Fq '.forbiddenRoots' "$validator"
-          if grep -Fq '/mnt/d' "$validator" "$devops_doc"; then
+          test -f "$roots_manager"
+          grep -Fq 'manage-wsl-roots.sh' "$validator"
+          grep -Fq 'config/wsl/runtime-contract.json' "$roots_manager"
+          grep -Fq '.forbiddenRoots' "$roots_manager"
+          grep -Fq 'relative="${declared:2}"' "$roots_manager"
+          if grep -Fq '/mnt/d' "$validator" "$roots_manager" "$devops_doc"; then
             echo 'Stale /mnt/d DATA/WSL reference detected.' >&2
             exit 1
           fi
