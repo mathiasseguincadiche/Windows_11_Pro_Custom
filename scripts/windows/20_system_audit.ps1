@@ -19,9 +19,14 @@ $cpu = Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, Numb
 $memory = Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Capacity, Speed, ConfiguredClockSpeed
 $gpu = Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate
 $physicalDisks = Get-PhysicalDisk | Select-Object FriendlyName, MediaType, BusType, HealthStatus, OperationalStatus, Size
-$volumes = foreach ($letter in @('C', 'D')) {
+
+# C: est le volume système et E: le volume DATA/WSL de la workstation cible.
+# D: peut être un support externe et ne doit jamais être assimilé au contrat de stockage interne.
+$managedVolumeLetters = @('C', 'E')
+$volumes = foreach ($letter in $managedVolumeLetters) {
     try {
-        Get-Volume -DriveLetter $letter | Select-Object DriveLetter, FileSystem, FileSystemLabel, DriveType, HealthStatus, Size, SizeRemaining
+        Get-Volume -DriveLetter $letter -ErrorAction Stop |
+            Select-Object DriveLetter, FileSystem, FileSystemLabel, DriveType, HealthStatus, Size, SizeRemaining
     } catch {
         [pscustomobject]@{ DriveLetter = $letter; Error = $_.Exception.Message }
     }
@@ -38,6 +43,7 @@ $defender = try {
 $report = [ordered]@{
     Timestamp = (Get-Date).ToString('o')
     Computer = $env:COMPUTERNAME
+    ManagedVolumeLetters = $managedVolumeLetters
     CPU = $cpu
     Memory = $memory
     GPU = $gpu

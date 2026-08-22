@@ -1,0 +1,104 @@
+name: Runtime polish contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/windows/20_system_audit.ps1'
+      - 'scripts/bootstrap/13_validate_hardware.ps1'
+      - 'scripts/wsl/validate-devops.sh'
+      - '.github/actionlint.yaml'
+      - '.github/workflows/runtime-polish-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/windows/20_system_audit.ps1'
+      - 'scripts/bootstrap/13_validate_hardware.ps1'
+      - 'scripts/wsl/validate-devops.sh'
+      - '.github/actionlint.yaml'
+      - '.github/workflows/runtime-polish-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse PowerShell runtime scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            './scripts/windows/20_system_audit.ps1',
+            './scripts/bootstrap/13_validate_hardware.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path), [ref]$tokens, [ref]$errors
+            )
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Enforce C and E storage audit contract
+        shell: pwsh
+        run: |
+          $text = Get-Content -Raw './scripts/windows/20_system_audit.ps1'
+          foreach ($needle in @(
+            '$managedVolumeLetters = @(''C'', ''E'')',
+            'ManagedVolumeLetters = $managedVolumeLetters',
+            'Get-Volume -DriveLetter $letter -ErrorAction Stop'
+          )) {
+            if (-not $text.Contains($needle)) { throw "system audit contract missing: $needle" }
+          }
+          if ($text.Contains('@(''C'', ''D'')')) {
+            throw 'system audit must never use D: as the managed DATA/WSL volume.'
+          }
+
+      - name: Enforce deterministic hardware JSON
+        shell: pwsh
+        run: |
+          $text = Get-Content -Raw './scripts/bootstrap/13_validate_hardware.ps1'
+          foreach ($needle in @(
+            '$details.CPU = $primaryCpu | Select-Object',
+            '$details.Memory = @($memory | Select-Object',
+            '$details.Motherboard = $board | Select-Object',
+            '$details.Video = @($video | Select-Object',
+            'ConvertTo-Json -Depth 8 -WarningAction Stop',
+            'ConvertFrom-Json -ErrorAction Stop',
+            'Sérialisation du rapport matériel non déterministe ou tronquée'
+          )) {
+            if (-not $text.Contains($needle)) { throw "hardware JSON contract missing: $needle" }
+          }
+          foreach ($forbidden in @(
+            '$details.CPU = $primaryCpu' + "`n",
+            '$details.Memory = $memory' + "`n",
+            '$details.Motherboard = $board' + "`n",
+            '$details.Video = $video' + "`n"
+          )) {
+            if ($text.Contains($forbidden)) { throw "raw CIM object regression detected: $forbidden" }
+          }
+
+      - name: Validate DevOps shell syntax
+        shell: bash
+        run: bash -n scripts/wsl/validate-devops.sh
+
+      - name: Enforce local actionlint config usage
+        shell: pwsh
+        run: |
+          $text = Get-Content -Raw './scripts/wsl/validate-devops.sh'
+          foreach ($needle in @(
+            'ACTIONLINT_CONFIG="$REPO_ROOT/.github/actionlint.yaml"',
+            'cd -- "$REPO_ROOT"',
+            'actionlint -config-file "$ACTIONLINT_CONFIG" .github/workflows/*.yml',
+            'actionlint valide les workflows du dépôt avec .github/actionlint.yaml.'
+          )) {
+            if (-not $text.Contains($needle)) { throw "actionlint local contract missing: $needle" }
+          }
+          if (-not (Test-Path './.github/actionlint.yaml')) {
+            throw '.github/actionlint.yaml is required.'
+          }
