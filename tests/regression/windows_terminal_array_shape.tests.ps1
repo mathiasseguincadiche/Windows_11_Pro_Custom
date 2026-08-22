@@ -4,9 +4,9 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$modulePath = Join-Path $repoRoot 'scripts\core\windows-terminal-settings.psm1'
-$contractPath = Join-Path $repoRoot 'config\windows-terminal\settings.contract.json'
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$modulePath = Join-Path $repoRoot 'scripts/core/windows-terminal-settings.psm1'
+$contractPath = Join-Path $repoRoot 'config/windows-terminal/settings.contract.json'
 
 Import-Module $modulePath -Force
 
