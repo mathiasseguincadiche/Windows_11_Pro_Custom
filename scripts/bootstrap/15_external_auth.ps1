@@ -62,24 +62,19 @@ function Get-GitHubCredentialStorage {
 }
 
 function Get-GitHubPlaintextState {
-    $probe = Invoke-WslCapture -ArgumentList @(
-        'sh','-lc',
-        'd="$HOME/.config/gh"; f="$d/hosts.yml"; m="$d/.wpc-plaintext-accepted"; '
-        + 'dir_mode="$(stat -c %a "$d" 2>/dev/null || true)"; '
-        + 'file_mode="$(stat -c %a "$f" 2>/dev/null || true)"; '
-        + 'marker_mode="$(stat -c %a "$m" 2>/dev/null || true)"; '
-        + 'printf "%s|%s|%s|%s" "$dir_mode" "$file_mode" "$marker_mode" "$([ -f "$m" ] && printf yes || printf no)"'
-    ) -IgnoreExitCode
+    $dirMode = (Invoke-WslCapture -ArgumentList @('sh','-lc','d="$HOME/.config/gh"; stat -c %a "$d" 2>/dev/null || true') -IgnoreExitCode).Output
+    $hostsMode = (Invoke-WslCapture -ArgumentList @('sh','-lc','f="$HOME/.config/gh/hosts.yml"; stat -c %a "$f" 2>/dev/null || true') -IgnoreExitCode).Output
+    $markerMode = (Invoke-WslCapture -ArgumentList @('sh','-lc','m="$HOME/.config/gh/.wpc-plaintext-accepted"; stat -c %a "$m" 2>/dev/null || true') -IgnoreExitCode).Output
+    $markerProbe = Invoke-WslCapture -ArgumentList @('sh','-lc','test -f "$HOME/.config/gh/.wpc-plaintext-accepted"') -IgnoreExitCode
+    $markerExists = ($markerProbe.ExitCode -eq 0)
 
-    $parts = @($probe.Output -split '\|', 4)
-    while ($parts.Count -lt 4) { $parts += '' }
     return [pscustomobject]@{
-        DirectoryMode = [string]$parts[0]
-        HostsMode = [string]$parts[1]
-        MarkerMode = [string]$parts[2]
-        AcceptanceMarker = ([string]$parts[3] -eq 'yes')
-        ProtectedPermissions = ([string]$parts[0] -eq '700' -and [string]$parts[1] -eq '600')
-        ExplicitlyAccepted = ([string]$parts[3] -eq 'yes' -and [string]$parts[2] -eq '600')
+        DirectoryMode = [string]$dirMode
+        HostsMode = [string]$hostsMode
+        MarkerMode = [string]$markerMode
+        AcceptanceMarker = $markerExists
+        ProtectedPermissions = ([string]$dirMode -eq '700' -and [string]$hostsMode -eq '600')
+        ExplicitlyAccepted = ($markerExists -and [string]$markerMode -eq '600')
     }
 }
 
