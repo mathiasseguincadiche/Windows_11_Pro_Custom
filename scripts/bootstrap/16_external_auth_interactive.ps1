@@ -40,8 +40,8 @@ function Invoke-WslSimple {
     $global:LASTEXITCODE = 0
     if ($code -ne 0 -and -not $IgnoreExitCode) { throw "Commande WSL échouée (code=$code): $($ArgumentList -join ' ')" }
     return [pscustomobject]@{
-        ExitCode = $code
-        Output   = (($output | ForEach-Object { ([string]$_) -replace "`0", '' }) -join "`n").Trim()
+        ExitCode = [int]$code
+        Output = (($output | ForEach-Object { ([string]$_) -replace "`0", '' }) -join "`n").Trim()
     }
 }
 
@@ -120,7 +120,7 @@ if ($LinuxUser -eq 'root' -or $LinuxUser -notmatch '^[a-z_][a-z0-9_-]{0,31}$') {
 function Protect-GitHubConfigPermissions {
     [void](Invoke-WslSimple -ArgumentList @(
         'sh','-lc',
-        'd="$HOME/.config/gh"; if [ -d "$d" ]; then chmod 700 "$d"; for f in "$d/hosts.yml" "$d/config.yml"; do [ ! -f "$f" ] || chmod 600 "$f"; done; fi'
+        'd="$HOME/.config/gh"; if [ -d "$d" ]; then chmod 700 "$d"; for f in "$d/hosts.yml" "$d/config.yml" "$d/.wpc-plaintext-accepted"; do [ ! -f "$f" ] || chmod 600 "$f"; done; fi'
     ) -IgnoreExitCode)
 }
 
@@ -142,16 +142,46 @@ function Get-GitHubCredentialStorage {
     return 'None'
 }
 
+function Test-GitHubPlaintextAccepted {
+    $probe = Invoke-WslSimple -ArgumentList @(
+        'sh','-lc',
+        'd="$HOME/.config/gh"; f="$d/hosts.yml"; m="$d/.wpc-plaintext-accepted"; [ -d "$d" ] && [ -f "$f" ] && [ -f "$m" ] && [ "$(stat -c %a "$d" 2>/dev/null)" = 700 ] && [ "$(stat -c %a "$f" 2>/dev/null)" = 600 ] && [ "$(stat -c %a "$m" 2>/dev/null)" = 600 ]'
+    ) -IgnoreExitCode
+    return ($probe.ExitCode -eq 0)
+}
+
+function Set-GitHubPlaintextAcceptance {
+    param([Parameter(Mandatory)][bool]$Accepted)
+    if ($Accepted) {
+        [void](Invoke-WslSimple -ArgumentList @(
+            'sh','-lc',
+            'd="$HOME/.config/gh"; mkdir -p "$d"; chmod 700 "$d"; : > "$d/.wpc-plaintext-accepted"; chmod 600 "$d/.wpc-plaintext-accepted"'
+        ))
+    } else {
+        [void](Invoke-WslSimple -ArgumentList @('sh','-lc','rm -f "$HOME/.config/gh/.wpc-plaintext-accepted"') -IgnoreExitCode)
+    }
+}
+
 function Resolve-GitHubPlaintextFallback {
     Protect-GitHubConfigPermissions
     Write-Host ''
-    Write-Host '[SECURITE] GitHub CLI a utilisé son fallback hosts.yml car aucun credential store Linux utilisable n a été trouvé.' -ForegroundColor Yellow
-    Write-Host 'Le fichier est immédiatement limité à 0600, mais il ne s agit PAS d un coffre chiffré.' -ForegroundColor Yellow
-    if (Read-YesNoLoop -Prompt 'Conserver temporairement cette session GitHub protégée en 0600') {
-        Write-Host '[AVERTISSEMENT] Session GitHub conservée explicitement en stockage fichier 0600.' -ForegroundColor Yellow
+    Write-Host '[SECURITE] GitHub CLI n a pas trouvé de credential store système utilisable et a utilisé hosts.yml.' -ForegroundColor Yellow
+    Write-Host 'Le dépôt impose immédiatement ~/.config/gh=0700 et hosts.yml=0600, mais le token reste non chiffré.' -ForegroundColor Yellow
+    Write-Host 'Windows_11_Pro_Custom ne lit jamais la valeur du token et ne la copie jamais ailleurs.' -ForegroundColor DarkGray
+
+    if (Test-GitHubPlaintextAccepted) {
+        Write-Host '[DEJA OK] Ce fallback protégé a déjà été explicitement accepté sur cette workstation.' -ForegroundColor Green
         return 'PlaintextAccepted'
     }
 
+    if (Read-YesNoLoop -Prompt 'Conserver temporairement cette session GitHub protégée en 0600') {
+        Set-GitHubPlaintextAcceptance -Accepted $true
+        Protect-GitHubConfigPermissions
+        Write-Host '[AVERTISSEMENT] Fallback fichier 0600 explicitement accepté; un credential store chiffré reste préférable.' -ForegroundColor Yellow
+        return 'PlaintextAccepted'
+    }
+
+    Set-GitHubPlaintextAcceptance -Accepted $false
     Write-Host '[EN COURS] Suppression de la session GitHub persistée en clair...' -ForegroundColor Cyan
     if ((Invoke-WslInteractive -ArgumentList @('gh','auth','logout','--hostname','github.com')) -ne 0) {
         throw 'Impossible de supprimer proprement la session GitHub après refus du stockage fichier.'
@@ -160,7 +190,7 @@ function Resolve-GitHubPlaintextFallback {
     if ((Get-GitHubCredentialStorage) -eq 'PlaintextFile') {
         throw 'Le token GitHub est toujours détecté dans hosts.yml après logout; arrêt fail-safe.'
     }
-    Write-Host '[IGNORE] GitHub CLI laissé non authentifié.' -ForegroundColor Yellow
+    Write-Host '[IGNORE] GitHub CLI laissé non authentifié plutôt que de conserver un secret en clair sans consentement.' -ForegroundColor Yellow
     return 'LoggedOut'
 }
 
@@ -180,7 +210,6 @@ function Configure-GitIdentity {
     if ((Invoke-WslInteractive -ArgumentList @('git','config','--global','user.name',$newName)) -ne 0) { throw 'Configuration git user.name échouée.' }
     if ((Invoke-WslInteractive -ArgumentList @('git','config','--global','user.email',$newEmail)) -ne 0) { throw 'Configuration git user.email échouée.' }
     Write-Host '[OK] Identité Git globale configurée sous l utilisateur WSL.' -ForegroundColor Green
-    Write-Host '[OK] Git configuré.' -ForegroundColor Green
 }
 
 function Configure-GitHub {
@@ -190,19 +219,20 @@ function Configure-GitHub {
 
     if ($status.ExitCode -eq 0) {
         if ($storage -eq 'PlaintextFile') {
-            Write-Host '[AVERTISSEMENT] GitHub CLI est authentifié, mais le token est actuellement persisté dans hosts.yml.' -ForegroundColor Yellow
             $resolution = Resolve-GitHubPlaintextFallback
             if ($resolution -eq 'LoggedOut') { return }
-            Write-Host '[OK] GitHub authentifié; stockage fichier 0600 explicitement accepté.' -ForegroundColor Green
+            Write-Host '[OK] GitHub authentifié; fallback fichier explicitement accepté et permissions durcies.' -ForegroundColor Green
             return
         }
-        Write-Host '[DEJA OK] GitHub CLI est authentifié.' -ForegroundColor Green
+        Set-GitHubPlaintextAcceptance -Accepted $false
+        Write-Host '[DEJA OK] GitHub CLI est authentifié via un stockage autre que hosts.yml en clair.' -ForegroundColor Green
         if (-not (Read-YesNoLoop -Prompt 'Veux-tu refaire la connexion GitHub')) {
             Write-Host '[OK] GitHub configuré.' -ForegroundColor Green
             return
         }
     }
 
+    Set-GitHubPlaintextAcceptance -Accepted $false
     Write-Host '[ACTION REQUISE] GitHub va utiliser son flux officiel navigateur / device code.' -ForegroundColor Magenta
     if ((Invoke-WslInteractive -ArgumentList @('gh','auth','login','--hostname','github.com','--web','--git-protocol','https')) -ne 0) {
         throw 'Authentification GitHub interrompue ou échouée.'
@@ -217,6 +247,8 @@ function Configure-GitHub {
     if ((Get-GitHubCredentialStorage) -eq 'PlaintextFile') {
         $resolution = Resolve-GitHubPlaintextFallback
         if ($resolution -eq 'LoggedOut') { return }
+    } else {
+        Set-GitHubPlaintextAcceptance -Accepted $false
     }
     Write-Host '[OK] GitHub configuré.' -ForegroundColor Green
 }
@@ -268,12 +300,12 @@ function Get-AwsOfferPrompt {
 $existing
 
 Méthodes disponibles :
-  1. Connexion AWS Console par navigateur — RECOMMANDÉE pour un compte classique.
-     Utilise tes identifiants habituels de la console AWS avec "aws login".
+  1. Connexion AWS Console par navigateur Windows — RECOMMANDÉE pour un compte classique.
+     WSL utilise "aws login --remote" : aucune tentative gio/xdg-open n est faite dans Ubuntu.
   2. IAM Identity Center / SSO.
-     Seulement si une organisation t a fourni un portail / une URL SSO.
+     WSL utilise le device-code et n essaie pas d ouvrir un navigateur Linux.
   3. Reconnecter un profil existant.
-     Le script détecte automatiquement un profil aws login ou SSO.
+     Le script détecte automatiquement un profil aws login ou SSO et réutilise le flux WSL-safe.
   4. Access Key / Secret Key — legacy.
      Seulement si AWS ou un administrateur t a explicitement fourni des clés IAM statiques.
   0. Ne rien configurer maintenant.
@@ -287,41 +319,25 @@ function Get-AwsMethodPrompt {
     return @"
 Choisis la méthode AWS :
 
-  1. CONNEXION AWS CONSOLE PAR NAVIGATEUR — RECOMMANDÉE
-     Choisis cette option si tu te connectes normalement sur la console AWS avec :
-       - le compte root créé avec ton compte AWS ;
-       - un utilisateur IAM ;
-       - ou une identité fédérée IAM.
-     Ce que tu fais :
-       - le script te propose le profil AWS CLI local "default" ;
-       - ce profil est seulement un alias local, PAS le nom d un projet AWS ;
-       - tu peux choisir un nom personnalisé si tu gères plusieurs comptes ou rôles ;
-       - AWS CLI lance "aws login --profile <profil>" ;
-       - ton navigateur s ouvre et tu te connectes avec tes identifiants AWS habituels.
-     Ce que tu N AS PAS besoin de connaître :
-       - aucun nom de projet AWS ;
-       - aucune URL de portail SSO ;
-       - aucune région SSO ;
-       - aucune Secret Access Key statique.
-     Sécurité : credentials temporaires, rafraîchis par AWS CLI, session jusqu à 12 h.
-     Cache local : ~/.aws/login/cache, durci en 0700/0600 par ce script.
+  1. CONNEXION AWS CONSOLE PAR NAVIGATEUR WINDOWS — RECOMMANDÉE
+     - profil local recommandé: default ;
+     - commande WSL: aws login --remote --profile <profil> ;
+     - AWS affiche une URL à ouvrir dans ton navigateur Windows ;
+     - tu recopies ensuite le code d autorisation dans WSL ;
+     - STS vérifie immédiatement la session.
 
   2. IAM IDENTITY CENTER / SSO
-     Choisis cette option uniquement si ton entreprise, école, client ou organisation utilise IAM Identity Center.
-     Il te faut une URL de portail / Start URL (ou Issuer URL) et la région SSO fournies par l organisation.
-     Le script lance "aws configure sso", puis "aws sso login --profile <profil>" et vérifie STS.
+     - uniquement si ton organisation fournit une Start URL/Issuer URL et une région SSO ;
+     - configuration et login utilisent --no-browser --use-device-code ;
+     - aucun navigateur Linux n est requis.
 
   3. RECONNECTER UN PROFIL EXISTANT
-     Choisis cette option si ~/.aws/config contient déjà un profil mais que sa session a expiré.
-     Le script détecte automatiquement :
-       - login_session  -> "aws login --profile <profil>" ;
-       - SSO            -> "aws sso login --profile <profil>".
-     La configuration existante n est pas recréée inutilement.
+     - login_session -> aws login --remote ;
+     - SSO -> aws sso login --no-browser --use-device-code.
 
   4. ACCESS KEY / SECRET KEY — LEGACY
-     À utiliser seulement si AWS ou un administrateur t a explicitement fourni des clés IAM statiques.
-     AWS CLI te demandera Access Key ID, Secret Access Key, région et format de sortie.
-     Le dépôt ne lit ni ne journalise les valeurs. Stockage AWS CLI : ~/.aws/credentials.
+     - uniquement si des clés IAM statiques t ont été fournies explicitement ;
+     - AWS CLI gère directement la saisie ; le dépôt ne lit ni ne journalise les valeurs.
 
   0. RETOUR / PLUS TARD
      Aucun changement AWS. La workstation reste READY.
@@ -336,6 +352,18 @@ function Read-AwsMethodChoice {
         if ($choice -in @('0','1','2','3','4')) { return $choice }
         Write-Host '[INFO] Choix invalide. Entre 0, 1, 2, 3 ou 4.' -ForegroundColor Yellow
     }
+}
+
+function Invoke-AwsRemoteLogin {
+    param([Parameter(Mandatory)][string]$Profile)
+    Write-Host "[ACTION REQUISE] Ouvre dans Windows l URL affichée par AWS puis recopie ici le code d autorisation." -ForegroundColor Magenta
+    return (Invoke-WslInteractive -ArgumentList @('aws','login','--remote','--profile',$Profile))
+}
+
+function Invoke-AwsDeviceSsoLogin {
+    param([Parameter(Mandatory)][string]$Profile)
+    Write-Host '[ACTION REQUISE] Ouvre dans Windows l URL device-code affichée par AWS.' -ForegroundColor Magenta
+    return (Invoke-WslInteractive -ArgumentList @('aws','sso','login','--profile',$Profile,'--no-browser','--use-device-code'))
 }
 
 function Configure-Aws {
@@ -367,19 +395,17 @@ function Configure-Aws {
                     continue
                 }
                 $profile = Read-AwsProfileName
-                Write-Host ("[ACTION REQUISE] Ouverture de la connexion AWS Console pour le profil local '{0}'." -f $profile) -ForegroundColor Magenta
-                Write-Host 'Le compte et l identité AWS réels seront choisis dans le navigateur puis vérifiés avec AWS STS.' -ForegroundColor DarkGray
-                Write-Host 'Aucune URL SSO, clé statique ou nom de projet AWS n est demandé par ce flux.' -ForegroundColor DarkGray
-                if ((Invoke-WslInteractive -ArgumentList @('aws','login','--profile',$profile)) -ne 0) { throw 'aws login a échoué ou a été interrompu.' }
+                Write-Host ("[INFO] Profil AWS CLI local sélectionné: {0}." -f $profile) -ForegroundColor Cyan
+                if ((Invoke-AwsRemoteLogin -Profile $profile) -ne 0) { throw 'aws login --remote a échoué ou a été interrompu.' }
                 Set-AwsCredentialPermissions
-                if (-not (Test-AwsProfile -Profile $profile)) { throw "La session AWS du profil '$profile' n est pas valide après aws login." }
+                if (-not (Test-AwsProfile -Profile $profile)) { throw "La session AWS du profil '$profile' n est pas valide après aws login --remote." }
                 Write-Host "[OK] Profil AWS '$profile' connecté par credentials temporaires et vérifié avec STS." -ForegroundColor Green
                 return
             }
             '2' {
-                Write-Host '[ACTION REQUISE] Configuration IAM Identity Center / SSO.' -ForegroundColor Magenta
+                Write-Host '[ACTION REQUISE] Configuration IAM Identity Center / SSO en device-code.' -ForegroundColor Magenta
                 Write-Host 'Continue uniquement si ton organisation t a fourni une Start URL/Issuer URL et une région SSO.' -ForegroundColor Yellow
-                if ((Invoke-WslInteractive -ArgumentList @('aws','configure','sso')) -ne 0) { throw 'aws configure sso a échoué.' }
+                if ((Invoke-WslInteractive -ArgumentList @('aws','configure','sso','--no-browser','--use-device-code')) -ne 0) { throw 'aws configure sso en device-code a échoué.' }
                 $profiles = @(Get-AwsProfiles)
                 if ($profiles.Count -eq 0) {
                     Write-Host '[INFO] Aucun profil AWS trouvé après la configuration SSO. Retour au menu AWS.' -ForegroundColor Yellow
@@ -387,7 +413,7 @@ function Configure-Aws {
                 }
                 Write-Host ("Profils disponibles: {0}" -f ($profiles -join ', ')) -ForegroundColor DarkGray
                 $profile = Read-AwsProfileFromList -Profiles $profiles -Prompt 'Profil SSO AWS à connecter'
-                if ((Invoke-WslInteractive -ArgumentList @('aws','sso','login','--profile',$profile)) -ne 0) { throw 'aws sso login a échoué.' }
+                if ((Invoke-AwsDeviceSsoLogin -Profile $profile) -ne 0) { throw 'aws sso login en device-code a échoué.' }
                 Set-AwsCredentialPermissions
                 if (-not (Test-AwsProfile -Profile $profile)) { throw "La session SSO AWS du profil '$profile' n est pas valide." }
                 Write-Host "[OK] Profil SSO AWS '$profile' connecté et vérifié." -ForegroundColor Green
@@ -405,10 +431,10 @@ function Configure-Aws {
                 switch ($mode) {
                     'Login' {
                         if (-not (Test-AwsLoginSupported)) { throw 'Ce profil utilise aws login mais AWS CLI est trop ancien.' }
-                        if ((Invoke-WslInteractive -ArgumentList @('aws','login','--profile',$profile)) -ne 0) { throw 'aws login a échoué.' }
+                        if ((Invoke-AwsRemoteLogin -Profile $profile) -ne 0) { throw 'aws login --remote a échoué.' }
                     }
                     'SSO' {
-                        if ((Invoke-WslInteractive -ArgumentList @('aws','sso','login','--profile',$profile)) -ne 0) { throw 'aws sso login a échoué.' }
+                        if ((Invoke-AwsDeviceSsoLogin -Profile $profile) -ne 0) { throw 'aws sso login en device-code a échoué.' }
                     }
                     default {
                         if (Test-AwsProfile -Profile $profile) {
