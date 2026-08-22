@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 RUNTIME_CONTRACT="$REPO_ROOT/config/wsl/runtime-contract.json"
 MANAGED_ROOTS_SCRIPT="$SCRIPT_DIR/manage-wsl-roots.sh"
+ACTIONLINT_CONFIG="$REPO_ROOT/.github/actionlint.yaml"
 required=(git curl jq docker kubectl helm terraform aws ansible gh trivy shellcheck shfmt minikube kind)
 advisory_required=(terraform-docs actionlint yq tflint)
 failed=0
@@ -102,10 +103,15 @@ if ! compgen -G "$REPO_ROOT/.github/workflows/*.yml" >/dev/null; then
   warn 'Aucun workflow .yml trouvé pour actionlint.'
 elif ! command -v actionlint >/dev/null 2>&1; then
   warn 'actionlint absent; validation locale des workflows ignorée.'
-elif actionlint "$REPO_ROOT"/.github/workflows/*.yml; then
-  ok 'actionlint valide les workflows du dépôt.'
+elif [[ ! -f "$ACTIONLINT_CONFIG" ]]; then
+  warn "Configuration actionlint absente: $ACTIONLINT_CONFIG"
+elif (
+  cd -- "$REPO_ROOT"
+  actionlint -config-file "$ACTIONLINT_CONFIG" .github/workflows/*.yml
+); then
+  ok 'actionlint valide les workflows du dépôt avec .github/actionlint.yaml.'
 else
-  warn 'actionlint détecte une erreur dans les workflows; cela ne rend pas Docker/kubectl/Helm/Terraform inutilisables.'
+  warn 'actionlint détecte une erreur réelle dans les workflows après application de la configuration du dépôt; cela ne rend pas Docker/kubectl/Helm/Terraform inutilisables.'
 fi
 
 printf '\nTerraform smoke test\n'
