@@ -133,11 +133,13 @@ Avant la commande, le dépôt prépare un petit bridge navigateur non secret dan
 ~/.local/bin/wpc-open-windows-browser
 ```
 
-Il est limité au compte Linux (`0700`) et appelle le navigateur Windows par l'interop WSL :
+Il est limité au compte Linux (`0700`) et appelle directement l'exécutable Windows Explorer par l'interop WSL :
 
 ```bash
-cmd.exe /d /c start "" "$1"
+explorer.exe "$1"
 ```
+
+Le bridge ne passe volontairement **pas** par `cmd.exe /c start`. Une URL OAuth AWS contient plusieurs paramètres séparés par `&`; `cmd.exe` peut interpréter ces caractères comme des séparateurs de commandes et tronquer l'URL. Le passage direct à `explorer.exe` conserve l'URL complète comme un seul argument et laisse Windows l'ouvrir avec le gestionnaire HTTP/HTTPS par défaut.
 
 Le chemin du bridge est fourni temporairement à AWS CLI via la variable d'environnement standard `BROWSER`.
 
@@ -145,11 +147,12 @@ Le parcours devient :
 
 1. le script reste dans la fenêtre PowerShell 7 courante ;
 2. AWS CLI démarre un callback OAuth local ;
-3. le bridge ouvre automatiquement le navigateur Windows par défaut ;
-4. l'utilisateur se connecte normalement sur le site AWS ;
-5. le navigateur renvoie automatiquement le callback vers `127.0.0.1` ;
-6. AWS CLI récupère l'autorisation sans demander de code à copier/coller ;
-7. le script valide la session avec STS.
+3. le bridge transmet l'URL OAuth complète à Windows sans passer par `cmd.exe` ;
+4. le navigateur Windows par défaut s'ouvre ;
+5. l'utilisateur se connecte normalement sur le site AWS ;
+6. le navigateur renvoie automatiquement le callback vers `127.0.0.1` ;
+7. AWS CLI récupère l'autorisation sans demander de code à copier/coller ;
+8. le script valide la session avec STS.
 
 Si le navigateur ne s'ouvre pas automatiquement, AWS CLI affiche également l'URL. Il suffit alors d'ouvrir cette URL dans le navigateur Windows ; le retour reste automatique via le callback local.
 
