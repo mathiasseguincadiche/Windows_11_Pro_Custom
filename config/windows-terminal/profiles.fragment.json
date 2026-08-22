@@ -20,9 +20,11 @@
       "bellStyle": "none",
       "closeOnExit": "automatic",
       "font": {
-        "face": "JetBrainsMono Nerd Font",
+        "face": "JetBrainsMono Nerd Font, Segoe UI Emoji",
         "size": 11.5,
-        "weight": "normal"
+        "weight": "normal",
+        "builtinGlyphs": true,
+        "colorGlyphs": true
       },
       "historySize": 20000,
       "snapOnInput": true
@@ -47,9 +49,11 @@
       "bellStyle": "none",
       "closeOnExit": "automatic",
       "font": {
-        "face": "JetBrainsMono Nerd Font",
+        "face": "JetBrainsMono Nerd Font, Segoe UI Emoji",
         "size": 11.5,
-        "weight": "normal"
+        "weight": "normal",
+        "builtinGlyphs": true,
+        "colorGlyphs": true
       },
       "historySize": 20000,
       "snapOnInput": true
@@ -74,9 +78,11 @@
       "bellStyle": "none",
       "closeOnExit": "automatic",
       "font": {
-        "face": "JetBrainsMono Nerd Font",
+        "face": "JetBrainsMono Nerd Font, Segoe UI Emoji",
         "size": 11.5,
-        "weight": "normal"
+        "weight": "normal",
+        "builtinGlyphs": true,
+        "colorGlyphs": true
       },
       "historySize": 20000,
       "snapOnInput": true
