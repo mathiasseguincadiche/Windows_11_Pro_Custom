@@ -64,7 +64,10 @@ jobs:
           grep -Fq 'Restore-WpcDefaultTerminalRegistryState' "$script"
           grep -Fq 'Set-PSReadLineOption -PredictionViewStyle ListView' "$script"
           grep -Fq '[Console]::OutputEncoding = $utf8' "$script"
-          grep -Fq '[System.IO.File]::Replace($tempPath, $Path, $null, $true)' "$script"
+          grep -Fq '[System.IO.File]::Replace($tempPath, $Path, $replaceBackup, $true)' "$script"
+          grep -Fq 'Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue' "$script"
+          grep -Fq "if (-not [bool]\$contract.Checks['Fragment profils modernes'])" "$script"
+          grep -Fq "if (-not [bool]\$contract.Checks['settings.json Windows Terminal moderne'])" "$script"
           grep -Fq 'settings.invalid.' "$script"
           grep -Fq 'ConvertFrom-WpcTerminalSettingsText -Text $roundTrip' "$script"
           grep -Fq 'Initialize-WpcUtf8Console' "$runtime_module"
@@ -72,6 +75,11 @@ jobs:
           grep -Fq 'HKCU:\Console\%%Startup' "$system_module"
           grep -Fq '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}' "$system_module"
           grep -Fq '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}' "$system_module"
+
+          if grep -Fq '[System.IO.File]::Replace($tempPath, $Path, $null, $true)' "$script"; then
+            echo 'Windows Terminal settings replacement must never pass a null backup path.' >&2
+            exit 1
+          fi
 
           test -f "$settings_module"
           test -f "$system_module"
@@ -275,11 +283,32 @@ jobs:
             if (-not $systemModule.Contains($needle)) { throw "Windows default-terminal contract missing: $needle" }
           }
           foreach ($needle in @(
-            '[System.IO.File]::Replace($tempPath, $Path, $null, $true)',
+            '[System.IO.File]::Replace($tempPath, $Path, $replaceBackup, $true)',
+            'Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue',
+            "if (-not [bool]`$contract.Checks['Fragment profils modernes'])",
+            "if (-not [bool]`$contract.Checks['settings.json Windows Terminal moderne'])",
             'settings.invalid.',
             'ConvertFrom-WpcTerminalSettingsText -Text $roundTrip'
           )) {
-            if (-not $terminalScript.Contains($needle)) { throw "Atomic settings repair contract missing: $needle" }
+            if (-not $terminalScript.Contains($needle)) { throw "Atomic/minimal settings repair contract missing: $needle" }
+          }
+          if ($terminalScript.Contains('[System.IO.File]::Replace($tempPath, $Path, $null, $true)')) {
+            throw 'Null backup path regression detected in File.Replace.'
+          }
+
+          $replaceDir = Join-Path $env:RUNNER_TEMP ("wpc-file-replace-{0}" -f [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Force -Path $replaceDir | Out-Null
+          $destination = Join-Path $replaceDir 'settings.json'
+          $source = Join-Path $replaceDir 'settings.tmp'
+          $backup = Join-Path $replaceDir 'settings.replace.bak'
+          try {
+            [IO.File]::WriteAllText($destination, 'old', [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($source, 'new', [Text.UTF8Encoding]::new($false))
+            [IO.File]::Replace($source, $destination, $backup, $true)
+            if ([IO.File]::ReadAllText($destination) -ne 'new') { throw 'Atomic replacement did not install the new payload.' }
+            if ([IO.File]::ReadAllText($backup) -ne 'old') { throw 'Atomic replacement backup did not preserve the old payload.' }
+          } finally {
+            Remove-Item -LiteralPath $replaceDir -Recurse -Force -ErrorAction SilentlyContinue
           }
 
           foreach ($path in @(
