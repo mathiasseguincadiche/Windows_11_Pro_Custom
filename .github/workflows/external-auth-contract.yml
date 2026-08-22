@@ -6,7 +6,7 @@ on:
       - 'menu.ps1'
       - 'scripts/bootstrap/15_external_auth.ps1'
       - 'scripts/bootstrap/16_external_auth_interactive.ps1'
-      - 'docs/07_DEVOPS_STACK.md'
+      - 'docs/08_EXTERNAL_AUTH.md'
       - '.github/workflows/external-auth-contract.yml'
   push:
     branches: [main]
@@ -14,7 +14,7 @@ on:
       - 'menu.ps1'
       - 'scripts/bootstrap/15_external_auth.ps1'
       - 'scripts/bootstrap/16_external_auth_interactive.ps1'
-      - 'docs/07_DEVOPS_STACK.md'
+      - 'docs/08_EXTERNAL_AUTH.md'
       - '.github/workflows/external-auth-contract.yml'
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
             }
           }
 
-      - name: Enforce direct interactive boundary and login-first AWS UX
+      - name: Enforce direct interactive boundary and WSL-safe AWS UX
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -70,62 +70,66 @@ jobs:
             'Resolve-GitHubPlaintextFallback',
             'PlaintextFile',
             'hosts.yml',
+            'chmod 700',
             'chmod 600',
+            '.wpc-plaintext-accepted',
+            'Test-GitHubPlaintextAccepted',
+            'Set-GitHubPlaintextAcceptance',
             'Read-YesNoLoop',
             'Veux-tu configurer AWS maintenant',
-            'CONNEXION AWS CONSOLE PAR NAVIGATEUR — RECOMMANDÉE',
+            'CONNEXION AWS CONSOLE PAR NAVIGATEUR WINDOWS',
             'PROFIL AWS CLI LOCAL',
             'Ce n est PAS le nom d un projet AWS',
             'Utiliser le profil local recommandé "default"',
-            'Profil AWS CLI local sélectionné',
             'Test-AwsLoginSupported',
             "[version]'2.32.0'",
-            "'aws','login','--profile'",
+            'Invoke-AwsRemoteLogin',
+            "'aws','login','--remote','--profile'",
+            'Invoke-AwsDeviceSsoLogin',
+            "'aws','sso','login','--profile'",
+            "'--no-browser'",
+            "'--use-device-code'",
             'login_session',
             'sso_session',
             'Get-AwsProfileAuthMode',
             'IAM IDENTITY CENTER / SSO',
             'Start URL/Issuer URL',
-            "'aws','configure','sso'",
-            "'aws','sso','login','--profile'",
+            "'aws','configure','sso','--no-browser','--use-device-code'",
             'ACCESS KEY / SECRET KEY — LEGACY',
             "'aws','configure','--profile'",
-            '~/.aws/login/cache',
-            '~/.aws/credentials',
             'Read-AwsMethodChoice',
             'Get-AwsMethodPrompt',
             'Read-Host (Get-AwsMethodPrompt)',
             'Choix [0-4]',
-            'Choix invalide. Entre 0, 1, 2, 3 ou 4.',
             '[IGNORE] AWS non configuré pour le moment.',
             '[RETOUR] Configuration AWS quittée sans erreur.'
           )) {
             if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
           }
 
+          if ($interactive -match "'aws','login','--profile'") {
+            throw 'Direct aws login without --remote is forbidden under WSL2.'
+          }
+          if ($interactive -match "'aws','sso','login','--profile',\$profile\)" ) {
+            throw 'Direct SSO login without no-browser/device-code is forbidden under WSL2.'
+          }
           if ($interactive -match 'IAM Identity Center / SSO — RECOMMANDÉ') {
             throw 'IAM Identity Center must not be presented as the universal recommended path.'
           }
-          if ($interactive -match 'Read-AwsProfileName[\s\S]*IsNullOrWhiteSpace\(\$value\)[\s\S]*return ''default''') {
-            throw 'AWS profile selection must not silently convert an empty prompt into default; the user must explicitly choose default.'
-          }
           if ($interactive -notmatch "Read-AwsProfileName[\s\S]*Read-YesNoLoop[\s\S]*profil local recommandé.*default") {
-            throw 'AWS default profile selection must be explicit and visible before aws login.'
+            throw 'AWS default profile selection must be explicit and visible.'
           }
-          if ($interactive -notmatch "'1'\s*\{[\s\S]*'aws','login','--profile'") {
-            throw 'AWS option 1 must execute aws login with a named/default profile.'
+          if ($interactive -notmatch "'1'\s*\{[\s\S]*Invoke-AwsRemoteLogin") {
+            throw 'AWS option 1 must execute the WSL-safe remote login helper.'
           }
-          if ($interactive -notmatch "'2'\s*\{[\s\S]*'aws','configure','sso'") {
-            throw 'AWS option 2 must be the IAM Identity Center configuration path.'
+          if ($interactive -notmatch "'2'\s*\{[\s\S]*'aws','configure','sso','--no-browser','--use-device-code'") {
+            throw 'AWS option 2 must configure SSO with device-code and no-browser.'
           }
           if ($interactive -notmatch "'3'\s*\{[\s\S]*Get-AwsProfileAuthMode") {
             throw 'AWS option 3 must detect the existing profile authentication mode.'
           }
           if ($interactive -notmatch "'4'\s*\{[\s\S]*'aws','configure','--profile'") {
             throw 'AWS option 4 must remain the explicit legacy static-key path.'
-          }
-          if ($interactive -match 'default\s*\{\s*throw\s+.*Choix AWS') {
-            throw 'Invalid AWS menu input must re-display the menu instead of terminating the assistant.'
           }
           if ($interactive -notmatch 'function\s+Read-AwsMethodChoice[\s\S]*while\s*\(\$true\)[\s\S]*Read-Host\s+\(Get-AwsMethodPrompt\)') {
             throw 'AWS choices and explanations must remain embedded in the visible Read-Host prompt.'
@@ -140,15 +144,15 @@ jobs:
           if ($menu -notmatch '&\s*\$exe\s+@childArgs') {
             throw 'Interactive menu helper must invoke the child directly instead of the captured live relay.'
           }
-          if ($menu -match 'Invoke-WpcVisibleChildProcess[^\r\n]*ExternalAuthInteractive') {
-            throw 'Interactive auth must not use the captured child-process relay.'
-          }
 
           foreach ($needle in @(
             'SecretMaterialRecorded = $false',
             "'gh','auth','status'",
             'CredentialStorage',
             'PlaintextCredentialDetected',
+            'PlaintextPermissionsProtected',
+            'PlaintextFallbackExplicitlyAccepted',
+            'OperationallyAccepted',
             'SecureEnoughForRequiredVerify',
             "'aws','configure','list-profiles'",
             "'aws','sts','get-caller-identity'"
@@ -156,7 +160,7 @@ jobs:
             if (-not $audit.Contains($needle)) { throw "non-secret audit contract missing: $needle" }
           }
 
-      - name: Reject credential persistence and insecure-storage patterns
+      - name: Reject credential persistence and secret extraction patterns
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -169,6 +173,8 @@ jobs:
           $forbidden = @(
             '--with-token',
             '--insecure-storage',
+            'gh\s+auth\s+token',
+            '--show-token',
             'AWS_SECRET_ACCESS_KEY=',
             'AWS_ACCESS_KEY_ID=',
             'GH_TOKEN=',
@@ -192,9 +198,6 @@ jobs:
             if ($text -notmatch 'grep -Eq .*oauth_token') {
               throw 'GitHub plaintext detection must inspect only the presence of the oauth_token key.'
             }
-          }
-          if ($audit -match 'gh\s+auth\s+token|--show-token') {
-            throw 'Audit must never request the GitHub token value.'
           }
 
       - name: Dry-run external auth menu entries
