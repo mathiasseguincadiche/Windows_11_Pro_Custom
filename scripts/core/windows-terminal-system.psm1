@@ -5,15 +5,115 @@ $script:DelegationPath = 'HKCU:\Console\%%Startup'
 $script:DelegationConsole = '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}'
 $script:DelegationTerminal = '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}'
 
-function Get-WpcWindowsTerminalVersion {
+function ConvertTo-WpcTerminalVersion {
+    param([AllowNull()][object]$Value)
+
+    if ($null -eq $Value) { return $null }
+    $text = ([string]$Value).Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+
+    $match = [regex]::Match($text, '(?<!\d)(\d+\.\d+\.\d+(?:\.\d+)?)(?!\d)')
+    if (-not $match.Success) { return $null }
+
+    try {
+        return [version]$match.Groups[1].Value
+    } catch {
+        return $null
+    }
+}
+
+function Get-WpcWindowsTerminalEvidence {
+    $candidates = [System.Collections.Generic.List[object]]::new()
+    $inventoryError = $null
+    $wingetError = $null
+
+    try {
+        $programs = @(Get-CimInstance `
+            -ClassName Win32_InstalledStoreProgram `
+            -Filter "ProgramId LIKE 'Microsoft.WindowsTerminal%' OR Name LIKE 'Windows Terminal%'" `
+            -ErrorAction Stop)
+
+        foreach ($program in $programs) {
+            $programId = [string]$program.ProgramId
+            $name = [string]$program.Name
+            if (
+                $programId -notmatch '(?i)^Microsoft\.WindowsTerminal(?:Preview)?(?:_|$)' -and
+                $name -notmatch '(?i)^Windows Terminal(?: Preview)?$'
+            ) {
+                continue
+            }
+
+            $version = ConvertTo-WpcTerminalVersion -Value $program.Version
+            if ($null -eq $version) { continue }
+
+            $candidates.Add([pscustomobject]@{
+                Version = $version
+                Source = 'Win32_InstalledStoreProgram'
+                Identity = if ($programId) { $programId } else { $name }
+            })
+        }
+    } catch {
+        $inventoryError = $_.Exception.Message
+    }
+
+    if ($candidates.Count -eq 0) {
+        $winget = Get-Command winget.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($winget) {
+            try {
+                $output = @(& $winget.Source list `
+                    --id Microsoft.WindowsTerminal `
+                    --exact `
+                    --disable-interactivity `
+                    --accept-source-agreements 2>$null)
+                $exitCode = $LASTEXITCODE
+                $global:LASTEXITCODE = 0
+
+                if ($exitCode -eq 0) {
+                    foreach ($line in $output) {
+                        $text = [string]$line
+                        $id = 'Microsoft.WindowsTerminal'
+                        $index = $text.IndexOf($id, [System.StringComparison]::OrdinalIgnoreCase)
+                        if ($index -lt 0) { continue }
+
+                        $tail = $text.Substring($index + $id.Length)
+                        $version = ConvertTo-WpcTerminalVersion -Value $tail
+                        if ($null -eq $version) { continue }
+
+                        $candidates.Add([pscustomobject]@{
+                            Version = $version
+                            Source = 'WinGet'
+                            Identity = $id
+                        })
+                        break
+                    }
+                } else {
+                    $wingetError = "winget list a retourné le code $exitCode"
+                }
+            } catch {
+                $wingetError = $_.Exception.Message
+                $global:LASTEXITCODE = 0
+            }
+        } else {
+            $wingetError = 'winget.exe introuvable'
+        }
+    }
+
+    $best = @($candidates | Sort-Object -Property Version -Descending | Select-Object -First 1)
     $wt = Get-Command wt.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $wt) { return $null }
-    $output = @(& $wt.Source --version 2>$null)
-    $global:LASTEXITCODE = 0
-    $text = ($output -join ' ').Trim()
-    if ($text -match '(\d+\.\d+\.\d+\.\d+)') { return [version]$Matches[1] }
-    if ($text -match '(\d+\.\d+\.\d+)') { return [version]$Matches[1] }
-    return $null
+
+    return [pscustomobject]@{
+        Version = if ($best.Count -gt 0) { [version]$best[0].Version } else { $null }
+        Source = if ($best.Count -gt 0) { [string]$best[0].Source } else { $null }
+        Identity = if ($best.Count -gt 0) { [string]$best[0].Identity } else { $null }
+        AliasAvailable = [bool]$wt
+        Executable = if ($wt) { [string]$wt.Source } else { $null }
+        InventoryError = $inventoryError
+        WinGetError = $wingetError
+    }
+}
+
+function Get-WpcWindowsTerminalVersion {
+    return (Get-WpcWindowsTerminalEvidence).Version
 }
 
 function Test-WpcWindowsTerminalMinimum {
@@ -88,6 +188,7 @@ function Restore-WpcDefaultTerminalRegistryState {
 }
 
 Export-ModuleMember -Function @(
+    'Get-WpcWindowsTerminalEvidence',
     'Get-WpcWindowsTerminalVersion',
     'Test-WpcWindowsTerminalMinimum',
     'Get-WpcDefaultTerminalEvidence',

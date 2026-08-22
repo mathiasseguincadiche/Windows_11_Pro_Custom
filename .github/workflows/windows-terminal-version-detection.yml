@@ -1,0 +1,92 @@
+name: Windows Terminal version detection
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/core/windows-terminal-system.psm1'
+      - '.github/workflows/windows-terminal-version-detection.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/core/windows-terminal-system.psm1'
+      - '.github/workflows/windows-terminal-version-detection.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse PowerShell module
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = Resolve-Path '.\scripts\core\windows-terminal-system.psm1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $path,
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if (@($errors).Count -gt 0) {
+            throw "PowerShell parse errors: $($errors.Message -join '; ')"
+          }
+
+      - name: Enforce supported version discovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $moduleText = Get-Content -Raw '.\scripts\core\windows-terminal-system.psm1'
+
+          foreach ($needle in @(
+            'Win32_InstalledStoreProgram',
+            'Microsoft.WindowsTerminal',
+            'Get-WpcWindowsTerminalEvidence',
+            'winget.exe'
+          )) {
+            if (-not $moduleText.Contains($needle)) {
+              throw "Windows Terminal version discovery contract missing: $needle"
+            }
+          }
+
+          if ($moduleText -match '(?is)wt(?:\.exe)?.{0,120}--version') {
+            throw 'Windows Terminal version discovery must not invoke unsupported wt.exe --version.'
+          }
+
+          Get-CimClass -ClassName Win32_InstalledStoreProgram -ErrorAction Stop | Out-Null
+          Get-CimInstance `
+            -ClassName Win32_InstalledStoreProgram `
+            -Filter "ProgramId LIKE 'Microsoft.WindowsTerminal%' OR Name LIKE 'Windows Terminal%'" `
+            -ErrorAction Stop | Out-Null
+
+      - name: Validate version parser and evidence shape
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module '.\scripts\core\windows-terminal-system.psm1' -Force
+          $module = Get-Module 'windows-terminal-system'
+          if (-not $module) { throw 'windows-terminal-system module was not imported.' }
+
+          $parsed = & $module { ConvertTo-WpcTerminalVersion -Value 'Windows Terminal 1.23.4567.0' }
+          if ([version]$parsed -ne [version]'1.23.4567.0') {
+            throw "Unexpected parsed Windows Terminal version: $parsed"
+          }
+
+          $threePart = & $module { ConvertTo-WpcTerminalVersion -Value '1.22.103' }
+          if ([version]$threePart -ne [version]'1.22.103') {
+            throw "Unexpected three-part version parsing: $threePart"
+          }
+
+          $invalid = & $module { ConvertTo-WpcTerminalVersion -Value 'not-a-version' }
+          if ($null -ne $invalid) {
+            throw "Invalid version text must return null, got: $invalid"
+          }
+
+          $command = Get-Command Get-WpcWindowsTerminalEvidence -ErrorAction Stop
+          if ($command.CommandType -ne 'Function') {
+            throw 'Get-WpcWindowsTerminalEvidence must be exported as a function.'
+          }
