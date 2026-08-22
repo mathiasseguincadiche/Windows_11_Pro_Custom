@@ -136,8 +136,6 @@ function Invoke-WslInlineInteractive {
     Write-Host 'La commande interactive s exécute directement dans cette fenêtre PowerShell.' -ForegroundColor Cyan
     Write-Host 'stdin, stdout et stderr restent attachés au terminal courant et ne sont pas capturés par le script.' -ForegroundColor DarkGray
 
-    # The native WSL process inherits the current console. Interactive AWS
-    # commands must never be piped, redirected or captured by PowerShell.
     & wsl.exe --distribution $Distribution --user $LinuxUser --exec @ArgumentList
     $code = [int]$LASTEXITCODE
     $global:LASTEXITCODE = 0
@@ -224,15 +222,28 @@ function Configure-GitHub {
     Write-Section -Title 'GitHub CLI'
     $status = Invoke-WslSimple -ArgumentList @('gh','auth','status','--hostname','github.com') -IgnoreExitCode
     if ($status.ExitCode -eq 0) {
-        if ((Get-GitHubCredentialStorage) -eq 'PlaintextFile') {
+        $storage = Get-GitHubCredentialStorage
+        if ($storage -eq 'PlaintextFile') {
             $resolution = Resolve-GitHubPlaintextFallback
             if ($resolution -eq 'LoggedOut') { return }
-            Write-Host '[OK] GitHub authentifié; fallback protégé et explicitement accepté.' -ForegroundColor Green
+            Write-Host '[DEJA OK] GitHub est déjà configuré.' -ForegroundColor Green
+            Write-Host 'Compte/session : OK' -ForegroundColor Green
+            Write-Host 'Stockage : fallback protégé 0600 déjà accepté' -ForegroundColor DarkGray
+        } else {
+            Set-GitHubPlaintextAcceptance -Accepted $false
+            Write-Host '[DEJA OK] GitHub est déjà configuré.' -ForegroundColor Green
+            Write-Host 'Compte/session : OK' -ForegroundColor Green
+            switch ($storage) {
+                'CredentialStore' { Write-Host 'Stockage : credential store' -ForegroundColor DarkGray }
+                'Environment' { Write-Host 'Stockage : variables d environnement' -ForegroundColor DarkGray }
+                default { Write-Host ("Stockage : {0}" -f $storage) -ForegroundColor DarkGray }
+            }
+        }
+
+        if (-not (Read-YesNoLoop -Prompt 'Veux-tu modifier/refaire la connexion GitHub')) {
+            Write-Host '[DEJA OK] Connexion GitHub conservée sans modification.' -ForegroundColor Green
             return
         }
-        Set-GitHubPlaintextAcceptance -Accepted $false
-        Write-Host '[DEJA OK] GitHub CLI est authentifié.' -ForegroundColor Green
-        if (-not (Read-YesNoLoop -Prompt 'Veux-tu refaire la connexion GitHub')) { return }
     }
 
     Set-GitHubPlaintextAcceptance -Accepted $false
@@ -261,8 +272,6 @@ function Get-AwsConfigValue {
         [Parameter(Mandatory)][ValidateSet('region','login_session','sso_session','sso_start_url')][string]$Name
     )
     $probe = Invoke-WslSimple -ArgumentList @('aws','configure','get',$Name,'--profile',$Profile) -IgnoreExitCode
-    # stderr is captured by Invoke-WslSimple. Output is configuration data only
-    # when AWS itself reports success.
     if ($probe.ExitCode -ne 0) { return '' }
     return $probe.Output.Trim()
 }
