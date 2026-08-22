@@ -108,7 +108,7 @@ function Invoke-WslTerminalInteractive {
         [Parameter(Mandatory)][string[]]$ArgumentList
     )
     $wt = Get-Command wt.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $wt) { throw 'Windows Terminal (wt.exe) est requis pour les authentifications interactives WSL.' }
+    if (-not $wt) { throw 'Windows Terminal (wt.exe) est requis pour cette authentification interactive WSL.' }
 
     $wtArgs = @(
         'new-tab','--title',$Title,
@@ -123,6 +123,27 @@ function Invoke-WslTerminalInteractive {
     $global:LASTEXITCODE = 0
     if ($launchCode -ne 0) { throw "Impossible d ouvrir l onglet Windows Terminal (code=$launchCode)." }
     [void](Read-Host 'Quand la commande dans le nouvel onglet est terminée, appuie sur Entrée ici')
+}
+
+function Invoke-WslInlineInteractive {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][string[]]$ArgumentList
+    )
+
+    Write-Host ''
+    Write-Host ("[ACTION REQUISE] {0}" -f $Label) -ForegroundColor Magenta
+    Write-Host 'La commande interactive s exécute directement dans cette fenêtre PowerShell.' -ForegroundColor Cyan
+    Write-Host 'Tu peux copier/coller ici. stdin, stdout et stderr restent attachés au terminal courant et ne sont pas capturés par le script.' -ForegroundColor DarkGray
+
+    # Deliberately no assignment, pipeline or 2>&1 here: the native WSL/AWS process
+    # must inherit the current console so interactive input and clipboard paste work.
+    & wsl.exe --distribution $Distribution --user $LinuxUser --exec @ArgumentList
+    $code = [int]$LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ne 0) {
+        throw "Commande WSL interactive échouée (code=$code)."
+    }
 }
 
 function Protect-GitHubConfigPermissions {
@@ -298,13 +319,13 @@ function Resolve-AwsRegion {
     }
 }
 
-function Invoke-AwsRemoteLoginTerminal {
+function Invoke-AwsRemoteLoginInline {
     param([Parameter(Mandatory)][string]$Profile)
     if (-not (Test-AwsLoginSupported)) { throw 'aws login nécessite AWS CLI 2.32.0 minimum.' }
     $region = Resolve-AwsRegion -Profile $Profile
     if (-not (Test-AwsRegionName -Region $region)) { throw "Région AWS refusée avant lancement: '$region'." }
 
-    Invoke-WslTerminalInteractive -Title "AWS login - $Profile" -ArgumentList @(
+    Invoke-WslInlineInteractive -Label "AWS login --remote | profil $Profile" -ArgumentList @(
         'env','AWS_PAGER=','AWS_CLI_AUTO_PROMPT=off',
         'aws','login','--remote','--profile',$Profile,'--region',$region,'--no-cli-pager','--no-cli-auto-prompt'
     )
@@ -312,9 +333,9 @@ function Invoke-AwsRemoteLoginTerminal {
     return (Test-AwsProfile -Profile $Profile)
 }
 
-function Invoke-AwsSsoLoginTerminal {
+function Invoke-AwsSsoLoginInline {
     param([Parameter(Mandatory)][string]$Profile)
-    Invoke-WslTerminalInteractive -Title "AWS SSO login - $Profile" -ArgumentList @(
+    Invoke-WslInlineInteractive -Label "AWS SSO login | profil $Profile" -ArgumentList @(
         'aws','sso','login','--profile',$Profile,'--no-browser','--use-device-code','--no-cli-pager'
     )
     Set-AwsCredentialPermissions
@@ -329,9 +350,9 @@ $existing
 
 Méthodes disponibles :
   1. Connexion AWS Console — RECOMMANDÉE pour un compte classique.
-     La commande aws login --remote s ouvre dans un vrai onglet WSL Windows Terminal.
+     aws login --remote s exécute directement dans cette fenêtre PowerShell : URL, code et saisie au même endroit.
   2. IAM Identity Center / SSO.
-     La configuration et le device-code s exécutent dans un vrai onglet WSL Windows Terminal.
+     La configuration et le device-code restent eux aussi dans cette fenêtre.
   3. Reconnecter un profil existant.
   4. Access Key / Secret Key — legacy, uniquement si elles t ont été fournies explicitement.
   0. Ne rien configurer maintenant.
@@ -344,7 +365,7 @@ function Read-AwsMethodChoice {
     while ($true) {
         Write-Host ''
         Write-Host 'Choisis la méthode AWS :' -ForegroundColor Cyan
-        Write-Host '  1. Connexion AWS Console (aws login --remote dans Windows Terminal)'
+        Write-Host '  1. Connexion AWS Console (aws login --remote ici, dans ce terminal)'
         Write-Host '  2. IAM Identity Center / SSO'
         Write-Host '  3. Reconnecter un profil existant'
         Write-Host '  4. Access Key / Secret Key — legacy'
@@ -372,20 +393,20 @@ function Configure-Aws {
             '0' { Write-Host '[RETOUR] Configuration AWS quittée.' -ForegroundColor Yellow; return }
             '1' {
                 $profile = Read-AwsProfileName
-                if (Invoke-AwsRemoteLoginTerminal -Profile $profile) {
+                if (Invoke-AwsRemoteLoginInline -Profile $profile) {
                     Write-Host "[OK] Profil AWS '$profile' connecté et vérifié avec STS." -ForegroundColor Green
                     return
                 }
-                Write-Host '[ERREUR] STS ne valide pas la connexion. Vérifie la fin de la commande dans le nouvel onglet puis réessaie.' -ForegroundColor Red
+                Write-Host '[ERREUR] STS ne valide pas la connexion. Vérifie le résultat affiché ci-dessus puis réessaie.' -ForegroundColor Red
                 Write-Host '[INFO] Pour un utilisateur IAM, la politique SignInLocalDevelopmentAccess peut être requise. Un compte root n en a pas besoin.' -ForegroundColor Yellow
             }
             '2' {
-                Invoke-WslTerminalInteractive -Title 'AWS SSO configuration' -ArgumentList @('aws','configure','sso','--no-browser','--use-device-code')
+                Invoke-WslInlineInteractive -Label 'AWS SSO configuration' -ArgumentList @('aws','configure','sso','--no-browser','--use-device-code')
                 $profiles = @(Get-AwsProfiles)
                 if ($profiles.Count -eq 0) { Write-Host '[ERREUR] Aucun profil SSO trouvé après configuration.' -ForegroundColor Red; continue }
                 Write-Host ("Profils disponibles: {0}" -f ($profiles -join ', ')) -ForegroundColor DarkGray
                 $profile = Read-AwsProfileFromList -Profiles $profiles -Prompt 'Profil SSO AWS à connecter'
-                if (Invoke-AwsSsoLoginTerminal -Profile $profile) {
+                if (Invoke-AwsSsoLoginInline -Profile $profile) {
                     Write-Host "[OK] Profil SSO AWS '$profile' connecté et vérifié." -ForegroundColor Green
                     return
                 }
@@ -398,17 +419,17 @@ function Configure-Aws {
                 $profile = Read-AwsProfileFromList -Profiles $profiles -Prompt 'Profil AWS à reconnecter'
                 $mode = Get-AwsProfileAuthMode -Profile $profile
                 $ok = $false
-                if ($mode -eq 'Login') { $ok = Invoke-AwsRemoteLoginTerminal -Profile $profile }
-                elseif ($mode -eq 'SSO') { $ok = Invoke-AwsSsoLoginTerminal -Profile $profile }
+                if ($mode -eq 'Login') { $ok = Invoke-AwsRemoteLoginInline -Profile $profile }
+                elseif ($mode -eq 'SSO') { $ok = Invoke-AwsSsoLoginInline -Profile $profile }
                 elseif (Test-AwsProfile -Profile $profile) { $ok = $true }
                 else { Write-Host '[INFO] Ce profil n utilise ni login_session ni SSO. Utilise l option 4 seulement pour des clés IAM statiques.' -ForegroundColor Yellow; continue }
                 if ($ok) { Write-Host "[OK] Session AWS '$profile' reconnectée et vérifiée." -ForegroundColor Green; return }
                 Write-Host '[ERREUR] Reconnexion AWS non validée par STS.' -ForegroundColor Red
             }
             '4' {
-                Write-Host '[AVERTISSEMENT] Mode legacy: saisie des clés uniquement dans le nouvel onglet WSL dédié.' -ForegroundColor Yellow
+                Write-Host '[AVERTISSEMENT] Mode legacy: la saisie des clés reste directement entre toi et AWS CLI dans cette fenêtre; le script ne capture pas les valeurs.' -ForegroundColor Yellow
                 $profile = Read-AwsProfileName -Prompt 'Nom du profil AWS CLI pour les clés statiques'
-                Invoke-WslTerminalInteractive -Title "AWS configure - $profile" -ArgumentList @('aws','configure','--profile',$profile)
+                Invoke-WslInlineInteractive -Label "AWS configure | profil $profile" -ArgumentList @('aws','configure','--profile',$profile)
                 Set-AwsCredentialPermissions
                 if (Test-AwsProfile -Profile $profile) { Write-Host "[OK] Profil AWS '$profile' configuré et vérifié." -ForegroundColor Green; return }
                 Write-Host '[ERREUR] Le profil est présent mais STS ne le valide pas.' -ForegroundColor Red
