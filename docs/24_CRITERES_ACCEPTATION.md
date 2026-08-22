@@ -78,21 +78,33 @@ Guide : [`25_IDENTITE_STOCKAGE_ET_RECUPERATION.md`](25_IDENTITE_STOCKAGE_ET_RECU
 
 ## 7. Windows Terminal et VS Code
 
-- [ ] Windows Terminal est disponible via `Microsoft.WindowsTerminal` ;
+- [ ] Windows Terminal est disponible via `Microsoft.WindowsTerminal` et satisfait la version minimale du contrat moderne ;
+- [ ] Windows Terminal Stable est l'application terminal système par défaut ;
 - [ ] Starship Windows et `JetBrainsMono Nerd Font` sont disponibles ;
-- [ ] le fragment géré expose exactement `PowerShell 7 - DevOps` et `Ubuntu - DevOps` ;
-- [ ] `PowerShell 7 - DevOps` est le profil Windows Terminal par défaut ;
+- [ ] le fragment géré expose exactement `PowerShell 7 - DevOps`, `PowerShell 7 - DevOps (Admin)` et `Ubuntu - DevOps` ;
+- [ ] `PowerShell 7 - DevOps` est le profil Windows Terminal par défaut et n'est pas élevé ;
+- [ ] `PowerShell 7 - DevOps (Admin)` utilise `elevate=true` et possède une identité visuelle distincte ;
+- [ ] `Ubuntu - DevOps` démarre explicitement dans `~` ;
+- [ ] les trois profils empêchent l'application courante d'écraser un titre d'onglet renommé ;
+- [ ] `Ctrl+T` ouvre un nouvel onglet PowerShell 7 - DevOps ;
 - [ ] `Ctrl+Shift+1` ouvre PowerShell 7 - DevOps ;
 - [ ] `Ctrl+Shift+2` ouvre Ubuntu - DevOps ;
+- [ ] `Ctrl+Shift+3` ouvre PowerShell 7 - DevOps (Admin) ;
+- [ ] `Ctrl+Shift+R` ouvre le renommage natif de l'onglet courant ;
+- [ ] `Ctrl+W` ferme l'onglet courant ;
 - [ ] `Ctrl+Shift+O` ouvre PowerShell et Ubuntu en panneaux ;
-- [ ] le bloc PowerShell/Starship géré est présent une seule fois ;
+- [ ] le menu `+` regroupe les profils Windows 11 Pro Custom tout en conservant les profils tiers ;
+- [ ] le thème `WPC DevOps` utilise Mica et les profils normal/Admin/Ubuntu utilisent leurs schémas gérés ;
+- [ ] le bloc PowerShell/Starship géré est présent une seule fois, force UTF-8 et configure PSReadLine ;
+- [ ] la transformation de `settings.json` est idempotente et préserve les réglages utilisateur non possédés ;
+- [ ] `Apply` sauvegarde les fichiers et la délégation terminal système avant mutation ;
 - [ ] le composant Windows Terminal passe `Audit / Apply / Verify / Rollback` et restaure l'état initial enregistré ;
 - [ ] le shell Bash/Starship Ubuntu reste possédé par les scripts WSL et n'est pas réécrit par le composant Windows Terminal ;
 - [ ] aucun profil ou hook OpenClaw/`clawops` n'est possédé par la workstation ;
 - [ ] VS Code ouvre les projets WSL sous `/home/<user>/...`.
 
 ```powershell
-.\install.ps1 -Mode Verify
+.\scripts\windows\31_windows_terminal.ps1 -Mode Verify
 ```
 
 ## 8. Frontière avec les projets externes

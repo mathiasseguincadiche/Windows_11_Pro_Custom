@@ -1,18 +1,22 @@
-name: Windows Terminal fragment contract
+name: Windows Terminal modern contract
 
 on:
   pull_request:
     paths:
       - 'config/windows-terminal/**'
       - 'scripts/core/windows-terminal-settings.psm1'
+      - 'scripts/core/windows-terminal-system.psm1'
       - 'scripts/windows/31_windows_terminal.ps1'
+      - 'scripts/windows/31_windows_terminal_modern.ps1'
       - '.github/workflows/windows-terminal-fragment-contract.yml'
   push:
     branches: [main]
     paths:
       - 'config/windows-terminal/**'
       - 'scripts/core/windows-terminal-settings.psm1'
+      - 'scripts/core/windows-terminal-system.psm1'
       - 'scripts/windows/31_windows_terminal.ps1'
+      - 'scripts/windows/31_windows_terminal_modern.ps1'
       - '.github/workflows/windows-terminal-fragment-contract.yml'
 
 permissions:
@@ -24,33 +28,46 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
-      - name: Parse managed JSON
+      - name: Parse managed JSON and TOML
         shell: bash
         run: |
           set -euo pipefail
           python3 -m json.tool config/windows-terminal/profiles.fragment.json >/dev/null
           python3 -m json.tool config/windows-terminal/actions.json >/dev/null
+          python3 -m json.tool config/windows-terminal/settings.contract.json >/dev/null
+          python3 - <<'PY'
+          import tomllib
+          with open('config/windows-terminal/starship.windows.toml', 'rb') as fh:
+              tomllib.load(fh)
+          PY
 
-      - name: Enforce native fragment wiring
+      - name: Enforce modern terminal wiring
         shell: bash
         run: |
           set -euo pipefail
-          script='scripts/windows/31_windows_terminal.ps1'
-          module='scripts/core/windows-terminal-settings.psm1'
+          entry='scripts/windows/31_windows_terminal.ps1'
+          script='scripts/windows/31_windows_terminal_modern.ps1'
+          settings_module='scripts/core/windows-terminal-settings.psm1'
+          system_module='scripts/core/windows-terminal-system.psm1'
 
-          grep -Fq 'scripts\core\windows-terminal-settings.psm1' "$script"
-          grep -Fq "terminal-devops.profiles.json" "$script"
-          grep -Fq "terminal-devops.actions.json" "$script"
-          grep -Fq "'Fragment actions'" "$script"
+          grep -Fq '31_windows_terminal_modern.ps1' "$entry"
+          grep -Fq 'settings.contract.json' "$script"
+          grep -Fq 'terminal-devops.profiles.json' "$script"
+          grep -Fq 'terminal-devops.actions.json' "$script"
           grep -Fq 'Set-WpcTerminalSettingsContract' "$script"
-          grep -Fq 'LegacyImportName $actionsFileName' "$script"
-          grep -Fq 'Remove-Item -LiteralPath $contract.Targets.Actions' "$script"
-          grep -Fq "ActionsFragment =" "$script"
+          grep -Fq 'Set-WpcDefaultTerminalApplication' "$script"
+          grep -Fq "minimumTerminalVersion = [version]'1.22.0.0'" "$script"
           grep -Fq 'Save-InitialState' "$script"
-          grep -Fq 'Restore-InitialState' "$script"
+          grep -Fq 'Restore-WpcDefaultTerminalRegistryState' "$script"
+          grep -Fq 'Set-PSReadLineOption -PredictionViewStyle ListView' "$script"
+          grep -Fq '[Console]::OutputEncoding = $utf8' "$script"
+          grep -Fq 'HKCU:\Console\%%Startup' "$system_module"
+          grep -Fq '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}' "$system_module"
+          grep -Fq '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}' "$system_module"
 
-          test -f "$module"
-          if grep -Eq "Set-WpcObjectProperty.*-Name 'import'.*LegacyImportName|imports.*\+=.*LegacyImportName" "$module"; then
+          test -f "$settings_module"
+          test -f "$system_module"
+          if grep -Eq "Set-WpcObjectProperty.*-Name 'import'.*LegacyImportName|imports.*\+=.*LegacyImportName" "$settings_module"; then
             echo 'The legacy Windows Terminal action import must never be re-added.' >&2
             exit 1
           fi
@@ -61,7 +78,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
             './scripts/core/windows-terminal-settings.psm1',
-            './scripts/windows/31_windows_terminal.ps1'
+            './scripts/core/windows-terminal-system.psm1',
+            './scripts/windows/31_windows_terminal.ps1',
+            './scripts/windows/31_windows_terminal_modern.ps1'
           )) {
             $tokens = $null
             $errors = $null
@@ -83,6 +102,7 @@ jobs:
 
           $expected = '{a3cc45a8-6e2f-4f3d-bca6-7d6df942da41}'
           $legacy = 'windows11-pro-custom.actions.json'
+          $contract = Get-Content -Raw ./config/windows-terminal/settings.contract.json | ConvertFrom-Json
 
           $fixture = @'
           {
@@ -95,7 +115,17 @@ jobs:
             "disabledProfileSources": [
               "Windows.Terminal.Azure",
             ],
-            "profiles": { "list": [] },
+            "profiles": {
+              "defaults": { "antialiasingMode": "grayscale" },
+              "list": []
+            },
+            "schemes": [
+              { "name": "Keep User Scheme", "background": "#000000", "foreground": "#ffffff" }
+            ],
+            "themes": [
+              { "name": "Keep User Theme", "window": { "applicationTheme": "light" } }
+            ],
+            "experimental.detectURLs": false
           }
           '@
 
@@ -103,14 +133,17 @@ jobs:
           $updated = Set-WpcTerminalSettingsContract `
             -Settings $settings `
             -ExpectedDefaultProfile $expected `
-            -LegacyImportName $legacy
+            -LegacyImportName $legacy `
+            -Contract $contract
+
           $evidence = Get-WpcTerminalSettingsEvidence `
             -Settings $updated `
             -ExpectedDefaultProfile $expected `
-            -LegacyImportName $legacy
+            -LegacyImportName $legacy `
+            -Contract $contract
 
           if (-not $evidence.IsCompliant) {
-            throw "Migrated settings are not compliant: $($evidence | ConvertTo-Json -Compress)"
+            throw "Migrated settings are not compliant: $($evidence | ConvertTo-Json -Depth 12 -Compress)"
           }
           if ($evidence.Imports -contains $legacy) {
             throw 'Legacy action import survived migration.'
@@ -118,6 +151,19 @@ jobs:
           if ($evidence.Imports -notcontains 'keep-user-import.json') {
             throw 'An unrelated user import was removed.'
           }
+          if (-not $updated.profiles.defaults -or $updated.profiles.defaults.antialiasingMode -ne 'grayscale') {
+            throw 'Existing user profile defaults were not preserved.'
+          }
+          if (@($updated.schemes | Where-Object name -eq 'Keep User Scheme').Count -ne 1) {
+            throw 'Existing user color scheme was removed.'
+          }
+          if (@($updated.themes | Where-Object name -eq 'Keep User Theme').Count -ne 1) {
+            throw 'Existing user theme was removed.'
+          }
+          if ($updated.'experimental.detectURLs' -ne $false) {
+            throw 'Unowned user root setting was modified.'
+          }
+
           foreach ($source in @('Windows.Terminal.Azure', 'Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')) {
             if ($evidence.DisabledProfileSources -notcontains $source) {
               throw "Expected disabled profile source missing after merge: $source"
@@ -129,7 +175,8 @@ jobs:
           $twiceObject = Set-WpcTerminalSettingsContract `
             -Settings $reparsed `
             -ExpectedDefaultProfile $expected `
-            -LegacyImportName $legacy
+            -LegacyImportName $legacy `
+            -Contract $contract
           $twice = ConvertTo-WpcTerminalSettingsText -Settings $twiceObject
           if ($once -ne $twice) {
             throw 'Windows Terminal settings transformation must be idempotent.'
@@ -138,30 +185,101 @@ jobs:
           $fresh = Set-WpcTerminalSettingsContract `
             -Settings $null `
             -ExpectedDefaultProfile $expected `
-            -LegacyImportName $legacy
+            -LegacyImportName $legacy `
+            -Contract $contract
           $freshEvidence = Get-WpcTerminalSettingsEvidence `
             -Settings $fresh `
             -ExpectedDefaultProfile $expected `
-            -LegacyImportName $legacy
+            -LegacyImportName $legacy `
+            -Contract $contract
           if (-not $freshEvidence.IsCompliant) {
             throw 'Fresh settings contract is not compliant.'
           }
-          if ($fresh.PSObject.Properties['import']) {
-            throw 'Fresh settings must not depend on an import entry.'
-          }
 
-          Write-Host '[OK] Windows Terminal native fragment settings contract passed.'
-
-      - name: Validate action fragment payload
+      - name: Validate profile action and theme payloads
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $actions = Get-Content -Raw ./config/windows-terminal/actions.json | ConvertFrom-Json
           $profiles = Get-Content -Raw ./config/windows-terminal/profiles.fragment.json | ConvertFrom-Json
+          $settings = Get-Content -Raw ./config/windows-terminal/settings.contract.json | ConvertFrom-Json
 
-          if (@($actions.actions).Count -ne 3) { throw 'Expected exactly three managed Windows Terminal actions.' }
-          if (@($profiles.profiles).Count -ne 2) { throw 'Expected exactly two managed Windows Terminal profiles.' }
+          if (@($profiles.profiles).Count -ne 3) { throw 'Expected exactly three managed Windows Terminal profiles.' }
+          if (@($actions.actions).Count -ne 7) { throw 'Expected exactly seven managed Windows Terminal actions.' }
+
+          $normal = @($profiles.profiles | Where-Object name -eq 'PowerShell 7 - DevOps')[0]
+          $admin = @($profiles.profiles | Where-Object name -eq 'PowerShell 7 - DevOps (Admin)')[0]
+          $ubuntu = @($profiles.profiles | Where-Object name -eq 'Ubuntu - DevOps')[0]
+
+          if ($normal.elevate -ne $false) { throw 'Normal PowerShell profile must remain unelevated.' }
+          if ($admin.elevate -ne $true) { throw 'Admin PowerShell profile must declare elevate=true.' }
+          if ($ubuntu.startingDirectory -ne '~') { throw 'Ubuntu profile must start in Linux home.' }
+          foreach ($profile in @($normal,$admin,$ubuntu)) {
+            if ($profile.suppressApplicationTitle -ne $true) { throw "Profile must preserve renamed tab titles: $($profile.name)" }
+            if ($profile.font.face -ne 'JetBrainsMono Nerd Font') { throw "Managed Nerd Font missing: $($profile.name)" }
+          }
+
           $keys = @($actions.actions | ForEach-Object { [string]$_.keys })
-          foreach ($key in @('ctrl+shift+1', 'ctrl+shift+2', 'ctrl+shift+o')) {
+          foreach ($key in @('ctrl+t','ctrl+shift+1','ctrl+shift+2','ctrl+shift+3','ctrl+shift+r','ctrl+w','ctrl+shift+o')) {
             if ($keys -notcontains $key) { throw "Missing managed key binding: $key" }
+          }
+
+          $ctrlT = @($actions.actions | Where-Object keys -eq 'ctrl+t')[0]
+          if ($ctrlT.command.action -ne 'newTab' -or $ctrlT.command.profile -ne 'PowerShell 7 - DevOps') {
+            throw 'Ctrl+T must open a new PowerShell DevOps tab.'
+          }
+          $rename = @($actions.actions | Where-Object keys -eq 'ctrl+shift+r')[0]
+          if ([string]$rename.command -ne 'openTabRenamer') {
+            throw 'Ctrl+Shift+R must open the native Windows Terminal tab renamer.'
+          }
+
+          if ($settings.globals.theme -ne 'WPC DevOps') { throw 'Managed WPC DevOps theme is not selected.' }
+          if ($settings.globals.launchMode -ne 'maximized') { throw 'Windows Terminal must launch maximized.' }
+          if ($settings.globals.windowingBehavior -ne 'useExisting') { throw 'Windows Terminal must reuse the active desktop window for normal tabs.' }
+          if (@($settings.themes | Where-Object name -eq 'WPC DevOps').Count -ne 1) { throw 'WPC DevOps theme missing.' }
+          $theme = @($settings.themes | Where-Object name -eq 'WPC DevOps')[0]
+          if ($theme.window.useMica -ne $true) { throw 'WPC DevOps theme must enable Mica.' }
+          foreach ($scheme in @('WPC DevOps','WPC DevOps Admin','WPC Ubuntu')) {
+            if (@($settings.schemes | Where-Object name -eq $scheme).Count -ne 1) { throw "Missing managed color scheme: $scheme" }
+          }
+          $menuJson = $settings.newTabMenu | ConvertTo-Json -Depth 12 -Compress
+          foreach ($needle in @('Windows 11 Pro Custom','PowerShell 7 - DevOps (Admin)','Ubuntu - DevOps','User.WpcSplitDevOps','remainingProfiles')) {
+            if ($menuJson -notlike "*$needle*") { throw "Managed newTabMenu missing: $needle" }
+          }
+
+  windows-model:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate Windows-specific default-terminal contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $systemModule = Get-Content -Raw .\scripts\core\windows-terminal-system.psm1
+          foreach ($needle in @(
+            'HKCU:\Console\%%Startup',
+            '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}',
+            '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}',
+            'Set-WpcDefaultTerminalApplication',
+            'Get-WpcDefaultTerminalRegistryState',
+            'Restore-WpcDefaultTerminalRegistryState'
+          )) {
+            if (-not $systemModule.Contains($needle)) { throw "Windows default-terminal contract missing: $needle" }
+          }
+
+          foreach ($path in @(
+            '.\scripts\core\windows-terminal-system.psm1',
+            '.\scripts\windows\31_windows_terminal_modern.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
           }

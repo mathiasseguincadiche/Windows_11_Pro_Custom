@@ -22,7 +22,7 @@ Cette page définit la hiérarchie utilisée pour résoudre les divergences entr
 | WSL2 | `config/wsl/runtime-contract.json` et `config/wsl/*.wslconfig` |
 | Versions DevOps | `config/devops/tool-versions.env` |
 | Windows Terminal | `config/windows-terminal/` |
-| Déploiement Windows Terminal | `scripts/windows/31_windows_terminal.ps1` |
+| Déploiement Windows Terminal | `scripts/windows/31_windows_terminal.ps1`, `scripts/windows/31_windows_terminal_modern.ps1` et `scripts/core/windows-terminal-settings.psm1` |
 | Shell Bash / Starship Ubuntu | `config/wsl/bashrc.d/devops.sh`, `config/wsl/starship.toml` et `scripts/wsl/manage-devops-terminal.sh` |
 | Matériel | `config/hardware/` |
 | Windows | `config/windows/` |
@@ -32,17 +32,26 @@ Cette page définit la hiérarchie utilisée pour résoudre les divergences entr
 | Orchestration | `install.ps1` + `scripts/core/runtime.psm1` |
 | Interface humaine | `menu.ps1` |
 
-Le contrat Windows Terminal est :
+Le contrat Windows Terminal moderne est :
 
 ```text
-PowerShell 7 - DevOps -> profil par défaut
-Ubuntu - DevOps       -> accès explicite à la distribution Ubuntu WSL2
-Ctrl+Shift+1          -> PowerShell 7 - DevOps
-Ctrl+Shift+2          -> Ubuntu - DevOps
-Ctrl+Shift+O          -> PowerShell + Ubuntu en panneaux
+Application terminal Windows      -> Windows Terminal Stable via la délégation HKCU\Console\%%Startup
+PowerShell 7 - DevOps             -> profil par défaut, session Windows normale
+PowerShell 7 - DevOps (Admin)     -> profil élevé via UAC (`elevate = true`)
+Ubuntu - DevOps                   -> distribution Ubuntu WSL2, démarre dans `~`
+
+Ctrl+T                            -> nouvel onglet PowerShell 7 - DevOps
+Ctrl+Shift+1                      -> PowerShell 7 - DevOps
+Ctrl+Shift+2                      -> Ubuntu - DevOps
+Ctrl+Shift+3                      -> PowerShell 7 - DevOps (Admin)
+Ctrl+Shift+R                      -> renommer l'onglet courant
+Ctrl+W                            -> fermer l'onglet courant
+Ctrl+Shift+O                      -> PowerShell + Ubuntu en panneaux
 ```
 
-La configuration Windows Terminal ne possède pas le shell Bash d'Ubuntu : le profil Ubuntu ouvre simplement la distribution WSL2, dont le shell et Starship restent gérés par le contrat Linux existant.
+Le contrat versionné sous `config/windows-terminal/` possède également le thème sombre `WPC DevOps`, Mica, les schémas distincts normal / Admin / Ubuntu, le menu `Windows 11 Pro Custom`, le profil Windows Terminal par défaut et les réglages nécessaires à la stabilité des titres d'onglets. Les réglages utilisateur non possédés par le dépôt sont préservés par la convergence.
+
+La configuration Windows Terminal ne possède pas le shell Bash d'Ubuntu : le profil Ubuntu ouvre simplement la distribution WSL2, dont le shell et Starship restent gérés par le contrat Linux existant. Les valeurs de délégation système et les fichiers possédés par le composant sont sauvegardés avant mutation afin que `Rollback` puisse restaurer l'état initial enregistré.
 
 ## Projets externes
 

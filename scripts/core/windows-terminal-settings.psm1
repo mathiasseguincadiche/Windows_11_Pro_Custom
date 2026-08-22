@@ -101,12 +101,91 @@ function Remove-WpcObjectProperty {
     }
 }
 
+function ConvertTo-WpcComparableJson {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return 'null' }
+    return ($Value | ConvertTo-Json -Depth 100 -Compress)
+}
+
+function Test-WpcEquivalent {
+    param([AllowNull()][object]$Actual, [AllowNull()][object]$Expected)
+    return (ConvertTo-WpcComparableJson -Value $Actual) -ceq (ConvertTo-WpcComparableJson -Value $Expected)
+}
+
+function Get-WpcSafeObjectName {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return '' }
+    try {
+        return [string]$Value.name
+    } catch {
+        return ''
+    }
+}
+
+function Merge-WpcNamedObjects {
+    param(
+        [AllowNull()][object[]]$Existing,
+        [AllowNull()][object[]]$Managed
+    )
+
+    $managedList = @($Managed)
+    $managedNames = @($managedList | ForEach-Object { Get-WpcSafeObjectName -Value $_ } | Where-Object { $_ })
+    $result = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($entry in @($Existing)) {
+        $name = Get-WpcSafeObjectName -Value $entry
+        if ($name -and $managedNames -contains $name) { continue }
+        if ($null -ne $entry) { $result.Add($entry) }
+    }
+    foreach ($entry in $managedList) {
+        if ($null -ne $entry) { $result.Add($entry) }
+    }
+    return @($result.ToArray())
+}
+
+function Get-WpcManagedArrayEvidence {
+    param(
+        [AllowNull()][object[]]$Actual,
+        [AllowNull()][object[]]$Expected,
+        [Parameter(Mandatory)][string]$Label
+    )
+
+    $missing = [System.Collections.Generic.List[string]]::new()
+    $mismatched = [System.Collections.Generic.List[string]]::new()
+    foreach ($expectedEntry in @($Expected)) {
+        $name = Get-WpcSafeObjectName -Value $expectedEntry
+        $actualEntry = @(
+            foreach ($candidate in @($Actual)) {
+                if ((Get-WpcSafeObjectName -Value $candidate) -eq $name) {
+                    $candidate
+                    break
+                }
+            }
+        )
+        if ($actualEntry.Count -eq 0) {
+            $missing.Add($name)
+            continue
+        }
+        if (-not (Test-WpcEquivalent -Actual $actualEntry[0] -Expected $expectedEntry)) {
+            $mismatched.Add($name)
+        }
+    }
+
+    return [pscustomobject]@{
+        Label = $Label
+        Missing = $missing.ToArray()
+        Mismatched = $mismatched.ToArray()
+        IsCompliant = ($missing.Count -eq 0 -and $mismatched.Count -eq 0)
+    }
+}
+
 function Get-WpcTerminalSettingsEvidence {
     [CmdletBinding()]
     param(
         [AllowNull()]$Settings,
         [Parameter(Mandatory)][string]$ExpectedDefaultProfile,
-        [Parameter(Mandatory)][string]$LegacyImportName
+        [Parameter(Mandatory)][string]$LegacyImportName,
+        [Parameter(Mandatory)]$Contract
     )
 
     if ($null -eq $Settings) {
@@ -118,13 +197,14 @@ function Get-WpcTerminalSettingsEvidence {
             DisabledProfileSources = @()
             PowerShellCoreDisabled = $false
             WslDisabled = $false
+            GlobalMismatches = @('settings.json absent')
+            ThemeEvidence = [pscustomobject]@{ IsCompliant=$false; Missing=@(); Mismatched=@() }
+            SchemeEvidence = [pscustomobject]@{ IsCompliant=$false; Missing=@(); Mismatched=@() }
+            NewTabMenuOk = $false
             IsCompliant = $false
         }
     }
 
-    # Wrap the whole conditional in @(...). PowerShell unwraps single-element
-    # pipeline output from an if statement; keeping the outer array boundary
-    # prevents += from becoming string concatenation when only one value exists.
     $imports = @(
         if ($Settings.PSObject.Properties['import']) {
             $Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ }
@@ -141,6 +221,22 @@ function Get-WpcTerminalSettingsEvidence {
     $powershellCoreDisabled = ($disabled -contains 'Windows.Terminal.PowershellCore')
     $wslDisabled = ($disabled -contains 'Windows.Terminal.Wsl')
 
+    $globalMismatches = [System.Collections.Generic.List[string]]::new()
+    foreach ($prop in $Contract.globals.PSObject.Properties) {
+        $actual = if ($Settings.PSObject.Properties[$prop.Name]) { $Settings.PSObject.Properties[$prop.Name].Value } else { $null }
+        if (-not (Test-WpcEquivalent -Actual $actual -Expected $prop.Value)) {
+            $globalMismatches.Add($prop.Name)
+        }
+    }
+
+    $themes = if ($Settings.PSObject.Properties['themes']) { @($Settings.themes) } else { @() }
+    $schemes = if ($Settings.PSObject.Properties['schemes']) { @($Settings.schemes) } else { @() }
+    $themeEvidence = Get-WpcManagedArrayEvidence -Actual $themes -Expected @($Contract.themes) -Label 'themes'
+    $schemeEvidence = Get-WpcManagedArrayEvidence -Actual $schemes -Expected @($Contract.schemes) -Label 'schemes'
+
+    $actualMenu = if ($Settings.PSObject.Properties['newTabMenu']) { @($Settings.newTabMenu) } else { @() }
+    $newTabMenuOk = Test-WpcEquivalent -Actual $actualMenu -Expected @($Contract.newTabMenu)
+
     return [pscustomobject]@{
         DefaultProfile = $defaultProfile
         DefaultProfileOk = $defaultOk
@@ -149,7 +245,20 @@ function Get-WpcTerminalSettingsEvidence {
         DisabledProfileSources = $disabled
         PowerShellCoreDisabled = $powershellCoreDisabled
         WslDisabled = $wslDisabled
-        IsCompliant = ($defaultOk -and $legacyImportAbsent -and $powershellCoreDisabled -and $wslDisabled)
+        GlobalMismatches = $globalMismatches.ToArray()
+        ThemeEvidence = $themeEvidence
+        SchemeEvidence = $schemeEvidence
+        NewTabMenuOk = $newTabMenuOk
+        IsCompliant = (
+            $defaultOk -and
+            $legacyImportAbsent -and
+            $powershellCoreDisabled -and
+            $wslDisabled -and
+            $globalMismatches.Count -eq 0 -and
+            $themeEvidence.IsCompliant -and
+            $schemeEvidence.IsCompliant -and
+            $newTabMenuOk
+        )
     }
 }
 
@@ -158,17 +267,15 @@ function Set-WpcTerminalSettingsContract {
     param(
         [AllowNull()]$Settings,
         [Parameter(Mandatory)][string]$ExpectedDefaultProfile,
-        [Parameter(Mandatory)][string]$LegacyImportName
+        [Parameter(Mandatory)][string]$LegacyImportName,
+        [Parameter(Mandatory)]$Contract
     )
 
     if ($null -eq $Settings) {
         $Settings = [pscustomobject][ordered]@{
             '$schema' = 'https://aka.ms/terminal-profiles-schema'
-            defaultProfile = $ExpectedDefaultProfile
-            disabledProfileSources = @('Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')
             profiles = [pscustomobject][ordered]@{ list = @() }
         }
-        return $Settings
     }
 
     Set-WpcObjectProperty -Object $Settings -Name 'defaultProfile' -Value $ExpectedDefaultProfile
@@ -194,6 +301,16 @@ function Set-WpcTerminalSettingsContract {
         if ($disabled -notcontains $source) { $disabled += $source }
     }
     Set-WpcObjectProperty -Object $Settings -Name 'disabledProfileSources' -Value $disabled
+
+    foreach ($prop in $Contract.globals.PSObject.Properties) {
+        Set-WpcObjectProperty -Object $Settings -Name $prop.Name -Value $prop.Value
+    }
+
+    $existingThemes = if ($Settings.PSObject.Properties['themes']) { @($Settings.themes) } else { @() }
+    $existingSchemes = if ($Settings.PSObject.Properties['schemes']) { @($Settings.schemes) } else { @() }
+    Set-WpcObjectProperty -Object $Settings -Name 'themes' -Value (Merge-WpcNamedObjects -Existing $existingThemes -Managed @($Contract.themes))
+    Set-WpcObjectProperty -Object $Settings -Name 'schemes' -Value (Merge-WpcNamedObjects -Existing $existingSchemes -Managed @($Contract.schemes))
+    Set-WpcObjectProperty -Object $Settings -Name 'newTabMenu' -Value @($Contract.newTabMenu)
 
     return $Settings
 }
