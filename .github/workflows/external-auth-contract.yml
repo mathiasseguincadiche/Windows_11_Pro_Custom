@@ -91,7 +91,9 @@ jobs:
             'stdin, stdout et stderr restent attachés au terminal courant',
             'Ensure-AwsWindowsBrowserBridge',
             'wpc-open-windows-browser',
-            'cmd.exe /d /c start "" "$1"',
+            'command -v pwsh.exe',
+            '-CommandWithArgs',
+            'Start-Process -FilePath $args[0] -ErrorAction Stop',
             'Invoke-AwsSameDeviceLoginInline',
             'BROWSER=$browserBridge',
             "'aws','login','--profile'",
@@ -114,9 +116,14 @@ jobs:
           if ($redirections.Count -gt 0) { throw 'Inline AWS terminal helper must not redirect or merge native streams.' }
           if ($inline -match '\$output\s*=|Out-String|Tee-Object|Start-Process') { throw 'Inline AWS terminal helper must not capture or detach the native process.' }
 
-          if (-not $browserBridge.Contains('command -v cmd.exe')) { throw 'AWS browser bridge must preflight WSL/Windows interop.' }
+          if (-not $browserBridge.Contains('command -v pwsh.exe')) { throw 'AWS browser bridge must preflight Windows PowerShell 7 interop.' }
           if (-not $browserBridge.Contains('chmod 700')) { throw 'AWS browser bridge must be executable only by the owning Linux user.' }
-          if (-not $browserBridge.Contains('cmd.exe /d /c start "" "$1"')) { throw 'AWS browser bridge must launch the Windows default browser through cmd.exe start.' }
+          if (-not $browserBridge.Contains("exec pwsh.exe -NoLogo -NoProfile -NonInteractive -CommandWithArgs 'Start-Process -FilePath `$args[0] -ErrorAction Stop' `"`$1`"")) {
+            throw 'AWS browser bridge must pass the complete OAuth URL as one separate argument to Windows PowerShell ShellExecute.'
+          }
+          if ($browserBridge.Contains('cmd.exe /d /c start') -or $interactive.Contains('exec cmd.exe /d /c start')) {
+            throw 'AWS OAuth URLs must never pass through cmd.exe command parsing; ampersands would be treated as command separators.'
+          }
 
           foreach ($pair in @(
             @{ Name='AWS same-device login'; Text=$awsLogin },
@@ -150,6 +157,18 @@ jobs:
             'SecureEnoughForRequiredVerify'
           )) {
             if (-not $audit.Contains($needle)) { throw "non-secret audit contract missing: $needle" }
+          }
+
+      - name: Verify OAuth URL argument round-trip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://us-east-1.signin.aws.amazon.com/v1/authorize?response_type=code&client_id=arn%3Aaws%3Asignin%3A%3A%3Adevtools%2Fsame-device&state=round-trip-state&code_challenge_method=SHA-256&scope=openid&redirect_uri=http%3A%2F%2F127.0.0.1%3A42877%2Foauth%2Fcallback&code_challenge=round_trip_challenge'
+          $output = @(& pwsh.exe -NoLogo -NoProfile -NonInteractive -CommandWithArgs '$args[0]' $url)
+          if ($LASTEXITCODE -ne 0) { throw "PowerShell argument round-trip failed with exit code $LASTEXITCODE." }
+          $actual = (($output | ForEach-Object { [string]$_ }) -join "`n").Trim()
+          if ($actual -cne $url) {
+            throw "OAuth URL was altered during Windows PowerShell argument handoff.`nExpected: $url`nActual:   $actual"
           }
 
       - name: Reject AWS stderr as configuration data
