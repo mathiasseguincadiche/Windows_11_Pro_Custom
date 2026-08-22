@@ -134,10 +134,10 @@ function Invoke-WslInlineInteractive {
     Write-Host ''
     Write-Host ("[ACTION REQUISE] {0}" -f $Label) -ForegroundColor Magenta
     Write-Host 'La commande interactive s exécute directement dans cette fenêtre PowerShell.' -ForegroundColor Cyan
-    Write-Host 'Tu peux copier/coller ici. stdin, stdout et stderr restent attachés au terminal courant et ne sont pas capturés par le script.' -ForegroundColor DarkGray
+    Write-Host 'stdin, stdout et stderr restent attachés au terminal courant et ne sont pas capturés par le script.' -ForegroundColor DarkGray
 
-    # Deliberately no assignment, pipeline or 2>&1 here: the native WSL/AWS process
-    # must inherit the current console so interactive input and clipboard paste work.
+    # The native WSL process inherits the current console. Interactive AWS
+    # commands must never be piped, redirected or captured by PowerShell.
     & wsl.exe --distribution $Distribution --user $LinuxUser --exec @ArgumentList
     $code = [int]$LASTEXITCODE
     $global:LASTEXITCODE = 0
@@ -261,8 +261,8 @@ function Get-AwsConfigValue {
         [Parameter(Mandatory)][ValidateSet('region','login_session','sso_session','sso_start_url')][string]$Name
     )
     $probe = Invoke-WslSimple -ArgumentList @('aws','configure','get',$Name,'--profile',$Profile) -IgnoreExitCode
-    # Critical boundary: stderr is captured by Invoke-WslSimple, therefore Output is
-    # configuration data ONLY when AWS itself reports success.
+    # stderr is captured by Invoke-WslSimple. Output is configuration data only
+    # when AWS itself reports success.
     if ($probe.ExitCode -ne 0) { return '' }
     return $probe.Output.Trim()
 }
@@ -319,15 +319,57 @@ function Resolve-AwsRegion {
     }
 }
 
-function Invoke-AwsRemoteLoginInline {
+function Ensure-AwsWindowsBrowserBridge {
+    $interop = Invoke-WslSimple -ArgumentList @('sh','-lc','command -v cmd.exe >/dev/null 2>&1') -IgnoreExitCode
+    if ($interop.ExitCode -ne 0) {
+        throw 'Interop WSL vers Windows indisponible: cmd.exe est introuvable depuis Ubuntu.'
+    }
+
+    $bridgeProvision = @'
+set -eu
+install_dir="$HOME/.local/bin"
+bridge="$install_dir/wpc-open-windows-browser"
+mkdir -p "$install_dir"
+umask 077
+cat > "$bridge" <<'EOF'
+#!/bin/sh
+set -eu
+if [ "$#" -ne 1 ]; then
+    exit 64
+fi
+exec cmd.exe /d /c start "" "$1"
+EOF
+chmod 700 "$bridge"
+printf '%s' "$bridge"
+'@
+
+    $probe = Invoke-WslSimple -ArgumentList @('sh','-lc',$bridgeProvision)
+    $bridge = $probe.Output.Trim()
+    if ([string]::IsNullOrWhiteSpace($bridge) -or $bridge -notmatch '^/.+/wpc-open-windows-browser$') {
+        throw 'Impossible de déterminer le bridge navigateur Windows créé dans WSL.'
+    }
+    $executable = Invoke-WslSimple -ArgumentList @('test','-x',$bridge) -IgnoreExitCode
+    if ($executable.ExitCode -ne 0) {
+        throw "Bridge navigateur Windows non exécutable: $bridge"
+    }
+    return $bridge
+}
+
+function Invoke-AwsSameDeviceLoginInline {
     param([Parameter(Mandatory)][string]$Profile)
     if (-not (Test-AwsLoginSupported)) { throw 'aws login nécessite AWS CLI 2.32.0 minimum.' }
     $region = Resolve-AwsRegion -Profile $Profile
     if (-not (Test-AwsRegionName -Region $region)) { throw "Région AWS refusée avant lancement: '$region'." }
+    $browserBridge = Ensure-AwsWindowsBrowserBridge
 
-    Invoke-WslInlineInteractive -Label "AWS login --remote | profil $Profile" -ArgumentList @(
-        'env','AWS_PAGER=','AWS_CLI_AUTO_PROMPT=off',
-        'aws','login','--remote','--profile',$Profile,'--region',$region,'--no-cli-pager','--no-cli-auto-prompt'
+    Write-Host ''
+    Write-Host '[INFO] AWS va utiliser le flux same-device recommandé.' -ForegroundColor Cyan
+    Write-Host 'Le navigateur Windows doit s ouvrir automatiquement. Aucun code n est à copier/coller dans le terminal.' -ForegroundColor Green
+    Write-Host 'Si le navigateur ne s ouvre pas, utilise simplement l URL affichée par AWS dans ce même navigateur Windows.' -ForegroundColor DarkGray
+
+    Invoke-WslInlineInteractive -Label "AWS login | profil $Profile" -ArgumentList @(
+        'env',"BROWSER=$browserBridge",'AWS_PAGER=','AWS_CLI_AUTO_PROMPT=off',
+        'aws','login','--profile',$Profile,'--region',$region,'--no-cli-pager','--no-cli-auto-prompt'
     )
     Set-AwsCredentialPermissions
     return (Test-AwsProfile -Profile $Profile)
@@ -350,9 +392,9 @@ $existing
 
 Méthodes disponibles :
   1. Connexion AWS Console — RECOMMANDÉE pour un compte classique.
-     aws login --remote s exécute directement dans cette fenêtre PowerShell : URL, code et saisie au même endroit.
+     aws login ouvre automatiquement le navigateur Windows et récupère le retour OAuth via localhost. Aucun code à coller.
   2. IAM Identity Center / SSO.
-     La configuration et le device-code restent eux aussi dans cette fenêtre.
+     La configuration et le device-code restent dans cette fenêtre.
   3. Reconnecter un profil existant.
   4. Access Key / Secret Key — legacy, uniquement si elles t ont été fournies explicitement.
   0. Ne rien configurer maintenant.
@@ -365,7 +407,7 @@ function Read-AwsMethodChoice {
     while ($true) {
         Write-Host ''
         Write-Host 'Choisis la méthode AWS :' -ForegroundColor Cyan
-        Write-Host '  1. Connexion AWS Console (aws login --remote ici, dans ce terminal)'
+        Write-Host '  1. Connexion AWS Console (aws login + navigateur Windows automatique)'
         Write-Host '  2. IAM Identity Center / SSO'
         Write-Host '  3. Reconnecter un profil existant'
         Write-Host '  4. Access Key / Secret Key — legacy'
@@ -393,11 +435,11 @@ function Configure-Aws {
             '0' { Write-Host '[RETOUR] Configuration AWS quittée.' -ForegroundColor Yellow; return }
             '1' {
                 $profile = Read-AwsProfileName
-                if (Invoke-AwsRemoteLoginInline -Profile $profile) {
+                if (Invoke-AwsSameDeviceLoginInline -Profile $profile) {
                     Write-Host "[OK] Profil AWS '$profile' connecté et vérifié avec STS." -ForegroundColor Green
                     return
                 }
-                Write-Host '[ERREUR] STS ne valide pas la connexion. Vérifie le résultat affiché ci-dessus puis réessaie.' -ForegroundColor Red
+                Write-Host '[ERREUR] STS ne valide pas la connexion. Vérifie le résultat AWS affiché ci-dessus puis réessaie.' -ForegroundColor Red
                 Write-Host '[INFO] Pour un utilisateur IAM, la politique SignInLocalDevelopmentAccess peut être requise. Un compte root n en a pas besoin.' -ForegroundColor Yellow
             }
             '2' {
@@ -419,7 +461,7 @@ function Configure-Aws {
                 $profile = Read-AwsProfileFromList -Profiles $profiles -Prompt 'Profil AWS à reconnecter'
                 $mode = Get-AwsProfileAuthMode -Profile $profile
                 $ok = $false
-                if ($mode -eq 'Login') { $ok = Invoke-AwsRemoteLoginInline -Profile $profile }
+                if ($mode -eq 'Login') { $ok = Invoke-AwsSameDeviceLoginInline -Profile $profile }
                 elseif ($mode -eq 'SSO') { $ok = Invoke-AwsSsoLoginInline -Profile $profile }
                 elseif (Test-AwsProfile -Profile $profile) { $ok = $true }
                 else { Write-Host '[INFO] Ce profil n utilise ni login_session ni SSO. Utilise l option 4 seulement pour des clés IAM statiques.' -ForegroundColor Yellow; continue }
