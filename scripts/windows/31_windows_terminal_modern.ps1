@@ -69,7 +69,16 @@ function Read-TerminalSettings {
     try {
         return ConvertFrom-WpcTerminalSettingsText -Text $raw
     } catch {
-        throw "settings.json Windows Terminal invalide ou non analysable: $Path. $($_.Exception.Message)"
+        if ($Mode -ne 'Apply') {
+            throw "settings.json Windows Terminal invalide ou non analysable: $Path. $($_.Exception.Message)"
+        }
+
+        New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+        $invalidBackup = Join-Path $stateDir ("settings.invalid.{0}.json" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        Copy-Item -LiteralPath $Path -Destination $invalidBackup -Force
+        Write-Host "[AVERTISSEMENT] settings.json est invalide; copie de sécurité conservée: $invalidBackup" -ForegroundColor Yellow
+        Write-Host '[ACTION] Reconstruction d un settings.json propre à partir du contrat géré.' -ForegroundColor Cyan
+        return $null
     }
 }
 
@@ -342,8 +351,37 @@ function Set-TerminalSettings {
         -Contract (Read-SettingsContract)
     $text = ConvertTo-WpcTerminalSettingsText -Settings $settings
 
-    New-Item -ItemType Directory -Force -Path (Split-Path $Path -Parent) | Out-Null
-    [System.IO.File]::WriteAllText($Path, $text, [System.Text.UTF8Encoding]::new($false))
+    # Validate the exact payload before Windows Terminal can ever observe it.
+    $parsed = ConvertFrom-WpcTerminalSettingsText -Text $text
+    $evidence = Get-WpcTerminalSettingsEvidence `
+        -Settings $parsed `
+        -ExpectedDefaultProfile $psProfileGuid `
+        -LegacyImportName $actionsFileName `
+        -Contract (Read-SettingsContract)
+    if (-not $evidence.IsCompliant) {
+        throw 'Le settings.json généré ne satisfait pas le contrat Windows Terminal; écriture refusée.'
+    }
+
+    $parent = Split-Path $Path -Parent
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $tempPath = Join-Path $parent ("settings.wpc.{0}.{1}.tmp" -f $PID,[guid]::NewGuid().ToString('N'))
+    try {
+        [System.IO.File]::WriteAllText($tempPath, $text, [System.Text.UTF8Encoding]::new($false))
+        $roundTrip = Get-Content -Raw -LiteralPath $tempPath -Encoding UTF8
+        [void](ConvertFrom-WpcTerminalSettingsText -Text $roundTrip)
+
+        # Windows Terminal watches settings.json. Replace it atomically so it can
+        # never observe a truncated/partially-written JSON document.
+        if (Test-Path -LiteralPath $Path) {
+            [System.IO.File]::Replace($tempPath, $Path, $null, $true)
+        } else {
+            [System.IO.File]::Move($tempPath, $Path)
+        }
+    } finally {
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+    }
+
+    [void](Read-TerminalSettings -Path $Path)
 }
 
 function Set-PowerShellProfile {
@@ -430,7 +468,7 @@ if ((Show-Contract -Contract $contract) -eq 0) {
 }
 
 if (Test-Path -LiteralPath $contract.Targets.Settings) {
-    [void](Read-TerminalSettings -Path $contract.Targets.Settings)
+    if ($Mode -ne 'Apply') { [void](Read-TerminalSettings -Path $contract.Targets.Settings) }
 }
 Save-InitialState -Targets $contract.Targets
 
@@ -454,4 +492,4 @@ Set-WpcDefaultTerminalApplication
 
 $verified = Get-Contract
 [void](Show-Contract -Contract $verified -FailOnError)
-Write-Host '[FAIT] Windows Terminal DevOps moderne configuré: profils normal/Admin/Ubuntu, thème Mica, actions, Ctrl+T, renommage et terminal système par défaut.' -ForegroundColor Green
+Write-Host '[FAIT] Windows Terminal DevOps moderne configuré: profils normal/Admin/Ubuntu, fallback emoji, UTF-8, thème Mica, actions, Ctrl+T, renommage et terminal système par défaut.' -ForegroundColor Green

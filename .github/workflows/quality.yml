@@ -233,9 +233,9 @@ jobs:
           test ! -e scripts/windows/31_wezterm.ps1
 
           jq -e '.profiles | length == 3' "$profiles" >/dev/null
-          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font" and .elevate == false and .suppressApplicationTitle == true and .colorScheme == "WPC DevOps")' "$profiles" >/dev/null
-          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps (Admin)") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font" and .elevate == true and .suppressApplicationTitle == true and .colorScheme == "WPC DevOps Admin")' "$profiles" >/dev/null
-          jq -e '.profiles[] | select(.name == "Ubuntu - DevOps") | (.commandline == "wsl.exe -d \"__WPC_DISTRIBUTION__\"" and .startingDirectory == "~" and .font.face == "JetBrainsMono Nerd Font" and .elevate == false and .suppressApplicationTitle == true and .colorScheme == "WPC Ubuntu")' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font, Segoe UI Emoji" and .font.builtinGlyphs == true and .font.colorGlyphs == true and .elevate == false and .suppressApplicationTitle == true and .colorScheme == "WPC DevOps")' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "PowerShell 7 - DevOps (Admin)") | (.commandline == "pwsh.exe -NoLogo" and .startingDirectory == "%USERPROFILE%" and .font.face == "JetBrainsMono Nerd Font, Segoe UI Emoji" and .font.builtinGlyphs == true and .font.colorGlyphs == true and .elevate == true and .suppressApplicationTitle == true and .colorScheme == "WPC DevOps Admin")' "$profiles" >/dev/null
+          jq -e '.profiles[] | select(.name == "Ubuntu - DevOps") | (.commandline == "wsl.exe -d \"__WPC_DISTRIBUTION__\"" and .startingDirectory == "~" and .font.face == "JetBrainsMono Nerd Font, Segoe UI Emoji" and .font.builtinGlyphs == true and .font.colorGlyphs == true and .elevate == false and .suppressApplicationTitle == true and .colorScheme == "WPC Ubuntu")' "$profiles" >/dev/null
 
           jq -e '.actions | length == 7' "$actions" >/dev/null
           jq -e '.actions[] | select(.keys == "ctrl+t") | (.command.action == "newTab" and .command.profile == "PowerShell 7 - DevOps")' "$actions" >/dev/null

@@ -6,6 +6,7 @@ on:
       - 'config/windows-terminal/**'
       - 'scripts/core/windows-terminal-settings.psm1'
       - 'scripts/core/windows-terminal-system.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
       - 'scripts/windows/31_windows_terminal.ps1'
       - 'scripts/windows/31_windows_terminal_modern.ps1'
       - '.github/workflows/windows-terminal-fragment-contract.yml'
@@ -15,6 +16,7 @@ on:
       - 'config/windows-terminal/**'
       - 'scripts/core/windows-terminal-settings.psm1'
       - 'scripts/core/windows-terminal-system.psm1'
+      - 'scripts/core/powershell-runtime.psm1'
       - 'scripts/windows/31_windows_terminal.ps1'
       - 'scripts/windows/31_windows_terminal_modern.ps1'
       - '.github/workflows/windows-terminal-fragment-contract.yml'
@@ -41,7 +43,7 @@ jobs:
               tomllib.load(fh)
           PY
 
-      - name: Enforce modern terminal wiring
+      - name: Enforce modern terminal wiring and safe settings writes
         shell: bash
         run: |
           set -euo pipefail
@@ -49,6 +51,7 @@ jobs:
           script='scripts/windows/31_windows_terminal_modern.ps1'
           settings_module='scripts/core/windows-terminal-settings.psm1'
           system_module='scripts/core/windows-terminal-system.psm1'
+          runtime_module='scripts/core/powershell-runtime.psm1'
 
           grep -Fq '31_windows_terminal_modern.ps1' "$entry"
           grep -Fq 'settings.contract.json' "$script"
@@ -61,6 +64,11 @@ jobs:
           grep -Fq 'Restore-WpcDefaultTerminalRegistryState' "$script"
           grep -Fq 'Set-PSReadLineOption -PredictionViewStyle ListView' "$script"
           grep -Fq '[Console]::OutputEncoding = $utf8' "$script"
+          grep -Fq '[System.IO.File]::Replace($tempPath, $Path, $null, $true)' "$script"
+          grep -Fq 'settings.invalid.' "$script"
+          grep -Fq 'ConvertFrom-WpcTerminalSettingsText -Text $roundTrip' "$script"
+          grep -Fq 'Initialize-WpcUtf8Console' "$runtime_module"
+          grep -Fq '$global:OutputEncoding = $utf8' "$runtime_module"
           grep -Fq 'HKCU:\Console\%%Startup' "$system_module"
           grep -Fq '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}' "$system_module"
           grep -Fq '{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}' "$system_module"
@@ -77,6 +85,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           foreach ($path in @(
+            './scripts/core/powershell-runtime.psm1',
             './scripts/core/windows-terminal-settings.psm1',
             './scripts/core/windows-terminal-system.psm1',
             './scripts/windows/31_windows_terminal.ps1',
@@ -93,6 +102,21 @@ jobs:
               throw "$path parse errors: $($errors.Message -join '; ')"
             }
           }
+
+      - name: Test UTF-8 no-profile runtime and Unicode round-trip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./scripts/core/powershell-runtime.psm1 -Force
+          $fact = Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -PassThru
+          if ($fact.NativeOutputEncoding -ne 'utf-8') { throw "Native OutputEncoding is $($fact.NativeOutputEncoding), expected utf-8." }
+          if ([Console]::OutputEncoding.WebName -ne 'utf-8') { throw "Console OutputEncoding is $([Console]::OutputEncoding.WebName)." }
+
+          $expected = 'UTF-8: é è à ç œ — ✅ ⚠️ ❌ 🚀'
+          $path = Join-Path $env:RUNNER_TEMP 'wpc-unicode-roundtrip.txt'
+          [IO.File]::WriteAllText($path, $expected, [Text.UTF8Encoding]::new($false))
+          $actual = [IO.File]::ReadAllText($path, [Text.UTF8Encoding]::new($false))
+          if ($actual -cne $expected) { throw "Unicode round-trip mismatch: '$actual'" }
 
       - name: Test settings migration and idempotence
         shell: pwsh
@@ -145,29 +169,17 @@ jobs:
           if (-not $evidence.IsCompliant) {
             throw "Migrated settings are not compliant: $($evidence | ConvertTo-Json -Depth 12 -Compress)"
           }
-          if ($evidence.Imports -contains $legacy) {
-            throw 'Legacy action import survived migration.'
-          }
-          if ($evidence.Imports -notcontains 'keep-user-import.json') {
-            throw 'An unrelated user import was removed.'
-          }
+          if ($evidence.Imports -contains $legacy) { throw 'Legacy action import survived migration.' }
+          if ($evidence.Imports -notcontains 'keep-user-import.json') { throw 'An unrelated user import was removed.' }
           if (-not $updated.profiles.defaults -or $updated.profiles.defaults.antialiasingMode -ne 'grayscale') {
             throw 'Existing user profile defaults were not preserved.'
           }
-          if (@($updated.schemes | Where-Object name -eq 'Keep User Scheme').Count -ne 1) {
-            throw 'Existing user color scheme was removed.'
-          }
-          if (@($updated.themes | Where-Object name -eq 'Keep User Theme').Count -ne 1) {
-            throw 'Existing user theme was removed.'
-          }
-          if ($updated.'experimental.detectURLs' -ne $false) {
-            throw 'Unowned user root setting was modified.'
-          }
+          if (@($updated.schemes | Where-Object name -eq 'Keep User Scheme').Count -ne 1) { throw 'Existing user color scheme was removed.' }
+          if (@($updated.themes | Where-Object name -eq 'Keep User Theme').Count -ne 1) { throw 'Existing user theme was removed.' }
+          if ($updated.'experimental.detectURLs' -ne $false) { throw 'Unowned user root setting was modified.' }
 
           foreach ($source in @('Windows.Terminal.Azure', 'Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')) {
-            if ($evidence.DisabledProfileSources -notcontains $source) {
-              throw "Expected disabled profile source missing after merge: $source"
-            }
+            if ($evidence.DisabledProfileSources -notcontains $source) { throw "Expected disabled profile source missing after merge: $source" }
           }
 
           $once = ConvertTo-WpcTerminalSettingsText -Settings $updated
@@ -178,9 +190,7 @@ jobs:
             -LegacyImportName $legacy `
             -Contract $contract
           $twice = ConvertTo-WpcTerminalSettingsText -Settings $twiceObject
-          if ($once -ne $twice) {
-            throw 'Windows Terminal settings transformation must be idempotent.'
-          }
+          if ($once -ne $twice) { throw 'Windows Terminal settings transformation must be idempotent.' }
 
           $fresh = Set-WpcTerminalSettingsContract `
             -Settings $null `
@@ -192,11 +202,9 @@ jobs:
             -ExpectedDefaultProfile $expected `
             -LegacyImportName $legacy `
             -Contract $contract
-          if (-not $freshEvidence.IsCompliant) {
-            throw 'Fresh settings contract is not compliant.'
-          }
+          if (-not $freshEvidence.IsCompliant) { throw 'Fresh settings contract is not compliant.' }
 
-      - name: Validate profile action and theme payloads
+      - name: Validate profile action theme and emoji payloads
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -216,7 +224,9 @@ jobs:
           if ($ubuntu.startingDirectory -ne '~') { throw 'Ubuntu profile must start in Linux home.' }
           foreach ($profile in @($normal,$admin,$ubuntu)) {
             if ($profile.suppressApplicationTitle -ne $true) { throw "Profile must preserve renamed tab titles: $($profile.name)" }
-            if ($profile.font.face -ne 'JetBrainsMono Nerd Font') { throw "Managed Nerd Font missing: $($profile.name)" }
+            if ($profile.font.face -ne 'JetBrainsMono Nerd Font, Segoe UI Emoji') { throw "Managed emoji font fallback missing: $($profile.name)" }
+            if ($profile.font.builtinGlyphs -ne $true) { throw "builtinGlyphs must be enabled: $($profile.name)" }
+            if ($profile.font.colorGlyphs -ne $true) { throw "colorGlyphs must be enabled: $($profile.name)" }
           }
 
           $keys = @($actions.actions | ForEach-Object { [string]$_.keys })
@@ -225,13 +235,9 @@ jobs:
           }
 
           $ctrlT = @($actions.actions | Where-Object keys -eq 'ctrl+t')[0]
-          if ($ctrlT.command.action -ne 'newTab' -or $ctrlT.command.profile -ne 'PowerShell 7 - DevOps') {
-            throw 'Ctrl+T must open a new PowerShell DevOps tab.'
-          }
+          if ($ctrlT.command.action -ne 'newTab' -or $ctrlT.command.profile -ne 'PowerShell 7 - DevOps') { throw 'Ctrl+T must open a new PowerShell DevOps tab.' }
           $rename = @($actions.actions | Where-Object keys -eq 'ctrl+shift+r')[0]
-          if ([string]$rename.command -ne 'openTabRenamer') {
-            throw 'Ctrl+Shift+R must open the native Windows Terminal tab renamer.'
-          }
+          if ([string]$rename.command -ne 'openTabRenamer') { throw 'Ctrl+Shift+R must open the native Windows Terminal tab renamer.' }
 
           if ($settings.globals.theme -ne 'WPC DevOps') { throw 'Managed WPC DevOps theme is not selected.' }
           if ($settings.globals.launchMode -ne 'maximized') { throw 'Windows Terminal must launch maximized.' }
@@ -252,11 +258,12 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
 
-      - name: Validate Windows-specific default-terminal contract
+      - name: Validate Windows-specific default-terminal and atomic-write contract
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $systemModule = Get-Content -Raw .\scripts\core\windows-terminal-system.psm1
+          $terminalScript = Get-Content -Raw .\scripts\windows\31_windows_terminal_modern.ps1
           foreach ($needle in @(
             'HKCU:\Console\%%Startup',
             '{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}',
@@ -267,19 +274,21 @@ jobs:
           )) {
             if (-not $systemModule.Contains($needle)) { throw "Windows default-terminal contract missing: $needle" }
           }
+          foreach ($needle in @(
+            '[System.IO.File]::Replace($tempPath, $Path, $null, $true)',
+            'settings.invalid.',
+            'ConvertFrom-WpcTerminalSettingsText -Text $roundTrip'
+          )) {
+            if (-not $terminalScript.Contains($needle)) { throw "Atomic settings repair contract missing: $needle" }
+          }
 
           foreach ($path in @(
+            '.\scripts\core\powershell-runtime.psm1',
             '.\scripts\core\windows-terminal-system.psm1',
             '.\scripts\windows\31_windows_terminal_modern.ps1'
           )) {
             $tokens = $null
             $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile(
-              (Resolve-Path $path),
-              [ref]$tokens,
-              [ref]$errors
-            )
-            if (@($errors).Count -gt 0) {
-              throw "$path parse errors: $($errors.Message -join '; ')"
-            }
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path),[ref]$tokens,[ref]$errors)
+            if (@($errors).Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
           }
