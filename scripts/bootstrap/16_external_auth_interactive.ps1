@@ -11,8 +11,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$repoRoot = (Resolve-Path "$PSScriptRoot\..\..").Path
+$runtimeModule = Join-Path $repoRoot 'scripts\core\powershell-runtime.psm1'
 $auditScript = Join-Path $PSScriptRoot '15_external_auth.ps1'
-if (-not (Test-Path -LiteralPath $auditScript)) { throw "Audit des connexions absent: $auditScript" }
+foreach ($required in @($runtimeModule,$auditScript)) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Dépendance absente: $required" }
+}
+Import-Module $runtimeModule -Force
+[void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe introuvable.' }
 
 function Write-Section {
@@ -27,13 +33,13 @@ function Write-Section {
 function Invoke-WslSimple {
     param([Parameter(Mandatory)][string[]]$ArgumentList,[switch]$IgnoreExitCode)
     $output = @(& wsl.exe --distribution $Distribution --user $LinuxUser --exec @ArgumentList 2>&1)
-    $code = $LASTEXITCODE
+    $code = [int]$LASTEXITCODE
     $global:LASTEXITCODE = 0
-    if ($code -ne 0 -and -not $IgnoreExitCode) { throw "Commande WSL échouée (code=$code): $($ArgumentList -join ' ')" }
-    return [pscustomobject]@{
-        ExitCode = [int]$code
-        Output = (($output | ForEach-Object { ([string]$_) -replace "`0", '' }) -join "`n").Trim()
+    $text = (($output | ForEach-Object { ([string]$_) -replace "`0", '' }) -join "`n").Trim()
+    if ($code -ne 0 -and -not $IgnoreExitCode) {
+        throw "Commande WSL échouée (code=$code): $($ArgumentList -join ' ')"
     }
+    return [pscustomobject]@{ ExitCode=$code; Output=$text }
 }
 
 function Read-YesNoLoop {
@@ -87,12 +93,14 @@ function Read-AwsProfileName {
 
 if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $probe = @(& wsl.exe --distribution $Distribution --exec id -un 2>&1)
-    $code = $LASTEXITCODE
+    $code = [int]$LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($code -ne 0) { throw "Impossible de déterminer l utilisateur WSL par défaut pour $Distribution." }
     $LinuxUser = (($probe | ForEach-Object { ([string]$_) -replace "`0", '' }) -join '').Trim()
 }
-if ($LinuxUser -eq 'root' -or $LinuxUser -notmatch '^[a-z_][a-z0-9_-]{0,31}$') { throw "Utilisateur WSL normal invalide: $LinuxUser" }
+if ($LinuxUser -eq 'root' -or $LinuxUser -notmatch '^[a-z_][a-z0-9_-]{0,31}$') {
+    throw "Utilisateur WSL normal invalide: $LinuxUser"
+}
 
 function Invoke-WslTerminalInteractive {
     param(
@@ -111,7 +119,7 @@ function Invoke-WslTerminalInteractive {
     Write-Host '[ACTION REQUISE] Un nouvel onglet Windows Terminal va s ouvrir.' -ForegroundColor Magenta
     Write-Host 'Termine entièrement la commande dans cet onglet. Les secrets restent dans ce terminal WSL dédié.' -ForegroundColor DarkGray
     & $wt.Source @wtArgs
-    $launchCode = $LASTEXITCODE
+    $launchCode = [int]$LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($launchCode -ne 0) { throw "Impossible d ouvrir l onglet Windows Terminal (code=$launchCode)." }
     [void](Read-Host 'Quand la commande dans le nouvel onglet est terminée, appuie sur Entrée ici')
@@ -176,8 +184,10 @@ function Resolve-GitHubPlaintextFallback {
 
 function Configure-GitIdentity {
     Write-Section -Title 'Git — identité de commit'
-    $name = (Invoke-WslSimple -ArgumentList @('git','config','--global','--get','user.name') -IgnoreExitCode).Output
-    $email = (Invoke-WslSimple -ArgumentList @('git','config','--global','--get','user.email') -IgnoreExitCode).Output
+    $nameProbe = Invoke-WslSimple -ArgumentList @('git','config','--global','--get','user.name') -IgnoreExitCode
+    $emailProbe = Invoke-WslSimple -ArgumentList @('git','config','--global','--get','user.email') -IgnoreExitCode
+    $name = if ($nameProbe.ExitCode -eq 0) { $nameProbe.Output } else { '' }
+    $email = if ($emailProbe.ExitCode -eq 0) { $emailProbe.Output } else { '' }
     if ($name -and $email) {
         Write-Host '[DEJA OK] Une identité Git globale existe déjà.' -ForegroundColor Green
         if (-not (Read-YesNoLoop -Prompt 'Veux-tu la modifier')) { return }
@@ -224,6 +234,18 @@ function Get-AwsProfiles {
     return @($probe.Output -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z0-9_.@+-]+$' } | Select-Object -Unique)
 }
 
+function Get-AwsConfigValue {
+    param(
+        [Parameter(Mandatory)][string]$Profile,
+        [Parameter(Mandatory)][ValidateSet('region','login_session','sso_session','sso_start_url')][string]$Name
+    )
+    $probe = Invoke-WslSimple -ArgumentList @('aws','configure','get',$Name,'--profile',$Profile) -IgnoreExitCode
+    # Critical boundary: stderr is captured by Invoke-WslSimple, therefore Output is
+    # configuration data ONLY when AWS itself reports success.
+    if ($probe.ExitCode -ne 0) { return '' }
+    return $probe.Output.Trim()
+}
+
 function Test-AwsProfile {
     param([Parameter(Mandatory)][string]$Profile)
     $probe = Invoke-WslSimple -ArgumentList @(
@@ -242,28 +264,36 @@ function Test-AwsLoginSupported {
 
 function Get-AwsProfileAuthMode {
     param([Parameter(Mandatory)][string]$Profile)
-    $loginSession = (Invoke-WslSimple -ArgumentList @('aws','configure','get','login_session','--profile',$Profile) -IgnoreExitCode).Output
-    if (-not [string]::IsNullOrWhiteSpace($loginSession)) { return 'Login' }
-    $ssoSession = (Invoke-WslSimple -ArgumentList @('aws','configure','get','sso_session','--profile',$Profile) -IgnoreExitCode).Output
-    $ssoStartUrl = (Invoke-WslSimple -ArgumentList @('aws','configure','get','sso_start_url','--profile',$Profile) -IgnoreExitCode).Output
+    if (-not [string]::IsNullOrWhiteSpace((Get-AwsConfigValue -Profile $Profile -Name 'login_session'))) { return 'Login' }
+    $ssoSession = Get-AwsConfigValue -Profile $Profile -Name 'sso_session'
+    $ssoStartUrl = Get-AwsConfigValue -Profile $Profile -Name 'sso_start_url'
     if (-not [string]::IsNullOrWhiteSpace($ssoSession) -or -not [string]::IsNullOrWhiteSpace($ssoStartUrl)) { return 'SSO' }
     return 'Other'
 }
 
 function Set-AwsCredentialPermissions {
-    [void](Invoke-WslSimple -ArgumentList @('sh','-lc','if [ -d "$HOME/.aws" ]; then find "$HOME/.aws" -type d -exec chmod 700 {} +; find "$HOME/.aws" -type f -exec chmod 600 {} +; fi') -IgnoreExitCode)
+    [void](Invoke-WslSimple -ArgumentList @(
+        'sh','-lc',
+        'if [ -d "$HOME/.aws" ]; then find "$HOME/.aws" -type d -exec chmod 700 {} +; find "$HOME/.aws" -type f -exec chmod 600 {} +; fi'
+    ) -IgnoreExitCode)
+}
+
+function Test-AwsRegionName {
+    param([AllowEmptyString()][string]$Region)
+    return (-not [string]::IsNullOrWhiteSpace($Region) -and $Region -match '^[a-z]{2}(-gov)?-[a-z0-9-]+-\d+$')
 }
 
 function Resolve-AwsRegion {
     param([Parameter(Mandatory)][string]$Profile)
-    $configured = (Invoke-WslSimple -ArgumentList @('aws','configure','get','region','--profile',$Profile) -IgnoreExitCode).Output
-    if (-not [string]::IsNullOrWhiteSpace($configured)) { return $configured }
-    Write-Host '[INFO] Aucune région AWS n est encore définie pour ce profil.' -ForegroundColor Cyan
+    $configured = Get-AwsConfigValue -Profile $Profile -Name 'region'
+    if (Test-AwsRegionName -Region $configured) { return $configured }
+
+    Write-Host '[INFO] Aucune région AWS valide n est encore définie pour ce profil.' -ForegroundColor Cyan
     Write-Host 'La valeur recommandée par défaut est us-east-1. Elle pourra être changée plus tard.' -ForegroundColor DarkGray
     if (Read-YesNoLoop -Prompt 'Utiliser us-east-1 pour ce profil') { return 'us-east-1' }
     while ($true) {
         $region = (Read-Host 'Région AWS (exemple: eu-west-3)').Trim()
-        if ($region -match '^[a-z]{2}(-gov)?-[a-z0-9-]+-\d+$') { return $region }
+        if (Test-AwsRegionName -Region $region) { return $region }
         Write-Host '[INFO] Région AWS invalide.' -ForegroundColor Yellow
     }
 }
@@ -272,6 +302,8 @@ function Invoke-AwsRemoteLoginTerminal {
     param([Parameter(Mandatory)][string]$Profile)
     if (-not (Test-AwsLoginSupported)) { throw 'aws login nécessite AWS CLI 2.32.0 minimum.' }
     $region = Resolve-AwsRegion -Profile $Profile
+    if (-not (Test-AwsRegionName -Region $region)) { throw "Région AWS refusée avant lancement: '$region'." }
+
     Invoke-WslTerminalInteractive -Title "AWS login - $Profile" -ArgumentList @(
         'env','AWS_PAGER=','AWS_CLI_AUTO_PROMPT=off',
         'aws','login','--remote','--profile',$Profile,'--region',$region,'--no-cli-pager','--no-cli-auto-prompt'
