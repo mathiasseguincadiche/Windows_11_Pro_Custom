@@ -22,9 +22,10 @@ function Assert-ManagedArrays {
 
     foreach ($name in @('themes','schemes','newTabMenu','disabledProfileSources')) {
         $prop = $Settings.PSObject.Properties[$name]
-        if ($null -eq $prop) { throw "$Context: propriété '$name' absente." }
+        if ($null -eq $prop) { throw "${Context}: propriété '$name' absente." }
         if ($prop.Value -isnot [System.Array]) {
-            throw "$Context: '$name' doit être System.Array, type observé=$($prop.Value.GetType().FullName)."
+            $typeName = if ($null -eq $prop.Value) { '<null>' } else { $prop.Value.GetType().FullName }
+            throw "${Context}: '$name' doit être System.Array, type observé=$typeName."
         }
     }
 }
@@ -37,13 +38,13 @@ function Assert-SerializedArrayShape {
 
     $shape = Get-WpcTerminalSettingsJsonShapeEvidence -Text $Text
     if (-not $shape.IsCompliant) {
-        throw "$Context: forme JSON invalide: $($shape.Mismatches -join ', ')."
+        throw "${Context}: forme JSON invalide: $($shape.Mismatches -join ', ')."
     }
     if ($Text -notmatch '"themes"\s*:\s*\[') {
-        throw "$Context: le JSON doit contenir 'themes' sous forme de tableau."
+        throw "${Context}: le JSON doit contenir 'themes' sous forme de tableau."
     }
     if ($Text -match '"themes"\s*:\s*\{') {
-        throw "$Context: la forme scalaire 'themes: { ... }' est interdite."
+        throw "${Context}: la forme scalaire 'themes: { ... }' est interdite."
     }
 }
 
@@ -144,7 +145,8 @@ $singleImport = Set-WpcTerminalSettingsContract `
 $singleImportText = ConvertTo-WpcTerminalSettingsText -Settings $singleImport
 $singleImportParsed = ConvertFrom-WpcTerminalSettingsText -Text $singleImportText
 if ($singleImportParsed.import -isnot [System.Array]) {
-    throw "single-import: import doit rester un tableau JSON, type=$($singleImportParsed.import.GetType().FullName)."
+    $importType = if ($null -eq $singleImportParsed.import) { '<null>' } else { $singleImportParsed.import.GetType().FullName }
+    throw "single-import: import doit rester un tableau JSON, type=$importType."
 }
 if (@($singleImportParsed.import).Count -ne 1 -or [string]$singleImportParsed.import[0] -ne 'keep-user-import.json') {
     throw 'single-import: la valeur utilisateur a été perdue ou modifiée.'
