@@ -73,8 +73,9 @@ jobs:
           $dedicated = Get-FunctionText 'Invoke-WslTerminalInteractive'
           $inlineAst = Get-FunctionAst 'Invoke-WslInlineInteractive'
           $inline = $inlineAst.Extent.Text
+          $browserBridge = Get-FunctionText 'Ensure-AwsWindowsBrowserBridge'
           $github = Get-FunctionText 'Configure-GitHub'
-          $awsRemote = Get-FunctionText 'Invoke-AwsRemoteLoginInline'
+          $awsLogin = Get-FunctionText 'Invoke-AwsSameDeviceLoginInline'
           $awsSso = Get-FunctionText 'Invoke-AwsSsoLoginInline'
           $awsConfigure = Get-FunctionText 'Configure-Aws'
 
@@ -88,8 +89,12 @@ jobs:
             'Invoke-WslInlineInteractive',
             '& wsl.exe --distribution $Distribution --user $LinuxUser --exec @ArgumentList',
             'stdin, stdout et stderr restent attachés au terminal courant',
-            'Invoke-AwsRemoteLoginInline',
-            "'aws','login','--remote'",
+            'Ensure-AwsWindowsBrowserBridge',
+            'wpc-open-windows-browser',
+            'cmd.exe /d /c start "" "$1"',
+            'Invoke-AwsSameDeviceLoginInline',
+            'BROWSER=$browserBridge',
+            "'aws','login','--profile'",
             "'--region'",
             "'--no-cli-auto-prompt'",
             'Invoke-AwsSsoLoginInline',
@@ -109,22 +114,32 @@ jobs:
           if ($redirections.Count -gt 0) { throw 'Inline AWS terminal helper must not redirect or merge native streams.' }
           if ($inline -match '\$output\s*=|Out-String|Tee-Object|Start-Process') { throw 'Inline AWS terminal helper must not capture or detach the native process.' }
 
+          if (-not $browserBridge.Contains('command -v cmd.exe')) { throw 'AWS browser bridge must preflight WSL/Windows interop.' }
+          if (-not $browserBridge.Contains('chmod 700')) { throw 'AWS browser bridge must be executable only by the owning Linux user.' }
+          if (-not $browserBridge.Contains('cmd.exe /d /c start "" "$1"')) { throw 'AWS browser bridge must launch the Windows default browser through cmd.exe start.' }
+
           foreach ($pair in @(
-            @{ Name='AWS remote login'; Text=$awsRemote },
+            @{ Name='AWS same-device login'; Text=$awsLogin },
             @{ Name='AWS SSO login'; Text=$awsSso }
           )) {
             if (-not $pair.Text.Contains('Invoke-WslInlineInteractive')) { throw "$($pair.Name) must run inline in the current terminal." }
             if ($pair.Text.Contains('Invoke-WslTerminalInteractive')) { throw "$($pair.Name) must never open a second terminal." }
           }
 
+          if (-not $awsLogin.Contains('Ensure-AwsWindowsBrowserBridge')) { throw 'AWS same-device login must provision the Windows browser bridge.' }
+          if (-not $awsLogin.Contains('"BROWSER=$browserBridge"')) { throw 'AWS same-device login must pass the browser bridge through BROWSER.' }
+          if (-not $awsLogin.Contains("'aws','login','--profile'")) { throw 'AWS same-device login command missing.' }
+          if ($awsLogin.Contains("'--remote'")) { throw 'AWS same-device login must never use --remote.' }
+          if ($interactive.Contains("'aws','login','--remote'")) { throw 'Cross-device aws login --remote is forbidden in this workstation flow.' }
+
           if ($awsConfigure.Contains('Invoke-WslTerminalInteractive')) { throw 'All AWS interactive flows must remain in the current terminal.' }
           if (-not $awsConfigure.Contains("Invoke-WslInlineInteractive -Label 'AWS SSO configuration'")) { throw 'AWS SSO configuration must run inline.' }
           if (-not $awsConfigure.Contains('Invoke-WslInlineInteractive -Label "AWS configure | profil $profile"')) { throw 'Legacy AWS configure must run inline.' }
           if ($awsConfigure.Contains('nouvel onglet')) { throw 'AWS UX must not instruct the user to switch to another terminal.' }
 
-          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','login','--remote'") { throw 'aws login --remote must never run through the captured WSL helper.' }
-          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','configure','sso'") { throw 'interactive aws configure sso must never run through the captured WSL helper.' }
-          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'gh','auth','login'") { throw 'interactive gh auth login must run in a dedicated terminal.' }
+          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','login','--profile'") { throw 'Interactive aws login must never run through the captured WSL helper.' }
+          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','configure','sso'") { throw 'Interactive aws configure sso must never run through the captured WSL helper.' }
+          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'gh','auth','login'") { throw 'Interactive gh auth login must run in a dedicated terminal.' }
 
           foreach ($needle in @(
             'SecretMaterialRecorded = $false',

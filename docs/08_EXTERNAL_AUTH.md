@@ -10,6 +10,7 @@ Cette phase est séparée de la convergence système de la workstation. L'absenc
 - vérifier `gh auth status` ;
 - vérifier les profils AWS avec `aws sts get-caller-identity` ;
 - exécuter AWS CLI de manière interactive directement dans le terminal PowerShell courant ;
+- ouvrir le navigateur Windows par un bridge WSL non secret pour le flux AWS same-device ;
 - ouvrir un terminal WSL dédié uniquement lorsqu'une autre frontière interactive est volontairement conservée, notamment pour GitHub CLI ;
 - revalider l'état après l'action utilisateur.
 
@@ -25,24 +26,18 @@ Le dépôt ne doit jamais :
 
 Les commandes non interactives peuvent être exécutées par un wrapper qui capture leur sortie afin de contrôler factuellement le code retour et le résultat.
 
-Une commande AWS interactive suit désormais une règle différente : **aucune capture, aucune redirection, aucune seconde fenêtre**.
+Une commande AWS interactive suit une règle différente : **aucune capture, aucune redirection, aucune seconde fenêtre AWS**.
 
 ```text
 Windows Terminal
 └── PowerShell 7 courant
     └── wsl.exe --distribution Ubuntu --user <user> --exec ...
-        └── AWS CLI interactif
+        └── AWS CLI
 ```
 
-Le processus AWS hérite directement de `stdin`, `stdout` et `stderr` de la fenêtre PowerShell. Le helper interactif AWS n'utilise ni affectation de sortie, ni pipeline, ni `2>&1`. Cela permet de conserver dans une seule fenêtre :
+Le processus AWS hérite directement de `stdin`, `stdout` et `stderr` de la fenêtre PowerShell. Le helper interactif AWS n'utilise ni affectation de sortie, ni pipeline, ni redirection de flux.
 
-1. les informations affichées par AWS CLI ;
-2. l'URL à ouvrir dans le navigateur ;
-3. le code d'autorisation affiché par le navigateur ;
-4. le collage du code dans le terminal ;
-5. le résultat final de la commande.
-
-Le comportement précédent ouvrait un second onglet Windows Terminal puis demandait de revenir dans la fenêtre principale. Cette séparation n'est plus utilisée pour AWS.
+Pour la connexion AWS Console classique, le flux est encore plus simple : il ne dépend plus du clavier Linux. `aws login` utilise l'authentification **same-device** et le navigateur Windows renvoie automatiquement le callback OAuth à AWS CLI via `localhost`.
 
 GitHub CLI conserve pour l'instant sa frontière WSL dédiée :
 
@@ -52,7 +47,7 @@ PowerShell 7 courant
     └── gh auth login
 ```
 
-Les deux comportements sont donc volontairement distincts.
+Les deux comportements sont volontairement distincts.
 
 ## Git
 
@@ -109,26 +104,54 @@ Un credential store réellement sécurisé reste préférable et le mode strict 
 
 AWS CLI 2.32.0 minimum est requis pour `aws login`.
 
-Le centre de contrôle exécute directement dans **la fenêtre PowerShell courante** :
+### Pourquoi `--remote` n'est plus utilisé
+
+AWS distingue deux flux :
+
+- `aws login` : **same-device**, prévu lorsque le navigateur et AWS CLI sont sur la même machine ;
+- `aws login --remote` : **cross-device**, prévu pour un hôte réellement distant ou sans navigateur.
+
+Sur cette workstation, Windows et WSL2 sont deux environnements de la **même machine** et un navigateur Windows est disponible. Le flux same-device est donc le contrat correct.
+
+Le flux cross-device a en plus montré une incompatibilité physique dans la chaîne PowerShell → `wsl.exe` → AWS CLI : la lecture interactive du code pouvait revenir vide. AWS CLI tentait alors de décoder une valeur absente et terminait avec l'erreur `argument should be a bytes-like object or ASCII string, not 'NoneType'`.
+
+Le dépôt interdit donc désormais `aws login --remote` pour le parcours compte classique.
+
+### Flux retenu
+
+Le centre de contrôle exécute dans la fenêtre PowerShell courante :
 
 ```bash
-aws login --remote --profile <profil> --region <region>
+aws login --profile <profil> --region <region>
 ```
 
 Le profil `default` est proposé explicitement. Si aucune région n'est configurée, `us-east-1` est proposée comme valeur initiale.
 
+Avant la commande, le dépôt prépare un petit bridge navigateur non secret dans WSL :
+
+```text
+~/.local/bin/wpc-open-windows-browser
+```
+
+Il est limité au compte Linux (`0700`) et appelle le navigateur Windows par l'interop WSL :
+
+```bash
+cmd.exe /d /c start "" "$1"
+```
+
+Le chemin du bridge est fourni temporairement à AWS CLI via la variable d'environnement standard `BROWSER`.
+
 Le parcours devient :
 
 1. le script reste dans la fenêtre PowerShell 7 courante ;
-2. AWS CLI affiche l'URL d'authentification dans cette même fenêtre ;
-3. l'utilisateur ouvre l'URL dans son navigateur Windows ;
-4. le navigateur affiche le code d'autorisation ;
-5. l'utilisateur copie ce code ;
-6. l'utilisateur le colle directement dans la fenêtre PowerShell 7 où AWS attend déjà la saisie ;
-7. AWS CLI termine la connexion ;
-8. le script reprend automatiquement et valide la session.
+2. AWS CLI démarre un callback OAuth local ;
+3. le bridge ouvre automatiquement le navigateur Windows par défaut ;
+4. l'utilisateur se connecte normalement sur le site AWS ;
+5. le navigateur renvoie automatiquement le callback vers `127.0.0.1` ;
+6. AWS CLI récupère l'autorisation sans demander de code à copier/coller ;
+7. le script valide la session avec STS.
 
-Il n'y a plus d'onglet AWS secondaire ni de confirmation manuelle demandant de revenir dans la fenêtre initiale.
+Si le navigateur ne s'ouvre pas automatiquement, AWS CLI affiche également l'URL. Il suffit alors d'ouvrir cette URL dans le navigateur Windows ; le retour reste automatique via le callback local.
 
 Le centre de contrôle valide ensuite :
 
@@ -140,7 +163,7 @@ Pour un utilisateur ou rôle IAM, AWS peut exiger la politique gérée `SignInLo
 
 ## AWS IAM Identity Center / SSO
 
-La configuration et la connexion suivent la même règle **mono-terminal** :
+La configuration et la connexion suivent la règle **mono-terminal** :
 
 ```bash
 aws configure sso --no-browser --use-device-code
