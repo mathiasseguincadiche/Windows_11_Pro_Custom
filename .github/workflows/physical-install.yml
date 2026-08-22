@@ -63,7 +63,7 @@ jobs:
           grep -Fq "if (\$Mode -in @('Apply','Verify'))" "$install"
           grep -Fq 'Ensure-HardwareManualEvidence' "$install"
           grep -Fq -- '-not $PlanOnly' "$install"
-          grep -Fq "-Purpose 'ManualEvidenceProbe'" "$install"
+          grep -Fq -- "-Purpose 'ManualEvidenceProbe'" "$install"
           grep -Fq 'Validation matérielle manuelle en attente' "$install"
           grep -Fq 'non bloquants pour Installation complete' "$install"
           if grep -Fq 'Veux-tu enregistrer maintenant les contrôles matériels manuels avant toute convergence ?' "$install"; then
