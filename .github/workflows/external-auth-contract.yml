@@ -44,36 +44,55 @@ jobs:
             if (@($errors).Count -gt 0) { throw "$path parse errors: $($errors.Message -join '; ')" }
           }
 
-      - name: Enforce real-terminal authentication boundary
+      - name: Enforce safe interactive authentication boundaries
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $menu = Get-Content -Raw '.\menu.ps1'
-          $interactive = Get-Content -Raw '.\scripts\bootstrap\16_external_auth_interactive.ps1'
+          $interactivePath = Resolve-Path '.\scripts\bootstrap\16_external_auth_interactive.ps1'
+          $interactive = Get-Content -Raw $interactivePath
           $audit = Get-Content -Raw '.\scripts\bootstrap\15_external_auth.ps1'
 
           foreach ($needle in @('Invoke-WpcInteractiveRepoScript','16_external_auth_interactive.ps1','Connexions externes')) {
             if (-not $menu.Contains($needle)) { throw "menu wiring missing: $needle" }
           }
 
+          $tokens = $null
+          $errors = $null
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile($interactivePath,[ref]$tokens,[ref]$errors)
+          if (@($errors).Count -gt 0) { throw "interactive auth parse errors: $($errors.Message -join '; ')" }
+          function Get-FunctionAst([string]$Name) {
+            $node = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $Name }, $true)
+            if (-not $node) { throw "missing function: $Name" }
+            return $node
+          }
+          function Get-FunctionText([string]$Name) {
+            return (Get-FunctionAst $Name).Extent.Text
+          }
+
+          $dedicated = Get-FunctionText 'Invoke-WslTerminalInteractive'
+          $inlineAst = Get-FunctionAst 'Invoke-WslInlineInteractive'
+          $inline = $inlineAst.Extent.Text
+          $github = Get-FunctionText 'Configure-GitHub'
+          $awsRemote = Get-FunctionText 'Invoke-AwsRemoteLoginInline'
+          $awsSso = Get-FunctionText 'Invoke-AwsSsoLoginInline'
+          $awsConfigure = Get-FunctionText 'Configure-Aws'
+
+          foreach ($needle in @('wt.exe',"'new-tab'",'Quand la commande dans le nouvel onglet est terminée')) {
+            if (-not $dedicated.Contains($needle)) { throw "GitHub dedicated-terminal contract missing: $needle" }
+          }
+          if (-not $github.Contains('Invoke-WslTerminalInteractive')) { throw 'GitHub login must keep its dedicated terminal boundary.' }
+          if (-not $github.Contains("'gh','auth','login'")) { throw 'GitHub auth login command missing.' }
+
           foreach ($needle in @(
-            'Invoke-WslTerminalInteractive',
-            'wt.exe',
-            "'new-tab'",
-            "'wsl.exe'",
-            "'--exec'",
-            'Quand la commande dans le nouvel onglet est terminée',
-            'Configure-GitHub',
-            "'gh','auth','login'",
-            'Resolve-GitHubPlaintextFallback',
-            'chmod 700',
-            'chmod 600',
-            '.wpc-plaintext-accepted',
-            'Invoke-AwsRemoteLoginTerminal',
+            'Invoke-WslInlineInteractive',
+            '& wsl.exe --distribution $Distribution --user $LinuxUser --exec @ArgumentList',
+            'stdin, stdout et stderr restent attachés au terminal courant',
+            'Invoke-AwsRemoteLoginInline',
             "'aws','login','--remote'",
             "'--region'",
             "'--no-cli-auto-prompt'",
-            'Invoke-AwsSsoLoginTerminal',
+            'Invoke-AwsSsoLoginInline',
             "'aws','sso','login'",
             "'--no-browser'",
             "'--use-device-code'",
@@ -86,11 +105,26 @@ jobs:
             if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
           }
 
-          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','login','--remote'") { throw 'aws login --remote must never run through the parent wsl.exe stdin path.' }
-          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','configure','sso'") { throw 'interactive aws configure sso must run in a dedicated terminal.' }
+          $redirections = @($inlineAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.RedirectionAst] }, $true))
+          if ($redirections.Count -gt 0) { throw 'Inline AWS terminal helper must not redirect or merge native streams.' }
+          if ($inline -match '\$output\s*=|Out-String|Tee-Object|Start-Process') { throw 'Inline AWS terminal helper must not capture or detach the native process.' }
+
+          foreach ($pair in @(
+            @{ Name='AWS remote login'; Text=$awsRemote },
+            @{ Name='AWS SSO login'; Text=$awsSso }
+          )) {
+            if (-not $pair.Text.Contains('Invoke-WslInlineInteractive')) { throw "$($pair.Name) must run inline in the current terminal." }
+            if ($pair.Text.Contains('Invoke-WslTerminalInteractive')) { throw "$($pair.Name) must never open a second terminal." }
+          }
+
+          if ($awsConfigure.Contains('Invoke-WslTerminalInteractive')) { throw 'All AWS interactive flows must remain in the current terminal.' }
+          if (-not $awsConfigure.Contains("Invoke-WslInlineInteractive -Label 'AWS SSO configuration'")) { throw 'AWS SSO configuration must run inline.' }
+          if (-not $awsConfigure.Contains('Invoke-WslInlineInteractive -Label "AWS configure | profil $profile"')) { throw 'Legacy AWS configure must run inline.' }
+          if ($awsConfigure.Contains('nouvel onglet')) { throw 'AWS UX must not instruct the user to switch to another terminal.' }
+
+          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','login','--remote'") { throw 'aws login --remote must never run through the captured WSL helper.' }
+          if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'aws','configure','sso'") { throw 'interactive aws configure sso must never run through the captured WSL helper.' }
           if ($interactive -match "Invoke-WslSimple[\s\S]{0,240}'gh','auth','login'") { throw 'interactive gh auth login must run in a dedicated terminal.' }
-          if ($interactive -notmatch "function\s+Invoke-AwsRemoteLoginTerminal[\s\S]*Invoke-WslTerminalInteractive") { throw 'AWS login helper must cross the Windows Terminal boundary.' }
-          if ($interactive -notmatch "function\s+Invoke-AwsSsoLoginTerminal[\s\S]*Invoke-WslTerminalInteractive") { throw 'AWS SSO helper must cross the Windows Terminal boundary.' }
 
           foreach ($needle in @(
             'SecretMaterialRecorded = $false',
