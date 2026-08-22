@@ -17,7 +17,7 @@ $auditScript = Join-Path $PSScriptRoot '15_external_auth.ps1'
 foreach ($required in @($runtimeModule,$auditScript)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Dépendance absente: $required" }
 }
-Import-Module $runtimeModule -Force
+Import-Module $runtimeModule
 [void](Assert-WpcPowerShellRuntime -MinimumVersion ([version]'7.6.4') -RequireWindows -PassThru)
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) { throw 'wsl.exe introuvable.' }
 
