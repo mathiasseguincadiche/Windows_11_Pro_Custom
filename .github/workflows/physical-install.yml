@@ -62,8 +62,14 @@ jobs:
           grep -Fq 'StrictPhysicalReadiness' "$install"
           grep -Fq "if (\$Mode -in @('Apply','Verify'))" "$install"
           grep -Fq 'Ensure-HardwareManualEvidence' "$install"
-          grep -Fq 'avant toute convergence' "$install"
           grep -Fq -- '-not $PlanOnly' "$install"
+          grep -Fq -- "-Purpose 'ManualEvidenceProbe'" "$install"
+          grep -Fq 'Validation matérielle manuelle en attente' "$install"
+          grep -Fq 'non bloquants pour Installation complete' "$install"
+          if grep -Fq 'Veux-tu enregistrer maintenant les contrôles matériels manuels avant toute convergence ?' "$install"; then
+            echo 'FullInstall must not present optional manual hardware evidence as a blocking prompt.' >&2
+            exit 1
+          fi
 
           grep -Fq 'PowerShell 7.6.4+ Core x64' "$readiness"
           grep -Fq 'minimum=7.6.4' "$readiness"

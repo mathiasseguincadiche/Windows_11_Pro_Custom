@@ -120,25 +120,16 @@ function Test-BenchmarkEvidencePair {
 
 function Ensure-HardwareManualEvidence {
     $manualPath = Get-RepoScript -RelativePath 'scripts\windows\51_hardware_manual_checks.ps1'
-    $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Preuves matérielles manuelles'
-    if ($manualReady) { return }
-
-    Write-WpcStatus -Status 'ACTION_REQUISE' -Message 'Preuves matérielles manuelles incomplètes' -Detail 'ReBAR, Above 4G, placement/refroidissement T705, stabilité DDR5, BIOS et pilotes doivent être confirmés avant une installation physique complète.' -Context $context
-    if ($context.NonInteractive) {
-        throw 'Validation matérielle requiert des preuves manuelles. Exécute: .\scripts\windows\51_hardware_manual_checks.ps1 -Mode Record -Interactive puis relance.'
+    Write-WpcStatus -Status 'ANALYSE' -Message 'Preuves matérielles manuelles' -Detail 'Lecture des confirmations qui ne peuvent pas être déduites automatiquement depuis Windows.' -Context $context
+    $probe = Invoke-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Preuves matérielles manuelles' -Phase 'Probe' -Purpose 'ManualEvidenceProbe' -AllowFailure -Quiet
+    if (-not $probe.Success) {
+        throw "Impossible de vérifier les preuves matérielles manuelles: $($probe.Error)"
     }
-
-    $answer = (Read-Host 'Veux-tu enregistrer maintenant les contrôles matériels manuels avant toute convergence ? [O/N]').Trim().ToLowerInvariant()
-    if ($answer -notin @('o','oui','y','yes')) {
-        throw 'Qualification matérielle laissée incomplète. Aucune convergence physique complète ne sera lancée.'
+    if ([string]$probe.Outcome -eq 'ACTION_REQUISE') {
+        Write-WpcStatus -Status 'AVERTISSEMENT' -Message 'Validation matérielle manuelle en attente' -Detail 'Des contrôles UEFI/placement/refroidissement T705/stabilité DDR5/BIOS restent à confirmer. Ils sont non bloquants pour Installation complete et seront rappelés dans la qualification finale.' -Context $context
+        return
     }
-
-    [void](Invoke-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Record'; Interactive=[switch]::Present } -DisplayName 'Saisie guidée des preuves matérielles' -Phase 'ManualEvidence')
-    $manualReady = Test-WpcManagedScript -Context $context -Path $manualPath -Arguments @{ Mode='Verify' } -DisplayName 'Revalidation des preuves matérielles'
-    if (-not $manualReady) {
-        throw 'Les preuves matérielles restent incomplètes après la saisie guidée. Corrige les points non confirmés avant de relancer.'
-    }
-    Write-WpcStatus -Status 'OK' -Message 'Preuves matérielles prêtes avant convergence' -Detail 'Les contrôles impossibles à déduire depuis Windows sont maintenant explicitement confirmés.' -Context $context
+    Write-WpcStatus -Status 'DEJA_OK' -Message 'Preuves matérielles manuelles' -Detail 'Toutes les preuves manuelles strictes ont déjà été confirmées; les informations purement consultatives restent non bloquantes.' -Context $context
 }
 
 function Invoke-HardwareQualification {
