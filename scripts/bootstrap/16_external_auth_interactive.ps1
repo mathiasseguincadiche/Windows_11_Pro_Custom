@@ -329,9 +329,9 @@ function Resolve-AwsRegion {
 }
 
 function Ensure-AwsWindowsBrowserBridge {
-    $interop = Invoke-WslSimple -ArgumentList @('sh','-lc','command -v explorer.exe >/dev/null 2>&1') -IgnoreExitCode
+    $interop = Invoke-WslSimple -ArgumentList @('sh','-lc','command -v pwsh.exe >/dev/null 2>&1') -IgnoreExitCode
     if ($interop.ExitCode -ne 0) {
-        throw 'Interop WSL vers Windows indisponible: explorer.exe est introuvable depuis Ubuntu.'
+        throw 'Interop WSL vers Windows indisponible: pwsh.exe Windows est introuvable depuis Ubuntu.'
     }
 
     $bridgeProvision = @'
@@ -346,7 +346,7 @@ set -eu
 if [ "$#" -ne 1 ]; then
     exit 64
 fi
-exec explorer.exe "$1"
+exec pwsh.exe -NoLogo -NoProfile -NonInteractive -CommandWithArgs 'Start-Process -FilePath $args[0] -ErrorAction Stop' "$1"
 EOF
 chmod 700 "$bridge"
 printf '%s' "$bridge"
