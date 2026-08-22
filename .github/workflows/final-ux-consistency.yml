@@ -1,0 +1,38 @@
+name: Final UX consistency
+
+on:
+  pull_request:
+    paths:
+      - 'install.ps1'
+      - 'scripts/bootstrap/15_external_auth.ps1'
+      - 'scripts/bootstrap/16_external_auth_interactive.ps1'
+      - 'tests/regression/final_ux_consistency.tests.ps1'
+      - '.github/workflows/final-ux-consistency.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'install.ps1'
+      - 'scripts/bootstrap/15_external_auth.ps1'
+      - 'scripts/bootstrap/16_external_auth_interactive.ps1'
+      - 'tests/regression/final_ux_consistency.tests.ps1'
+      - '.github/workflows/final-ux-consistency.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Validate final UX contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & pwsh -NoLogo -NoProfile -File ./tests/regression/final_ux_consistency.tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Final UX consistency test failed with code $LASTEXITCODE." }
