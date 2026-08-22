@@ -1,165 +1,161 @@
 # Connexions externes — Git, GitHub et AWS
 
-Cette phase est volontairement séparée de la convergence système de la workstation.
+Cette phase est séparée de la convergence système de la workstation. L'absence d'une session GitHub ou AWS ne retire pas le statut READY de Windows, WSL2 ou de la stack DevOps.
 
-## Principe
+## Principe de sécurité
 
 `Windows_11_Pro_Custom` peut :
 
-- détecter qu'une identité Git est absente ;
-- détecter l'état de `gh auth status` ;
-- détecter les profils AWS et vérifier une session avec STS ;
-- lancer les assistants officiels en mode interactif direct ;
-- revalider l'état après connexion.
+- configurer `git user.name` et `git user.email` ;
+- vérifier `gh auth status` ;
+- vérifier les profils AWS avec `aws sts get-caller-identity` ;
+- ouvrir un terminal WSL dédié pour les commandes qui demandent réellement une saisie ;
+- revalider l'état après l'action utilisateur.
 
 Le dépôt ne doit jamais :
 
-- demander ou stocker lui-même un token GitHub ;
-- extraire un token avec `gh auth token` ;
-- injecter un token avec `--with-token` ;
-- recevoir une Access Key ou Secret Key dans un argument PowerShell/Bash ;
-- écrire un secret dans `logs/`, `reports/` ou `state/` ;
-- exporter des credentials dans des variables d'environnement versionnées ;
-- considérer AWS/GitHub non connectés comme une panne de la workstation.
+- lire ou journaliser un token GitHub ;
+- appeler `gh auth token` ou `--show-token` ;
+- injecter `--with-token` ou `--insecure-storage` ;
+- recevoir une Access Key ou une Secret Access Key dans un argument PowerShell ;
+- écrire un secret dans `logs/`, `reports/` ou `state/`.
 
-## Centre de contrôle
+## Pourquoi les commandes interactives utilisent un onglet Windows Terminal dédié
 
-Dans `menu.ps1` :
+Le centre de contrôle s'exécute dans PowerShell Windows. Une commande interactive lancée directement par la chaîne :
 
 ```text
-8. Composants spécifiques
-   8. Connexions externes interactives (Git / GitHub / AWS)
-   9. Auditer les connexions externes (sans secret)
+PowerShell -> wsl.exe -> AWS CLI / GitHub CLI
 ```
 
-Après une `Installation complete` réussie, le menu exécute l'audit sans secret puis peut proposer l'assistant interactif. Le refus ou l'absence d'un compte externe ne retire pas le statut `READY` de la workstation.
+peut ne pas recevoir un véritable stdin Linux interactif. Ce cas a été observé physiquement avec AWS CLI 2.36.21 : `aws login --remote` recevait une réponse vide et AWS CLI terminait avec une erreur interne `NoneType` avant que l'utilisateur puisse saisir le code.
+
+Le contrat courant évite cette classe de panne. Les commandes qui ont besoin d'un terminal sont lancées dans un **nouvel onglet Windows Terminal exécutant directement WSL** :
+
+```text
+Centre de contrôle PowerShell
+        |
+        +--> Windows Terminal / WSL interactif réel
+                |
+                +--> gh auth login
+                +--> aws login --remote
+                +--> aws configure sso
+                +--> aws sso login
+                +--> aws configure
+```
+
+Le centre de contrôle attend ensuite la confirmation de l'utilisateur puis vérifie factuellement le résultat.
 
 ## Git
 
-Git utilise une identité de commit :
+L'identité Git globale est non secrète :
 
-```text
-user.name
-user.email
+```bash
+git config --global user.name
+git config --global user.email
 ```
 
-Ces deux valeurs ne sont pas des secrets. L'assistant peut donc les demander avec `Read-Host` puis exécuter `git config --global`.
-
-L'authentification distante n'est pas gérée par `git config user.name/user.email`.
+Le script peut la lire et la modifier directement.
 
 ## GitHub CLI
 
-La connexion GitHub utilise uniquement le flux officiel :
+L'authentification interactive utilise dans l'onglet WSL dédié :
 
 ```bash
 gh auth login --hostname github.com --web --git-protocol https
-gh auth setup-git --hostname github.com
-gh auth status --hostname github.com
 ```
 
-Le dépôt ne fournit jamais de token à `gh`, n'utilise jamais `--with-token` et ne demande jamais la valeur du token.
+Après le retour dans le centre de contrôle :
 
-GitHub CLI tente normalement d'utiliser le credential store du système. Si aucun credential store Linux utilisable n'est disponible dans WSL, `gh` peut retomber sur `~/.config/gh/hosts.yml` en clair.
+```bash
+gh auth status --hostname github.com
+gh auth setup-git --hostname github.com
+```
 
-Dans ce cas, `Windows_11_Pro_Custom` applique un garde-fou explicite :
+sont utilisés pour vérifier et configurer Git.
+
+### Fallback `hosts.yml`
+
+Si GitHub CLI ne trouve aucun credential store Linux exploitable, il peut écrire le token dans :
+
+```text
+~/.config/gh/hosts.yml
+```
+
+Dans ce cas le dépôt applique :
 
 ```text
 ~/.config/gh             -> 0700
 ~/.config/gh/hosts.yml   -> 0600
 ```
 
-Le script :
+Le script demande un consentement explicite avant de conserver ce fallback et mémorise uniquement un marqueur sans secret :
 
-1. signale clairement que ce stockage n'est pas chiffré ;
-2. ne lit jamais la valeur `oauth_token` ;
-3. demande un consentement explicite avant de conserver ce fallback ;
-4. enregistre uniquement un marqueur **sans secret** `~/.config/gh/.wpc-plaintext-accepted` en `0600` ;
-5. supprime la session GitHub si l'utilisateur refuse de conserver le token en fichier.
-
-Un fallback `hosts.yml` protégé et explicitement accepté peut donc être opérationnel, mais il n'est jamais présenté comme équivalent à un credential store chiffré. Le mode `-RequireGitHub` reste strict et exige un stockage réellement sécurisé.
-
-## AWS CLI sous WSL2
-
-### Compte AWS classique — `aws login --remote`
-
-Sous WSL2, le flux recommandé ne tente pas d'ouvrir un navigateur Linux avec `gio` ou `xdg-open`.
-
-Le script utilise :
-
-```bash
-aws login --remote --profile <profil>
+```text
+~/.config/gh/.wpc-plaintext-accepted
 ```
 
-AWS affiche alors une URL. Elle doit être ouverte dans le navigateur Windows, puis le code d'autorisation affiché par AWS est recopié dans WSL.
+Un credential store réellement sécurisé reste préférable et le mode strict continue de le distinguer du fallback plaintext.
 
-Le profil `default` est proposé explicitement pour une configuration simple avec un seul compte, mais il n'est jamais choisi silencieusement.
+## AWS CLI — compte classique
 
-Après la connexion :
+AWS CLI 2.32.0 minimum est requis pour `aws login`.
+
+Le centre de contrôle ouvre un onglet WSL dédié et exécute :
+
+```bash
+aws login --remote --profile <profil> --region <region>
+```
+
+Le profil `default` est proposé explicitement. Si aucune région n'est configurée, `us-east-1` est proposée comme valeur initiale afin d'éviter que AWS CLI tente d'ouvrir un prompt caché dans le processus WSL parent.
+
+Dans l'onglet WSL dédié :
+
+1. AWS affiche l'URL d'authentification ;
+2. l'utilisateur ouvre cette URL dans son navigateur Windows ;
+3. l'utilisateur recopie le code d'autorisation dans le véritable terminal WSL ;
+4. AWS CLI termine la connexion.
+
+Le centre de contrôle valide ensuite :
 
 ```bash
 aws sts get-caller-identity --profile <profil> --no-cli-pager
 ```
 
-valide factuellement la session.
+Pour un utilisateur ou rôle IAM, AWS peut exiger la politique gérée `SignInLocalDevelopmentAccess`. Un compte root n'a pas besoin de cette politique pour `aws login`.
 
-### IAM Identity Center / SSO
+## AWS IAM Identity Center / SSO
 
-Pour IAM Identity Center, le script force également un flux adapté à WSL sans navigateur Linux :
+La configuration et la connexion utilisent elles aussi le terminal WSL dédié :
 
 ```bash
 aws configure sso --no-browser --use-device-code
 aws sso login --profile <profil> --no-browser --use-device-code
 ```
 
-Ce mode est à utiliser uniquement lorsqu'une organisation fournit une Start URL/Issuer URL et la région SSO.
+Ce mode est réservé aux environnements où une organisation fournit les informations IAM Identity Center nécessaires.
 
-### Reconnexion d'un profil existant
+## AWS Access Key / Secret Key — legacy
 
-L'assistant détecte le mode du profil :
-
-```text
-login_session -> aws login --remote
-SSO           -> aws sso login --no-browser --use-device-code
-```
-
-La configuration existante n'est pas recréée inutilement.
-
-### Access Key / Secret Key — legacy
-
-Quand un environnement impose encore des clés statiques, l'assistant peut lancer directement :
+Si des clés IAM statiques sont explicitement requises, le centre de contrôle lance dans l'onglet WSL dédié :
 
 ```bash
 aws configure --profile <profil>
 ```
 
-La saisie est alors gérée par AWS CLI. `Windows_11_Pro_Custom` ne lit pas les valeurs et ne les journalise pas.
+La saisie reste donc entre l'utilisateur et AWS CLI. Le dépôt ne lit ni ne journalise les valeurs.
 
-Après configuration ou authentification, les permissions de `~/.aws` sont resserrées :
-
-- répertoires : `0700` ;
-- fichiers : `0600`.
-
-Les clés statiques restent moins recommandées que les credentials temporaires ou le SSO.
+Après une configuration AWS, les permissions locales sous `~/.aws` sont resserrées : répertoires `0700`, fichiers `0600`.
 
 ## Audit sans secret
 
-`scripts/bootstrap/15_external_auth.ps1` écrit :
+Le script `scripts/bootstrap/15_external_auth.ps1` écrit :
 
 ```text
 reports/auth/external-auth.json
 ```
 
-Ce rapport contient uniquement des faits non secrets :
-
-- présence des CLI ;
-- identité Git configurée ou non ;
-- GitHub authentifié ou non ;
-- type de stockage GitHub détecté ;
-- présence des permissions 0700/0600 ;
-- acceptation explicite ou non du fallback plaintext ;
-- noms de profils AWS ;
-- profils AWS dont STS confirme une session valide ;
-- actions utilisateur encore nécessaires.
+Le rapport contient uniquement des faits non secrets : présence des CLI, identité Git, état GitHub, type de stockage GitHub, permissions, profils AWS et résultat STS.
 
 Il contient explicitement :
 
@@ -168,15 +164,3 @@ Il contient explicitement :
 ```
 
 Aucun Account ID, ARN, token, Access Key ou Secret Key n'est requis dans ce rapport.
-
-## Idempotence
-
-Si une connexion est déjà valide :
-
-```text
-[DEJA OK]
-```
-
-L'assistant ne force pas une nouvelle authentification. Un fallback GitHub déjà protégé et explicitement accepté n'est pas redemandé à chaque exécution.
-
-AWS, GitHub et l'identité Git sont des éléments utilisateur optionnels ; la conformité système, WSL2 et DevOps reste indépendante de leur état.
