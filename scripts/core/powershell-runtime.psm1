@@ -13,10 +13,15 @@ function Initialize-WpcUtf8Console {
     try { [Console]::OutputEncoding = $utf8 } catch {}
     $global:OutputEncoding = $utf8
 
+    $inputName = ''
+    $outputName = ''
+    try { $inputName = [string][Console]::InputEncoding.WebName } catch {}
+    try { $outputName = [string][Console]::OutputEncoding.WebName } catch {}
+
     return [pscustomobject]@{
-        InputEncoding = try { [Console]::InputEncoding.WebName } catch { '' }
-        OutputEncoding = try { [Console]::OutputEncoding.WebName } catch { '' }
-        NativeOutputEncoding = $global:OutputEncoding.WebName
+        InputEncoding = $inputName
+        OutputEncoding = $outputName
+        NativeOutputEncoding = [string]$global:OutputEncoding.WebName
     }
 }
 
@@ -28,6 +33,11 @@ function Get-WpcPowerShellRuntimeFact {
     try { $processPath = [string](Get-Process -Id $PID -ErrorAction Stop).Path } catch {}
     $executableName = if ([string]::IsNullOrWhiteSpace($processPath)) { '' } else { [IO.Path]::GetFileName($processPath) }
 
+    $consoleInputName = ''
+    $consoleOutputName = ''
+    try { $consoleInputName = [string][Console]::InputEncoding.WebName } catch {}
+    try { $consoleOutputName = [string][Console]::OutputEncoding.WebName } catch {}
+
     [pscustomobject]@{
         Edition = [string]$PSVersionTable.PSEdition
         Version = [version]$PSVersionTable.PSVersion
@@ -36,9 +46,9 @@ function Get-WpcPowerShellRuntimeFact {
         ExecutablePath = $processPath
         ExecutableName = $executableName
         IsWindows = [bool]$IsWindows
-        ConsoleInputEncoding = try { [Console]::InputEncoding.WebName } catch { '' }
-        ConsoleOutputEncoding = try { [Console]::OutputEncoding.WebName } catch { '' }
-        NativeOutputEncoding = $global:OutputEncoding.WebName
+        ConsoleInputEncoding = $consoleInputName
+        ConsoleOutputEncoding = $consoleOutputName
+        NativeOutputEncoding = [string]$global:OutputEncoding.WebName
     }
 }
 
