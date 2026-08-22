@@ -363,22 +363,29 @@ function Set-TerminalSettings {
     }
 
     $parent = Split-Path $Path -Parent
+    if ([string]::IsNullOrWhiteSpace($parent)) {
+        throw "Chemin parent Windows Terminal invalide pour settings.json: '$Path'."
+    }
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
-    $tempPath = Join-Path $parent ("settings.wpc.{0}.{1}.tmp" -f $PID,[guid]::NewGuid().ToString('N'))
+    $nonce = "{0}.{1}" -f $PID,[guid]::NewGuid().ToString('N')
+    $tempPath = Join-Path $parent ("settings.wpc.$nonce.tmp")
+    $replaceBackup = Join-Path $parent ("settings.wpc.$nonce.replace.bak")
     try {
         [System.IO.File]::WriteAllText($tempPath, $text, [System.Text.UTF8Encoding]::new($false))
         $roundTrip = Get-Content -Raw -LiteralPath $tempPath -Encoding UTF8
         [void](ConvertFrom-WpcTerminalSettingsText -Text $roundTrip)
 
-        # Windows Terminal watches settings.json. Replace it atomically so it can
-        # never observe a truncated/partially-written JSON document.
+        # Windows Terminal watches settings.json. File.Replace requires a real
+        # backup path on the Windows/.NET runtime used by the physical machine.
+        # Keep that backup transient because Save-InitialState owns rollback.
         if (Test-Path -LiteralPath $Path) {
-            [System.IO.File]::Replace($tempPath, $Path, $null, $true)
+            [System.IO.File]::Replace($tempPath, $Path, $replaceBackup, $true)
         } else {
             [System.IO.File]::Move($tempPath, $Path)
         }
     } finally {
         Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $replaceBackup -Force -ErrorAction SilentlyContinue
     }
 
     [void](Read-TerminalSettings -Path $Path)
@@ -472,24 +479,41 @@ if (Test-Path -LiteralPath $contract.Targets.Settings) {
 }
 Save-InitialState -Targets $contract.Targets
 
-New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.ProfileFragment -Parent) | Out-Null
-[System.IO.File]::WriteAllText(
-    $contract.Targets.ProfileFragment,
-    (Get-RenderedFragment),
-    [System.Text.UTF8Encoding]::new($false)
-)
+if (-not [bool]$contract.Checks['Fragment profils modernes']) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.ProfileFragment -Parent) | Out-Null
+    [System.IO.File]::WriteAllText(
+        $contract.Targets.ProfileFragment,
+        (Get-RenderedFragment),
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
 
-New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.ActionsFragment -Parent) | Out-Null
-Copy-Item -LiteralPath $sourceActions -Destination $contract.Targets.ActionsFragment -Force
-Remove-Item -LiteralPath $contract.Targets.LegacyActions -Force -ErrorAction SilentlyContinue
+if (-not [bool]$contract.Checks['Fragment actions modernes']) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.ActionsFragment -Parent) | Out-Null
+    Copy-Item -LiteralPath $sourceActions -Destination $contract.Targets.ActionsFragment -Force
+}
 
-New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.Starship -Parent) | Out-Null
-Copy-Item -LiteralPath $sourceStarship -Destination $contract.Targets.Starship -Force
+if (-not [bool]$contract.Checks['Ancien import actions retiré']) {
+    Remove-Item -LiteralPath $contract.Targets.LegacyActions -Force -ErrorAction SilentlyContinue
+}
 
-Set-PowerShellProfile -Path $contract.Targets.PowerShellProfile
-Set-TerminalSettings -Path $contract.Targets.Settings
-Set-WpcDefaultTerminalApplication
+if (-not [bool]$contract.Checks['Starship Windows config']) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $contract.Targets.Starship -Parent) | Out-Null
+    Copy-Item -LiteralPath $sourceStarship -Destination $contract.Targets.Starship -Force
+}
+
+if (-not [bool]$contract.Checks['Profil PowerShell géré']) {
+    Set-PowerShellProfile -Path $contract.Targets.PowerShellProfile
+}
+
+if (-not [bool]$contract.Checks['settings.json Windows Terminal moderne']) {
+    Set-TerminalSettings -Path $contract.Targets.Settings
+}
+
+if (-not [bool]$contract.Checks['Windows Terminal application terminal par défaut']) {
+    Set-WpcDefaultTerminalApplication
+}
 
 $verified = Get-Contract
 [void](Show-Contract -Contract $verified -FailOnError)
-Write-Host '[FAIT] Windows Terminal DevOps moderne configuré: profils normal/Admin/Ubuntu, fallback emoji, UTF-8, thème Mica, actions, Ctrl+T, renommage et terminal système par défaut.' -ForegroundColor Green
+Write-Host '[FAIT] Windows Terminal DevOps moderne configuré: seuls les écarts détectés ont été corrigés et revalidés.' -ForegroundColor Green
