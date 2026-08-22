@@ -1,0 +1,81 @@
+name: Windows Terminal array shape contract
+
+on:
+  pull_request:
+    paths:
+      - 'config/windows-terminal/**'
+      - 'scripts/core/windows-terminal-settings.psm1'
+      - 'scripts/windows/31_windows_terminal.ps1'
+      - 'scripts/windows/31_windows_terminal_modern.ps1'
+      - 'tests/regression/windows_terminal_array_shape.tests.ps1'
+      - '.github/workflows/windows-terminal-array-shape-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'config/windows-terminal/**'
+      - 'scripts/core/windows-terminal-settings.psm1'
+      - 'scripts/windows/31_windows_terminal.ps1'
+      - 'scripts/windows/31_windows_terminal_modern.ps1'
+      - 'tests/regression/windows_terminal_array_shape.tests.ps1'
+      - '.github/workflows/windows-terminal-array-shape-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  array-shape:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6 pinned
+
+      - name: Parse PowerShell regression files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @(
+            './scripts/core/windows-terminal-settings.psm1',
+            './tests/regression/windows_terminal_array_shape.tests.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if (@($errors).Count -gt 0) {
+              throw "$path parse errors: $($errors.Message -join '; ')"
+            }
+          }
+
+      - name: Enforce explicit collection preservation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $module = Get-Content -Raw './scripts/core/windows-terminal-settings.psm1'
+          foreach ($needle in @(
+            'Get-WpcTerminalSettingsArrayShapeEvidence',
+            'Get-WpcTerminalSettingsJsonShapeEvidence',
+            '[object[]]$mergedThemes',
+            '[object[]]$mergedSchemes',
+            '[object[]]$managedNewTabMenu',
+            "-Name 'themes' -Value ([object]`$mergedThemes)",
+            "-Name 'schemes' -Value ([object]`$mergedSchemes)",
+            "-Name 'newTabMenu' -Value ([object]`$managedNewTabMenu)",
+            "-Name 'disabledProfileSources' -Value ([object]`$disabled)",
+            '[System.Text.Json.JsonValueKind]::Array'
+          )) {
+            if (-not $module.Contains($needle)) {
+              throw "Windows Terminal array preservation contract missing: $needle"
+            }
+          }
+
+      - name: Reproduce scalar bug and validate repair
+        shell: pwsh
+        run: |
+          & pwsh -NoLogo -NoProfile -File ./tests/regression/windows_terminal_array_shape.tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Array-shape regression test failed with code $LASTEXITCODE." }

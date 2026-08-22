@@ -122,6 +122,93 @@ function Get-WpcSafeObjectName {
     }
 }
 
+function Test-WpcArrayProperty {
+    param(
+        [AllowNull()]$Object,
+        [Parameter(Mandatory)][string]$Name,
+        [switch]$Optional
+    )
+
+    if ($null -eq $Object) { return $false }
+    $prop = $Object.PSObject.Properties[$Name]
+    if ($null -eq $prop) { return $Optional.IsPresent }
+    return ($prop.Value -is [System.Array])
+}
+
+function Get-WpcTerminalSettingsArrayShapeEvidence {
+    [CmdletBinding()]
+    param([AllowNull()]$Settings)
+
+    $themesIsArray = Test-WpcArrayProperty -Object $Settings -Name 'themes'
+    $schemesIsArray = Test-WpcArrayProperty -Object $Settings -Name 'schemes'
+    $newTabMenuIsArray = Test-WpcArrayProperty -Object $Settings -Name 'newTabMenu'
+    $disabledProfileSourcesIsArray = Test-WpcArrayProperty -Object $Settings -Name 'disabledProfileSources'
+    $importIsArray = Test-WpcArrayProperty -Object $Settings -Name 'import' -Optional
+
+    $mismatches = [System.Collections.Generic.List[string]]::new()
+    if (-not $themesIsArray) { $mismatches.Add('themes:not-array-or-absent') }
+    if (-not $schemesIsArray) { $mismatches.Add('schemes:not-array-or-absent') }
+    if (-not $newTabMenuIsArray) { $mismatches.Add('newTabMenu:not-array-or-absent') }
+    if (-not $disabledProfileSourcesIsArray) { $mismatches.Add('disabledProfileSources:not-array-or-absent') }
+    if (-not $importIsArray) { $mismatches.Add('import:not-array') }
+
+    return [pscustomobject]@{
+        ThemesIsArray = $themesIsArray
+        SchemesIsArray = $schemesIsArray
+        NewTabMenuIsArray = $newTabMenuIsArray
+        DisabledProfileSourcesIsArray = $disabledProfileSourcesIsArray
+        ImportIsArray = $importIsArray
+        Mismatches = $mismatches.ToArray()
+        IsCompliant = ($mismatches.Count -eq 0)
+    }
+}
+
+function Get-WpcTerminalSettingsJsonShapeEvidence {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Text)
+
+    $clean = Remove-WpcJsonComments -Text $Text
+    $clean = [regex]::Replace($clean, ',\s*(?=[}\]])', '')
+    $document = $null
+    try {
+        $document = [System.Text.Json.JsonDocument]::Parse($clean)
+        if ($document.RootElement.ValueKind -ne [System.Text.Json.JsonValueKind]::Object) {
+            return [pscustomobject]@{
+                Mismatches = @('root:not-object')
+                IsCompliant = $false
+            }
+        }
+
+        $kinds = @{}
+        foreach ($property in $document.RootElement.EnumerateObject()) {
+            $kinds[$property.Name] = $property.Value.ValueKind
+        }
+
+        $mismatches = [System.Collections.Generic.List[string]]::new()
+        foreach ($name in @('themes','schemes','newTabMenu','disabledProfileSources')) {
+            if (-not $kinds.ContainsKey($name)) {
+                $mismatches.Add("${name}:absent")
+                continue
+            }
+            if ($kinds[$name] -ne [System.Text.Json.JsonValueKind]::Array) {
+                $mismatches.Add("${name}:not-array")
+            }
+        }
+        if ($kinds.ContainsKey('import') -and $kinds['import'] -ne [System.Text.Json.JsonValueKind]::Array) {
+            $mismatches.Add('import:not-array')
+        }
+
+        return [pscustomobject]@{
+            Mismatches = $mismatches.ToArray()
+            IsCompliant = ($mismatches.Count -eq 0)
+        }
+    } catch {
+        throw "settings.json Windows Terminal invalide lors du contrôle structurel JSON: $($_.Exception.Message)"
+    } finally {
+        if ($null -ne $document) { $document.Dispose() }
+    }
+}
+
 function Merge-WpcNamedObjects {
     param(
         [AllowNull()][object[]]$Existing,
@@ -198,6 +285,7 @@ function Get-WpcTerminalSettingsEvidence {
             PowerShellCoreDisabled = $false
             WslDisabled = $false
             GlobalMismatches = @('settings.json absent')
+            ArrayShapeEvidence = Get-WpcTerminalSettingsArrayShapeEvidence -Settings $null
             ThemeEvidence = [pscustomobject]@{ IsCompliant=$false; Missing=@(); Mismatched=@() }
             SchemeEvidence = [pscustomobject]@{ IsCompliant=$false; Missing=@(); Mismatched=@() }
             NewTabMenuOk = $false
@@ -205,6 +293,7 @@ function Get-WpcTerminalSettingsEvidence {
         }
     }
 
+    $arrayShapeEvidence = Get-WpcTerminalSettingsArrayShapeEvidence -Settings $Settings
     $imports = @(
         if ($Settings.PSObject.Properties['import']) {
             $Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ }
@@ -233,9 +322,11 @@ function Get-WpcTerminalSettingsEvidence {
     $schemes = if ($Settings.PSObject.Properties['schemes']) { @($Settings.schemes) } else { @() }
     $themeEvidence = Get-WpcManagedArrayEvidence -Actual $themes -Expected @($Contract.themes) -Label 'themes'
     $schemeEvidence = Get-WpcManagedArrayEvidence -Actual $schemes -Expected @($Contract.schemes) -Label 'schemes'
+    $themeEvidence.IsCompliant = ([bool]$themeEvidence.IsCompliant -and [bool]$arrayShapeEvidence.ThemesIsArray)
+    $schemeEvidence.IsCompliant = ([bool]$schemeEvidence.IsCompliant -and [bool]$arrayShapeEvidence.SchemesIsArray)
 
     $actualMenu = if ($Settings.PSObject.Properties['newTabMenu']) { @($Settings.newTabMenu) } else { @() }
-    $newTabMenuOk = Test-WpcEquivalent -Actual $actualMenu -Expected @($Contract.newTabMenu)
+    $newTabMenuOk = ([bool]$arrayShapeEvidence.NewTabMenuIsArray -and (Test-WpcEquivalent -Actual $actualMenu -Expected @($Contract.newTabMenu)))
 
     return [pscustomobject]@{
         DefaultProfile = $defaultProfile
@@ -246,6 +337,7 @@ function Get-WpcTerminalSettingsEvidence {
         PowerShellCoreDisabled = $powershellCoreDisabled
         WslDisabled = $wslDisabled
         GlobalMismatches = $globalMismatches.ToArray()
+        ArrayShapeEvidence = $arrayShapeEvidence
         ThemeEvidence = $themeEvidence
         SchemeEvidence = $schemeEvidence
         NewTabMenuOk = $newTabMenuOk
@@ -255,6 +347,7 @@ function Get-WpcTerminalSettingsEvidence {
             $powershellCoreDisabled -and
             $wslDisabled -and
             $globalMismatches.Count -eq 0 -and
+            $arrayShapeEvidence.IsCompliant -and
             $themeEvidence.IsCompliant -and
             $schemeEvidence.IsCompliant -and
             $newTabMenuOk
@@ -280,19 +373,19 @@ function Set-WpcTerminalSettingsContract {
 
     Set-WpcObjectProperty -Object $Settings -Name 'defaultProfile' -Value $ExpectedDefaultProfile
 
-    $imports = @(
+    [string[]]$imports = @(
         if ($Settings.PSObject.Properties['import']) {
             $Settings.PSObject.Properties['import'].Value | ForEach-Object { [string]$_ }
         }
     )
-    $imports = @($imports | Where-Object { $_ -and $_ -ne $LegacyImportName })
+    $imports = [string[]]@($imports | Where-Object { $_ -and $_ -ne $LegacyImportName })
     if ($imports.Count -eq 0) {
         Remove-WpcObjectProperty -Object $Settings -Name 'import'
     } else {
-        Set-WpcObjectProperty -Object $Settings -Name 'import' -Value $imports
+        Set-WpcObjectProperty -Object $Settings -Name 'import' -Value ([object]$imports)
     }
 
-    $disabled = @(
+    [string[]]$disabled = @(
         if ($Settings.PSObject.Properties['disabledProfileSources']) {
             $Settings.PSObject.Properties['disabledProfileSources'].Value | ForEach-Object { [string]$_ }
         }
@@ -300,7 +393,8 @@ function Set-WpcTerminalSettingsContract {
     foreach ($source in @('Windows.Terminal.PowershellCore', 'Windows.Terminal.Wsl')) {
         if ($disabled -notcontains $source) { $disabled += $source }
     }
-    Set-WpcObjectProperty -Object $Settings -Name 'disabledProfileSources' -Value $disabled
+    $disabled = [string[]]@($disabled | Select-Object -Unique)
+    Set-WpcObjectProperty -Object $Settings -Name 'disabledProfileSources' -Value ([object]$disabled)
 
     foreach ($prop in $Contract.globals.PSObject.Properties) {
         Set-WpcObjectProperty -Object $Settings -Name $prop.Name -Value $prop.Value
@@ -308,9 +402,13 @@ function Set-WpcTerminalSettingsContract {
 
     $existingThemes = if ($Settings.PSObject.Properties['themes']) { @($Settings.themes) } else { @() }
     $existingSchemes = if ($Settings.PSObject.Properties['schemes']) { @($Settings.schemes) } else { @() }
-    Set-WpcObjectProperty -Object $Settings -Name 'themes' -Value (Merge-WpcNamedObjects -Existing $existingThemes -Managed @($Contract.themes))
-    Set-WpcObjectProperty -Object $Settings -Name 'schemes' -Value (Merge-WpcNamedObjects -Existing $existingSchemes -Managed @($Contract.schemes))
-    Set-WpcObjectProperty -Object $Settings -Name 'newTabMenu' -Value @($Contract.newTabMenu)
+    [object[]]$mergedThemes = @(Merge-WpcNamedObjects -Existing $existingThemes -Managed @($Contract.themes))
+    [object[]]$mergedSchemes = @(Merge-WpcNamedObjects -Existing $existingSchemes -Managed @($Contract.schemes))
+    [object[]]$managedNewTabMenu = @($Contract.newTabMenu)
+
+    Set-WpcObjectProperty -Object $Settings -Name 'themes' -Value ([object]$mergedThemes)
+    Set-WpcObjectProperty -Object $Settings -Name 'schemes' -Value ([object]$mergedSchemes)
+    Set-WpcObjectProperty -Object $Settings -Name 'newTabMenu' -Value ([object]$managedNewTabMenu)
 
     return $Settings
 }
@@ -319,11 +417,18 @@ function ConvertTo-WpcTerminalSettingsText {
     [CmdletBinding()]
     param([Parameter(Mandatory)]$Settings)
 
-    return (($Settings | ConvertTo-Json -Depth 100) + "`n")
+    $text = (($Settings | ConvertTo-Json -Depth 100) + "`n")
+    $shapeEvidence = Get-WpcTerminalSettingsJsonShapeEvidence -Text $text
+    if (-not $shapeEvidence.IsCompliant) {
+        throw "settings.json Windows Terminal sérialisé avec une forme JSON invalide: $($shapeEvidence.Mismatches -join ', ')."
+    }
+    return $text
 }
 
 Export-ModuleMember -Function @(
     'ConvertFrom-WpcTerminalSettingsText',
+    'Get-WpcTerminalSettingsArrayShapeEvidence',
+    'Get-WpcTerminalSettingsJsonShapeEvidence',
     'Get-WpcTerminalSettingsEvidence',
     'Set-WpcTerminalSettingsContract',
     'ConvertTo-WpcTerminalSettingsText'
