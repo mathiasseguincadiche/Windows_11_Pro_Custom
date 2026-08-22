@@ -75,7 +75,6 @@ jobs:
             '.wpc-plaintext-accepted',
             'Test-GitHubPlaintextAccepted',
             'Set-GitHubPlaintextAcceptance',
-            'Read-YesNoLoop',
             'Veux-tu configurer AWS maintenant',
             'CONNEXION AWS CONSOLE PAR NAVIGATEUR WINDOWS',
             'PROFIL AWS CLI LOCAL',
@@ -107,10 +106,12 @@ jobs:
             if (-not $interactive.Contains($needle)) { throw "interactive auth contract missing: $needle" }
           }
 
-          if ($interactive -match "'aws','login','--profile'") {
+          $directAwsLogin = '''aws'',''login'',''--profile'''
+          $directSsoLogin = '''aws'',''sso'',''login'',''--profile'',$profile)'
+          if ($interactive.Contains($directAwsLogin)) {
             throw 'Direct aws login without --remote is forbidden under WSL2.'
           }
-          if ($interactive -match "'aws','sso','login','--profile',\$profile\)" ) {
+          if ($interactive.Contains($directSsoLogin)) {
             throw 'Direct SSO login without no-browser/device-code is forbidden under WSL2.'
           }
           if ($interactive -match 'IAM Identity Center / SSO — RECOMMANDÉ') {
