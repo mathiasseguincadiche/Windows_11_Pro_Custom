@@ -4,10 +4,11 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$repoRoot = (Resolve-Path (Join-Path (Join-Path $PSScriptRoot '..') '..')).Path
 $installPath = Join-Path $repoRoot 'install.ps1'
-$interactivePath = Join-Path $repoRoot 'scripts\bootstrap\16_external_auth_interactive.ps1'
-$auditPath = Join-Path $repoRoot 'scripts\bootstrap\15_external_auth.ps1'
+$bootstrapRoot = Join-Path (Join-Path $repoRoot 'scripts') 'bootstrap'
+$interactivePath = Join-Path $bootstrapRoot '16_external_auth_interactive.ps1'
+$auditPath = Join-Path $bootstrapRoot '15_external_auth.ps1'
 
 foreach ($path in @($installPath,$interactivePath,$auditPath)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Fichier requis introuvable: $path" }
