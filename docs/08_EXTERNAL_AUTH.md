@@ -133,13 +133,20 @@ Avant la commande, le dépôt prépare un petit bridge navigateur non secret dan
 ~/.local/bin/wpc-open-windows-browser
 ```
 
-Il est limité au compte Linux (`0700`) et appelle directement l'exécutable Windows Explorer par l'interop WSL :
+Il est limité au compte Linux (`0700`) et appelle directement **PowerShell 7 Windows**, sans passer par un interpréteur de commandes Windows :
 
 ```bash
-explorer.exe "$1"
+pwsh.exe -NoLogo -NoProfile -NonInteractive \
+  -CommandWithArgs 'Start-Process -FilePath $args[0] -ErrorAction Stop' "$1"
 ```
 
-Le bridge ne passe volontairement **pas** par `cmd.exe /c start`. Une URL OAuth AWS contient plusieurs paramètres séparés par `&`; `cmd.exe` peut interpréter ces caractères comme des séparateurs de commandes et tronquer l'URL. Le passage direct à `explorer.exe` conserve l'URL complète comme un seul argument et laisse Windows l'ouvrir avec le gestionnaire HTTP/HTTPS par défaut.
+L'URL OAuth est donc transmise comme **un seul argument** à `pwsh.exe`. `Start-Process` délègue ensuite l'URI HTTPS au navigateur Windows par défaut.
+
+### Pourquoi `cmd.exe /c start` est interdit pour ce bridge
+
+Le test physique du 22 août 2026 a démontré que ce launcher était incorrect pour une URL OAuth. L'URL générée par AWS contient des paramètres séparés par `&`, par exemple `client_id`, `state`, `scope`, `redirect_uri` et `code_challenge`. `cmd.exe` interprétait ces `&` comme des séparateurs de commandes : les paramètres étaient exécutés comme de prétendues commandes Windows et le navigateur ne recevait que le début de l'URL, jusqu'à `response_type=code`. AWS répondait alors `400 Bad Request`.
+
+Le contrat CI interdit désormais le retour de `cmd.exe /c start` dans ce bridge et effectue un round-trip exact d'une URL OAuth représentative contenant `&`, `%`, `=`, un `redirect_uri` et un `code_challenge`.
 
 Le chemin du bridge est fourni temporairement à AWS CLI via la variable d'environnement standard `BROWSER`.
 
@@ -147,8 +154,8 @@ Le parcours devient :
 
 1. le script reste dans la fenêtre PowerShell 7 courante ;
 2. AWS CLI démarre un callback OAuth local ;
-3. le bridge transmet l'URL OAuth complète à Windows sans passer par `cmd.exe` ;
-4. le navigateur Windows par défaut s'ouvre ;
+3. le bridge transmet l'URL OAuth complète à PowerShell 7 Windows comme un argument unique ;
+4. Windows ouvre cette URI dans le navigateur par défaut ;
 5. l'utilisateur se connecte normalement sur le site AWS ;
 6. le navigateur renvoie automatiquement le callback vers `127.0.0.1` ;
 7. AWS CLI récupère l'autorisation sans demander de code à copier/coller ;
