@@ -49,13 +49,13 @@ jobs:
         run: |
           $text = Get-Content -Raw './scripts/windows/20_system_audit.ps1'
           foreach ($needle in @(
-            "$managedVolumeLetters = @('C', 'E')",
+            '$managedVolumeLetters = @(''C'', ''E'')',
             'ManagedVolumeLetters = $managedVolumeLetters',
             'Get-Volume -DriveLetter $letter -ErrorAction Stop'
           )) {
             if (-not $text.Contains($needle)) { throw "system audit contract missing: $needle" }
           }
-          if ($text.Contains("@('C', 'D')")) {
+          if ($text.Contains('@(''C'', ''D'')')) {
             throw 'system audit must never use D: as the managed DATA/WSL volume.'
           }
 
