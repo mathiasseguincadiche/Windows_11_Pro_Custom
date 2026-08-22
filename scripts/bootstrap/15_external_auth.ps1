@@ -61,6 +61,28 @@ function Get-GitHubCredentialStorage {
     return 'None'
 }
 
+function Get-GitHubPlaintextState {
+    $probe = Invoke-WslCapture -ArgumentList @(
+        'sh','-lc',
+        'd="$HOME/.config/gh"; f="$d/hosts.yml"; m="$d/.wpc-plaintext-accepted"; '
+        + 'dir_mode="$(stat -c %a "$d" 2>/dev/null || true)"; '
+        + 'file_mode="$(stat -c %a "$f" 2>/dev/null || true)"; '
+        + 'marker_mode="$(stat -c %a "$m" 2>/dev/null || true)"; '
+        + 'printf "%s|%s|%s|%s" "$dir_mode" "$file_mode" "$marker_mode" "$([ -f "$m" ] && printf yes || printf no)"'
+    ) -IgnoreExitCode
+
+    $parts = @($probe.Output -split '\|', 4)
+    while ($parts.Count -lt 4) { $parts += '' }
+    return [pscustomobject]@{
+        DirectoryMode = [string]$parts[0]
+        HostsMode = [string]$parts[1]
+        MarkerMode = [string]$parts[2]
+        AcceptanceMarker = ([string]$parts[3] -eq 'yes')
+        ProtectedPermissions = ([string]$parts[0] -eq '700' -and [string]$parts[1] -eq '600')
+        ExplicitlyAccepted = ([string]$parts[3] -eq 'yes' -and [string]$parts[2] -eq '600')
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($LinuxUser)) {
     $defaultUser = @(& wsl.exe --distribution $Distribution --exec id -un 2>&1)
     $defaultCode = $LASTEXITCODE
@@ -97,7 +119,12 @@ if ($ghInstalled) {
     $githubAuthenticated = ($ghProbe.ExitCode -eq 0)
 }
 $githubCredentialStorage = Get-GitHubCredentialStorage
-$githubSecureEnough = ($githubAuthenticated -and $githubCredentialStorage -ne 'PlaintextFile')
+$githubPlaintextState = Get-GitHubPlaintextState
+$githubPlaintextDetected = ($githubCredentialStorage -eq 'PlaintextFile')
+$githubPlaintextProtected = ($githubPlaintextDetected -and $githubPlaintextState.ProtectedPermissions)
+$githubPlaintextAccepted = ($githubPlaintextProtected -and $githubPlaintextState.ExplicitlyAccepted)
+$githubSecureEnough = ($githubAuthenticated -and -not $githubPlaintextDetected)
+$githubOperationallyAccepted = ($githubAuthenticated -and ($githubSecureEnough -or $githubPlaintextAccepted))
 
 $awsProfiles = @()
 $awsAuthenticatedProfiles = [System.Collections.Generic.List[string]]::new()
@@ -119,13 +146,18 @@ $awsAnyAuthenticated = ($awsAuthenticatedProfiles.Count -gt 0)
 
 $actions = [System.Collections.Generic.List[string]]::new()
 if (-not $gitIdentityConfigured) { $actions.Add('Git identity') }
-if (-not $githubAuthenticated) { $actions.Add('GitHub CLI') }
-elseif ($githubCredentialStorage -eq 'PlaintextFile') { $actions.Add('GitHub credential storage') }
+if (-not $githubAuthenticated) {
+    $actions.Add('GitHub CLI')
+} elseif ($githubPlaintextDetected -and -not $githubPlaintextProtected) {
+    $actions.Add('GitHub credential permissions')
+} elseif ($githubPlaintextDetected -and -not $githubPlaintextAccepted) {
+    $actions.Add('GitHub credential storage consent')
+}
 if (-not $awsAnyAuthenticated) { $actions.Add('AWS') }
 
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $report = [ordered]@{
-    SchemaVersion = 2
+    SchemaVersion = 3
     Timestamp = (Get-Date).ToString('o')
     Distribution = $Distribution
     LinuxUser = $LinuxUser
@@ -139,7 +171,10 @@ $report = [ordered]@{
         Installed = $ghInstalled
         Authenticated = $githubAuthenticated
         CredentialStorage = $githubCredentialStorage
-        PlaintextCredentialDetected = ($githubCredentialStorage -eq 'PlaintextFile')
+        PlaintextCredentialDetected = $githubPlaintextDetected
+        PlaintextPermissionsProtected = $githubPlaintextProtected
+        PlaintextFallbackExplicitlyAccepted = $githubPlaintextAccepted
+        OperationallyAccepted = $githubOperationallyAccepted
         SecureEnoughForRequiredVerify = $githubSecureEnough
     }
     Aws = [ordered]@{
@@ -160,13 +195,16 @@ else { Write-Host '[ACTION REQUISE] Identité Git globale non configurée.' -For
 
 if (-not $githubAuthenticated) {
     Write-Host '[ACTION REQUISE] GitHub CLI non authentifié sur github.com.' -ForegroundColor Yellow
-} elseif ($githubCredentialStorage -eq 'PlaintextFile') {
-    Write-Host '[AVERTISSEMENT] GitHub CLI authentifié, mais un token persistant est détecté dans ~/.config/gh/hosts.yml.' -ForegroundColor Yellow
-    Write-Host '[ACTION REQUISE] Revoir explicitement le stockage GitHub; aucun contenu du token n est lu par cet audit.' -ForegroundColor Yellow
+} elseif ($githubPlaintextDetected -and -not $githubPlaintextProtected) {
+    Write-Host '[ACTION REQUISE] GitHub CLI utilise hosts.yml et ses permissions ne sont pas conformes au garde-fou 0700/0600.' -ForegroundColor Yellow
+} elseif ($githubPlaintextDetected -and -not $githubPlaintextAccepted) {
+    Write-Host '[ACTION REQUISE] GitHub CLI utilise un token non chiffré dans hosts.yml; permissions 0700/0600 appliquées mais fallback non accepté.' -ForegroundColor Yellow
+} elseif ($githubPlaintextAccepted) {
+    Write-Host '[AVERTISSEMENT] GitHub CLI utilise hosts.yml non chiffré, protégé en 0700/0600 et explicitement accepté. Un credential store système reste préférable.' -ForegroundColor Yellow
 } elseif ($githubCredentialStorage -eq 'Environment') {
     Write-Host '[DEJA OK] GitHub CLI authentifié via une variable d environnement externe au dépôt.' -ForegroundColor Green
 } elseif ($githubCredentialStorage -eq 'CredentialStore') {
-    Write-Host '[DEJA OK] GitHub CLI authentifié; aucun token persistant détecté dans hosts.yml.' -ForegroundColor Green
+    Write-Host '[DEJA OK] GitHub CLI authentifié via un credential store; aucun token persistant détecté dans hosts.yml.' -ForegroundColor Green
 } else {
     Write-Host '[DEJA OK] GitHub CLI authentifié sur github.com.' -ForegroundColor Green
 }
